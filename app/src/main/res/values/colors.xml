@@ -7,4 +7,11 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Widget palette (light) — used via ColorProvider(R.color.xxx) in Glance widgets -->
+    <color name="widget_primary">#E07E38</color>
+    <color name="widget_surface">#FFFFFF</color>
+    <color name="widget_on_surface">#18181F</color>
+    <color name="widget_on_surface_variant">#6B6B6B</color>
+    <color name="widget_divider">#E0E0E0</color>
 </resources>

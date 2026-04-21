@@ -1,18 +1,20 @@
 package com.stler.tasks.widget
 
-import androidx.compose.ui.graphics.Color
 import androidx.glance.unit.ColorProvider
+import com.stler.tasks.R
 
 /**
  * Explicit widget colour palette that mirrors the app's TasksTheme.
  *
- * Glance uses the system's Material You dynamic colours by default, which can
- * produce a wrong orange or a reddish surface tint when the user's wallpaper
- * is warm-toned.  Using these explicit providers keeps widgets consistent with
- * the app regardless of system accent colour.
+ * Glance's ColorProvider(Color) only accepts a single colour; day/night variants
+ * must be declared as XML color resources with a "values-night" qualifier.
+ * See res/values/colors.xml and res/values-night/colors.xml.
+ *
+ * Using these explicit providers keeps widgets consistent with the app regardless
+ * of the system's Material You dynamic accent colour.
  */
-internal val WPrimary            = ColorProvider(Color(0xFFE07E38), Color(0xFFD98D52))
-internal val WSurface            = ColorProvider(Color(0xFFFFFFFF), Color(0xFF363636))
-internal val WOnSurface          = ColorProvider(Color(0xFF18181F), Color(0xFFF2F2F2))
-internal val WOnSurfaceVariant   = ColorProvider(Color(0xFF6B6B6B), Color(0xFF949494))
-internal val WDivider            = ColorProvider(Color(0xFFE0E0E0), Color(0xFF4A4A4A))
+internal val WPrimary          = ColorProvider(R.color.widget_primary)
+internal val WSurface          = ColorProvider(R.color.widget_surface)
+internal val WOnSurface        = ColorProvider(R.color.widget_on_surface)
+internal val WOnSurfaceVariant = ColorProvider(R.color.widget_on_surface_variant)
+internal val WDivider          = ColorProvider(R.color.widget_divider)

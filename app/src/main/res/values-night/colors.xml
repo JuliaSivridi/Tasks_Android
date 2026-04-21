@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget palette (dark/night) — mirrors app's DarkColorScheme -->
+    <color name="widget_primary">#D98D52</color>
+    <color name="widget_surface">#363636</color>
+    <color name="widget_on_surface">#F2F2F2</color>
+    <color name="widget_on_surface_variant">#949494</color>
+    <color name="widget_divider">#4A4A4A</color>
+</resources>
