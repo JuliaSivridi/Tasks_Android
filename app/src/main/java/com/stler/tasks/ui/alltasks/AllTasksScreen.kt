@@ -1,9 +1,9 @@
 package com.stler.tasks.ui.alltasks
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -11,7 +11,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.Label
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -20,6 +25,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -44,7 +52,7 @@ fun AllTasksScreen(
     val labelFilter by viewModel.labelFilter.collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize()) {
-        FilterPillsRow(
+        FilterDropdown(
             labels = labels,
             priorityFilter = priorityFilter,
             labelFilter = labelFilter,
@@ -77,51 +85,90 @@ fun AllTasksScreen(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+/**
+ * Compact single-chip filter control that opens a dropdown with multi-select for
+ * priority and label filters. Replaces the old FlowRow of chips which consumed too
+ * much vertical space when many labels were present.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun FilterPillsRow(
-    labels: List<Label>,
-    priorityFilter: Set<Priority>,
-    labelFilter: Set<String>,
+fun FilterDropdown(
+    labels          : List<Label>,
+    priorityFilter  : Set<Priority>,
+    labelFilter     : Set<String>,
     onTogglePriority: (Priority) -> Unit,
-    onToggleLabel: (String) -> Unit,
+    onToggleLabel   : (String) -> Unit,
 ) {
-    FlowRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        listOf(
-            Priority.URGENT to "Urgent",
-            Priority.IMPORTANT to "Important",
-            Priority.NORMAL to "Normal",
-        ).forEach { (p, label) ->
-            FilterChip(
-                selected = p in priorityFilter,
-                onClick = { onTogglePriority(p) },
-                label = {
-                    Icon(
-                        imageVector = Icons.Outlined.Flag,
-                        contentDescription = label,
-                        modifier = Modifier.size(14.dp),
-                        tint = priorityColor(p),
-                    )
-                },
-            )
-        }
-        labels.forEach { lbl ->
-            FilterChip(
-                selected = lbl.id in labelFilter,
-                onClick = { onToggleLabel(lbl.id) },
-                label = {
+    val activeCount = priorityFilter.size + labelFilter.size
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+        FilterChip(
+            selected = activeCount > 0,
+            onClick  = { expanded = true },
+            label    = {
+                Row(
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Icon(Icons.Outlined.Tune, contentDescription = null, modifier = Modifier.size(14.dp))
                     Text(
-                        lbl.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = lbl.color.toComposeColor(),
+                        text  = if (activeCount > 0) "Filters ($activeCount)" else "Filters",
+                        style = MaterialTheme.typography.bodySmall,
                     )
-                },
+                }
+            },
+        )
+        DropdownMenu(
+            expanded         = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            // ── Priority ──────────────────────────────────────────────────────
+            DropdownMenuItem(
+                text    = { Text("Priority", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                onClick = {},
+                enabled = false,
             )
+            listOf(Priority.URGENT to "Urgent", Priority.IMPORTANT to "Important", Priority.NORMAL to "Normal")
+                .forEach { (p, name) ->
+                    val active = p in priorityFilter
+                    DropdownMenuItem(
+                        text         = { Text(name) },
+                        onClick      = { onTogglePriority(p) },
+                        leadingIcon  = {
+                            Icon(Icons.Outlined.Flag, null,
+                                tint = priorityColor(p), modifier = Modifier.size(16.dp))
+                        },
+                        trailingIcon = if (active) ({
+                            Icon(Icons.Outlined.Check, null, modifier = Modifier.size(16.dp))
+                        }) else null,
+                    )
+                }
+            // ── Labels ────────────────────────────────────────────────────────
+            if (labels.isNotEmpty()) {
+                HorizontalDivider()
+                DropdownMenuItem(
+                    text    = { Text("Labels", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                    onClick = {},
+                    enabled = false,
+                )
+                labels.forEach { lbl ->
+                    val active = lbl.id in labelFilter
+                    DropdownMenuItem(
+                        text         = { Text(lbl.name, color = lbl.color.toComposeColor()) },
+                        onClick      = { onToggleLabel(lbl.id) },
+                        leadingIcon  = {
+                            Icon(Icons.Outlined.Label, null,
+                                tint = lbl.color.toComposeColor(), modifier = Modifier.size(16.dp))
+                        },
+                        trailingIcon = if (active) ({
+                            Icon(Icons.Outlined.Check, null, modifier = Modifier.size(16.dp))
+                        }) else null,
+                    )
+                }
+            }
         }
     }
 }

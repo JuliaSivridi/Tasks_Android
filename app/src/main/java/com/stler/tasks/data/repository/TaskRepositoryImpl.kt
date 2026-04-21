@@ -104,6 +104,7 @@ class TaskRepositoryImpl @Inject constructor(
         val entity = taskDao.getById(id) ?: return
         val now = nowIso()
         if (entity.isRecurring) {
+            // Recurring: advance deadline, do NOT mark done, leave subtasks untouched
             val advanced = advanceDeadline(entity, now)
             taskDao.upsert(advanced)
             enqueue("task", "UPDATE", id, advanced)
@@ -111,8 +112,23 @@ class TaskRepositoryImpl @Inject constructor(
             val updated = entity.copy(status = "completed", completedAt = now, updatedAt = now)
             taskDao.upsert(updated)
             enqueue("task", "UPDATE", id, updated)
+            // Also complete all descendants at every depth (mirrors PWA behaviour)
+            completeDescendants(id, now)
         }
         widgetRefresher.refreshAll()
+    }
+
+    /** Recursively marks all pending children of [parentId] as completed. */
+    private suspend fun completeDescendants(parentId: String, now: String) {
+        val children = taskDao.getAll().filter { it.parentId == parentId }
+        for (child in children) {
+            if (child.status != "completed") {
+                val updated = child.copy(status = "completed", completedAt = now, updatedAt = now)
+                taskDao.upsert(updated)
+                enqueue("task", "UPDATE", child.id, updated)
+            }
+            completeDescendants(child.id, now)   // recurse regardless (subtasks may have their own children)
+        }
     }
 
     override suspend fun restoreTask(id: String) {

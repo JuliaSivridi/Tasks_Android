@@ -20,7 +20,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
@@ -90,6 +89,9 @@ fun DeadlinePickerDialog(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
                 // ── Row 1: Date chip + Time chip ──────────────────────────────
+                // Both chips use selected=false so they always render as the same
+                // outlined (border-only) style regardless of whether a value is set.
+                // Active state is indicated by the label/icon color instead.
                 Row(
                     modifier              = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -97,63 +99,65 @@ fun DeadlinePickerDialog(
                 ) {
                     // Date chip
                     FilterChip(
-                        selected = selectedDate.isNotBlank(),
+                        selected = false,
                         onClick  = { showCalendar = true },
                         label    = {
                             Row(
                                 verticalAlignment     = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
-                                Icon(Icons.Outlined.CalendarMonth, null, modifier = Modifier.size(13.dp))
+                                Icon(
+                                    Icons.Outlined.CalendarMonth, null,
+                                    modifier = Modifier.size(13.dp),
+                                    tint = if (selectedDate.isNotBlank()) MaterialTheme.colorScheme.primary
+                                           else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                                 Text(
                                     text  = if (selectedDate.isBlank()) "No date" else formatDate(selectedDate),
                                     style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                        },
-                    )
-                    // Time chip — disabled until a date is set
-                    FilterChip(
-                        selected = selectedTime.isNotBlank(),
-                        onClick  = { showTimePicker = true },
-                        enabled  = selectedDate.isNotBlank(),
-                        label    = {
-                            Row(
-                                verticalAlignment     = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                Icon(Icons.Outlined.Schedule, null, modifier = Modifier.size(13.dp))
-                                Text(
-                                    text  = if (selectedTime.isBlank()) "No time" else selectedTime,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (selectedTime.isNotBlank()) MaterialTheme.colorScheme.primary
+                                    color = if (selectedDate.isNotBlank()) MaterialTheme.colorScheme.primary
                                             else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         },
                     )
+                    // Time chip — hidden until a date is set
+                    if (selectedDate.isNotBlank()) {
+                        FilterChip(
+                            selected = false,
+                            onClick  = { showTimePicker = true },
+                            label    = {
+                                Row(
+                                    verticalAlignment     = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Outlined.Schedule, null,
+                                        modifier = Modifier.size(13.dp),
+                                        tint = if (selectedTime.isNotBlank()) MaterialTheme.colorScheme.primary
+                                               else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Text(
+                                        text  = if (selectedTime.isBlank()) "No time" else selectedTime,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (selectedTime.isNotBlank()) MaterialTheme.colorScheme.primary
+                                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            },
+                        )
+                    }
                 }
 
-                // ── Row 2: Recurring toggle + RecurRow ────────────────────────
-                Row(
-                    modifier              = Modifier.fillMaxWidth(),
-                    verticalAlignment     = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text("Repeat", style = MaterialTheme.typography.bodyMedium)
-                    Switch(
-                        checked         = isRecurring,
-                        onCheckedChange = { isRecurring = it },
-                    )
-                }
-                if (isRecurring) {
-                    RecurRow(
-                        recurValue    = recurValue,
-                        onValueChange = { recurValue = it },
-                        recurType     = recurType,
-                        onTypeChange  = { recurType = it },
-                    )
-                }
+                // ── Row 2: Repeat (inline checkbox design) ────────────────────
+                RepeatRow(
+                    isChecked    = isRecurring,
+                    onToggle     = { isRecurring = it },
+                    recurValue   = recurValue,
+                    onValueChange = { recurValue = it },
+                    recurType    = recurType,
+                    onTypeChange = { recurType = it },
+                )
 
                 HorizontalDivider()
 

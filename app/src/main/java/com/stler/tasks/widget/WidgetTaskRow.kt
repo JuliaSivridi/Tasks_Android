@@ -23,6 +23,7 @@ import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
 import androidx.glance.layout.size
 import androidx.glance.layout.width
+import androidx.glance.layout.height
 import androidx.glance.layout.wrapContentHeight
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
@@ -81,6 +82,9 @@ fun WidgetTaskRow(
 
     val hasRow2 = dlLabel != null || labelItems.isNotEmpty() || folderName.isNotBlank()
 
+    // Wrap in Column so we can add a thin bottom divider (matches app's HorizontalDivider).
+    // Semi-transparent gray works on both light and dark widget backgrounds.
+    Column(modifier = GlanceModifier.fillMaxWidth()) {
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
@@ -212,6 +216,14 @@ fun WidgetTaskRow(
             }
         }
     }
+    // Thin divider line below each row
+    Box(
+        modifier = GlanceModifier
+            .fillMaxWidth()
+            .height(0.5.dp)
+            .background(ColorProvider(Color(0x20808080))),  // ~12% gray, readable on light+dark
+    ) {}
+    } // end Column
 }
 
 /** Parses a hex color string (e.g. "#3b82f6") into a Glance [ColorProvider], or null on failure. */

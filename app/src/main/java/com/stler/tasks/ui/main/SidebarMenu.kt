@@ -80,7 +80,7 @@ fun SidebarMenu(
     onEditLabel: (Label) -> Unit,
     onDeleteLabel: (Label) -> Unit,
 ) {
-    ModalDrawerSheet {
+    ModalDrawerSheet(modifier = Modifier.fillMaxWidth(0.70f)) {
         Column(
             modifier = Modifier
                 .fillMaxHeight()

@@ -4,8 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,9 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.ChevronLeft
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,9 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.stler.tasks.domain.model.Priority
+import com.stler.tasks.ui.alltasks.FilterDropdown
 import com.stler.tasks.ui.task.TaskItem
-import com.stler.tasks.ui.task.priorityColor
-import com.stler.tasks.util.toComposeColor
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
@@ -57,7 +52,7 @@ import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UpcomingScreen(
     onEditTask   : (com.stler.tasks.domain.model.Task) -> Unit = {},
@@ -204,45 +199,14 @@ fun UpcomingScreen(
             }
         }
 
-        // ── Filter pills ──────────────────────────────────────────────────
-        FlowRow(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            listOf(
-                Priority.URGENT    to "Urgent",
-                Priority.IMPORTANT to "Important",
-                Priority.NORMAL    to "Normal",
-            ).forEach { (p, label) ->
-                FilterChip(
-                    selected = p in priorityFilter,
-                    onClick = { viewModel.togglePriorityFilter(p) },
-                    label = {
-                        Icon(
-                            imageVector = Icons.Outlined.Flag,
-                            contentDescription = label,
-                            modifier = Modifier.size(14.dp),
-                            tint = priorityColor(p),
-                        )
-                    },
-                )
-            }
-            labels.forEach { lbl ->
-                FilterChip(
-                    selected = lbl.id in labelFilter,
-                    onClick = { viewModel.toggleLabelFilter(lbl.id) },
-                    label = {
-                        Text(
-                            lbl.name,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = lbl.color.toComposeColor(),
-                        )
-                    },
-                )
-            }
-        }
+        // ── Filter dropdown ───────────────────────────────────────────────
+        FilterDropdown(
+            labels           = labels,
+            priorityFilter   = priorityFilter,
+            labelFilter      = labelFilter,
+            onTogglePriority = { viewModel.togglePriorityFilter(it) },
+            onToggleLabel    = { viewModel.toggleLabelFilter(it) },
+        )
 
         // ── Task list — all dates, scrollable ─────────────────────────────
         if (orderedDates.isEmpty()) {
@@ -327,7 +291,7 @@ private fun DayHeader(date: LocalDate, today: LocalDate) {
     Text(
         text = label,
         style = MaterialTheme.typography.bodyMedium,
-        fontWeight = FontWeight.SemiBold,
+        fontWeight = FontWeight.Medium,
         color = if (date == LocalDate.MIN) MaterialTheme.colorScheme.error
                 else MaterialTheme.colorScheme.onSurface,
         modifier = Modifier

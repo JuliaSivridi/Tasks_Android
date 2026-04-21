@@ -151,9 +151,9 @@ private fun DateHeader(text: String) {
             .fillMaxWidth()
             .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp),
         style = TextStyle(
-            color      = GlanceTheme.colors.onSurface,
+            color      = GlanceTheme.colors.primary,
             fontSize   = 14.sp,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.Medium,
         ),
     )
 }

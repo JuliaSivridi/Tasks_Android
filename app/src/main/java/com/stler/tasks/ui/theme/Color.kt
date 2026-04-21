@@ -3,7 +3,7 @@ package com.stler.tasks.ui.theme
 import androidx.compose.ui.graphics.Color
 
 // ── Brand / Primary ──────────────────────────────────────────────────────────
-val Primary = Color(0xFFE07E36)          // hsl(25 75% 55%) – orange
+val Primary = Color(0xFFE07E38)          // #e07e38 – PWA orange
 val PrimaryDark = Color(0xFFD98D52)      // hsl(25 65% 63%) – lighter orange for dark mode
 val OnPrimary = Color(0xFFFFFFFF)
 

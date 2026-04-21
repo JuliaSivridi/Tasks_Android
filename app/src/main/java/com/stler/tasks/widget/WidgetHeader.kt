@@ -44,7 +44,7 @@ fun WidgetHeader(
     Row(
         modifier = GlanceModifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .padding(horizontal = 8.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // App icon — tappable (same deeplink as title) when screenUri is provided
@@ -87,9 +87,9 @@ fun WidgetHeader(
             text     = title,
             modifier = titleMod,
             style    = TextStyle(
-                color      = GlanceTheme.colors.onSurface,
+                color      = GlanceTheme.colors.primary,
                 fontSize   = 18.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.Medium,
             ),
         )
 

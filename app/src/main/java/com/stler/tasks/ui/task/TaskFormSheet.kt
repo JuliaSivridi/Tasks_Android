@@ -23,7 +23,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.border
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Flag
@@ -31,6 +34,7 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -41,10 +45,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -89,6 +97,8 @@ fun TaskFormSheet(
 ) {
     val isEditing = task != null
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // Snap immediately to expanded state so the sheet opens at full height without animation lag.
+    LaunchedEffect(Unit) { sheetState.snapTo(SheetValue.Expanded) }
 
     // ── Form state ────────────────────────────────────────────────────────
 
@@ -195,16 +205,22 @@ fun TaskFormSheet(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 val dlStatus = deadlineStatus(deadlineDate)
-                // Date chip
+                // Date chip — uses selected=false (border-only style) like time chip for consistency.
+                // Active state indicated by primary-colored icon/text.
                 FilterChip(
-                    selected = deadlineDate.isNotBlank(),
+                    selected = false,
                     onClick  = { showDeadlinePicker = true },
                     label    = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            Icon(Icons.Outlined.Schedule, null, modifier = Modifier.size(13.dp))
+                            Icon(
+                                Icons.Outlined.CalendarMonth, null,
+                                modifier = Modifier.size(13.dp),
+                                tint = if (deadlineDate.isNotBlank()) deadlineColor(dlStatus)
+                                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                             Text(
                                 text  = if (deadlineDate.isBlank()) "No date"
                                         else formatExplicitDate(deadlineDate),
@@ -218,14 +234,19 @@ fun TaskFormSheet(
                 // Time chip — only visible when date is set
                 if (deadlineDate.isNotBlank()) {
                     FilterChip(
-                        selected = deadlineTime.isNotBlank(),
+                        selected = false,
                         onClick  = { showTimePicker = true },
                         label    = {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
-                                Icon(Icons.Outlined.Schedule, null, modifier = Modifier.size(13.dp))
+                                Icon(
+                                    Icons.Outlined.Schedule, null,
+                                    modifier = Modifier.size(13.dp),
+                                    tint = if (deadlineTime.isNotBlank()) MaterialTheme.colorScheme.primary
+                                           else MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                                 Text(
                                     text  = if (deadlineTime.isBlank()) "No time" else deadlineTime,
                                     style = MaterialTheme.typography.bodySmall,
@@ -238,26 +259,15 @@ fun TaskFormSheet(
                 }
             }
 
-            // ── Recurring ─────────────────────────────────────────────────
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text("Recurring task", style = MaterialTheme.typography.bodyMedium)
-                androidx.compose.material3.Switch(
-                    checked = isRecurring,
-                    onCheckedChange = { isRecurring = it },
-                )
-            }
-            if (isRecurring) {
-                RecurRow(
-                    recurValue    = recurValue,
-                    onValueChange = { recurValue = it },
-                    recurType     = recurType,
-                    onTypeChange  = { recurType = it },
-                )
-            }
+            // ── Repeat (inline checkbox design) ───────────────────────────
+            RepeatRow(
+                isChecked    = isRecurring,
+                onToggle     = { isRecurring = it },
+                recurValue   = recurValue,
+                onValueChange = { recurValue = it },
+                recurType    = recurType,
+                onTypeChange = { recurType = it },
+            )
 
             // ── Priority ──────────────────────────────────────────────────
             SectionLabel("Priority")
@@ -574,8 +584,14 @@ private fun SectionLabel(text: String) {
     )
 }
 
+/**
+ * Inline repeat row: [☐] Repeat  /  [☑] Repeat every [3] [D] [W] [M]
+ * Replaces the old Switch + separate RecurRow pattern.
+ */
 @Composable
-internal fun RecurRow(
+internal fun RepeatRow(
+    isChecked    : Boolean,
+    onToggle     : (Boolean) -> Unit,
     recurValue   : String,
     onValueChange: (String) -> Unit,
     recurType    : RecurType,
@@ -583,34 +599,52 @@ internal fun RecurRow(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth(),
     ) {
-        Text("Every", style = MaterialTheme.typography.bodyMedium)
-        OutlinedTextField(
-            value         = recurValue,
-            onValueChange = { v -> if (v.all { it.isDigit() } && v.length <= 3) onValueChange(v) },
-            modifier      = Modifier.width(64.dp),
-            singleLine    = true,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
-            ),
+        Checkbox(
+            checked         = isChecked,
+            onCheckedChange = onToggle,
         )
-        listOf(RecurType.DAYS to "D", RecurType.WEEKS to "W", RecurType.MONTHS to "M")
-            .forEach { (rt, label) ->
-                val sel = recurType == rt
-                FilterChip(
-                    selected    = sel,
-                    onClick     = { onTypeChange(rt) },
-                    label       = { Text(label, style = MaterialTheme.typography.bodySmall) },
-                    leadingIcon = if (sel) ({
-                        Icon(
-                            Icons.Outlined.Check,
-                            contentDescription = null,
-                            modifier = Modifier.size(13.dp),
-                        )
-                    }) else null,
+        Text(
+            text     = if (isChecked) "Repeat every" else "Repeat",
+            style    = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.clickable { onToggle(!isChecked) },
+        )
+        if (isChecked) {
+            Spacer(Modifier.width(8.dp))
+            // Compact outlined number input (BasicTextField avoids OutlinedTextField's tall minimum height)
+            Box(
+                modifier = Modifier
+                    .width(48.dp)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                BasicTextField(
+                    value         = recurValue,
+                    onValueChange = { v ->
+                        if (v.isEmpty() || (v.all { it.isDigit() } && v.length <= 3)) onValueChange(v)
+                    },
+                    singleLine    = true,
+                    textStyle     = MaterialTheme.typography.bodyMedium.copy(
+                        textAlign = TextAlign.Center,
+                        color     = MaterialTheme.colorScheme.onSurface,
+                    ),
+                    cursorBrush   = SolidColor(MaterialTheme.colorScheme.primary),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
             }
+            Spacer(Modifier.width(4.dp))
+            listOf(RecurType.DAYS to "D", RecurType.WEEKS to "W", RecurType.MONTHS to "M")
+                .forEach { (rt, lbl) ->
+                    FilterChip(
+                        selected = recurType == rt,
+                        onClick  = { onTypeChange(rt) },
+                        label    = { Text(lbl, style = MaterialTheme.typography.labelSmall) },
+                    )
+                    Spacer(Modifier.width(4.dp))
+                }
+        }
     }
 }
 
