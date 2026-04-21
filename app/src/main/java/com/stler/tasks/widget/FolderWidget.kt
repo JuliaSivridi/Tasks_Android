@@ -49,7 +49,7 @@ class FolderWidget : GlanceAppWidget() {
                 Column(
                     modifier = GlanceModifier
                         .fillMaxSize()
-                        .background(GlanceTheme.colors.surface),
+                        .background(WSurface),
                 ) {
                     WidgetHeader(
                         title     = folderName,

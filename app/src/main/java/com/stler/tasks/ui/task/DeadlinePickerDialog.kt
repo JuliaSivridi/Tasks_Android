@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowForward
@@ -20,10 +23,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -41,17 +46,18 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * Deadline picker dialog opened by the clock-button on a task row.
+ * Deadline picker shown as a bottom sheet (full device width).
  *
  * Layout:
- *   Row 1 — [Date chip] [Time chip]
- *   Row 2 — "Repeat" toggle; when on → RecurRow (Every N D/W/M)
- *   ─────────────────────
- *   [No date] [Postpone?]          [Cancel] [Save]
+ *   Title row
+ *   [Date chip] [Time chip]
+ *   [☐/☑ Repeat (every N D/W/M)]
+ *   ─────────────────────────────────
+ *   [×]  [→ postpone?]        [Cancel] [Save]
  *
- * "No date" resets everything (date, time, recurring).
- * "Postpone" shifts selectedDate +1 day (only shown when a date is selected).
- * "Save" confirms with all current values.
+ * "×" clears everything (date, time, recurring) and saves immediately.
+ * "→" is shown only for recurring tasks; advances date by recur_value×recur_type.
+ * "Save" confirms with current values.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,152 +88,166 @@ fun DeadlinePickerDialog(
             LocalDate.parse(d).format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
         }.getOrDefault(d)
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Set deadline") },
-        text  = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-                // ── Row 1: Date chip + Time chip ──────────────────────────────
-                // Both chips use selected=false so they always render as the same
-                // outlined (border-only) style regardless of whether a value is set.
-                // Active state is indicated by the label/icon color instead.
-                Row(
-                    modifier              = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment     = Alignment.CenterVertically,
-                ) {
-                    // Date chip
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState       = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 8.dp)
+                .imePadding()
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            // ── Sheet title ───────────────────────────────────────────────────
+            Text(
+                text  = "Set deadline",
+                style = MaterialTheme.typography.titleMedium,
+            )
+
+            // ── Row 1: Date chip + Time chip ──────────────────────────────────
+            // Both chips use selected=false so they always render as the same
+            // outlined (border-only) style regardless of whether a value is set.
+            // Active state is indicated by the label/icon color instead.
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                // Date chip
+                FilterChip(
+                    selected = false,
+                    onClick  = { showCalendar = true },
+                    label    = {
+                        Row(
+                            verticalAlignment     = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(
+                                Icons.Outlined.CalendarMonth, null,
+                                modifier = Modifier.size(13.dp),
+                                tint = if (selectedDate.isNotBlank()) MaterialTheme.colorScheme.primary
+                                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                text  = if (selectedDate.isBlank()) "No date" else formatDate(selectedDate),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (selectedDate.isNotBlank()) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                )
+                // Time chip — hidden until a date is set
+                if (selectedDate.isNotBlank()) {
                     FilterChip(
                         selected = false,
-                        onClick  = { showCalendar = true },
+                        onClick  = { showTimePicker = true },
                         label    = {
                             Row(
                                 verticalAlignment     = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
                                 Icon(
-                                    Icons.Outlined.CalendarMonth, null,
+                                    Icons.Outlined.Schedule, null,
                                     modifier = Modifier.size(13.dp),
-                                    tint = if (selectedDate.isNotBlank()) MaterialTheme.colorScheme.primary
+                                    tint = if (selectedTime.isNotBlank()) MaterialTheme.colorScheme.primary
                                            else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Text(
-                                    text  = if (selectedDate.isBlank()) "No date" else formatDate(selectedDate),
+                                    text  = if (selectedTime.isBlank()) "No time" else selectedTime,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (selectedDate.isNotBlank()) MaterialTheme.colorScheme.primary
+                                    color = if (selectedTime.isNotBlank()) MaterialTheme.colorScheme.primary
                                             else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                         },
                     )
-                    // Time chip — hidden until a date is set
-                    if (selectedDate.isNotBlank()) {
-                        FilterChip(
-                            selected = false,
-                            onClick  = { showTimePicker = true },
-                            label    = {
-                                Row(
-                                    verticalAlignment     = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.Schedule, null,
-                                        modifier = Modifier.size(13.dp),
-                                        tint = if (selectedTime.isNotBlank()) MaterialTheme.colorScheme.primary
-                                               else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                    Text(
-                                        text  = if (selectedTime.isBlank()) "No time" else selectedTime,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (selectedTime.isNotBlank()) MaterialTheme.colorScheme.primary
-                                                else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            },
+                }
+            }
+
+            // ── Row 2: Repeat (inline checkbox design) ────────────────────────
+            RepeatRow(
+                isChecked     = isRecurring,
+                onToggle      = { isRecurring = it },
+                recurValue    = recurValue,
+                onValueChange = { recurValue = it },
+                recurType     = recurType,
+                onTypeChange  = { recurType = it },
+            )
+
+            HorizontalDivider()
+
+            // ── Action row — full-width for reliable left/right layout ─────────
+            Row(
+                modifier              = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                // Left: × clear all  +  → postpone
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick  = { onConfirm("", "", false, RecurType.DAYS, 1) },
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            Icons.Outlined.Close,
+                            contentDescription = "No date",
+                            modifier = Modifier.size(20.dp),
+                            tint     = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                }
-
-                // ── Row 2: Repeat (inline checkbox design) ────────────────────
-                RepeatRow(
-                    isChecked    = isRecurring,
-                    onToggle     = { isRecurring = it },
-                    recurValue   = recurValue,
-                    onValueChange = { recurValue = it },
-                    recurType    = recurType,
-                    onTypeChange = { recurType = it },
-                )
-
-                HorizontalDivider()
-
-                // ── Action row — full-width for reliable left/right layout ────
-                Row(
-                    modifier              = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment     = Alignment.CenterVertically,
-                ) {
-                    // Left: × clear all  +  ↺ postpone
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Postpone: only for recurring tasks — advances deadline by the task's own
+                    // recurrence interval (recur_value days/weeks/months) and saves immediately.
+                    if (isRecurring && selectedDate.isNotBlank()) {
                         IconButton(
-                            onClick = { onConfirm("", "", false, RecurType.DAYS, 1) },
+                            onClick = {
+                                runCatching {
+                                    val n = recurValue.toIntOrNull() ?: 1
+                                    val base = LocalDate.parse(selectedDate)
+                                    val postponed = when (recurType) {
+                                        RecurType.WEEKS  -> base.plusWeeks(n.toLong())
+                                        RecurType.MONTHS -> base.plusMonths(n.toLong())
+                                        else             -> base.plusDays(n.toLong())
+                                    }.toString()
+                                    onConfirm(postponed, selectedTime, true, recurType, n)
+                                }
+                            },
                             modifier = Modifier.size(36.dp),
                         ) {
                             Icon(
-                                Icons.Outlined.Close,
-                                contentDescription = "No date",
+                                Icons.Outlined.ArrowForward,
+                                contentDescription = "Postpone",
                                 modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint     = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
-                        // Postpone: only for recurring tasks — advances deadline by the task's own
-                        // recurrence interval (recur_value days/weeks/months) and saves immediately.
-                        if (isRecurring && selectedDate.isNotBlank()) {
-                            IconButton(
-                                onClick = {
-                                    runCatching {
-                                        val n = recurValue.toIntOrNull() ?: 1
-                                        val base = LocalDate.parse(selectedDate)
-                                        val postponed = when (recurType) {
-                                            RecurType.WEEKS  -> base.plusWeeks(n.toLong())
-                                            RecurType.MONTHS -> base.plusMonths(n.toLong())
-                                            else             -> base.plusDays(n.toLong())  // DAYS or NONE
-                                        }.toString()
-                                        onConfirm(postponed, selectedTime, true, recurType, n)
-                                    }
-                                },
-                                modifier = Modifier.size(36.dp),
-                            ) {
-                                Icon(
-                                    Icons.Outlined.ArrowForward,
-                                    contentDescription = "Postpone",
-                                    modifier = Modifier.size(20.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                    }
-                    // Right: Cancel  +  Save
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = onDismiss) { Text("Cancel") }
-                        TextButton(
-                            onClick = {
-                                onConfirm(
-                                    selectedDate,
-                                    selectedTime,
-                                    isRecurring,
-                                    if (isRecurring) recurType else RecurType.NONE,
-                                    recurValue.toIntOrNull() ?: 1,
-                                )
-                            },
-                        ) { Text("Save") }
                     }
                 }
+                // Right: Cancel  +  Save
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(
+                        onClick = {
+                            onConfirm(
+                                selectedDate,
+                                selectedTime,
+                                isRecurring,
+                                if (isRecurring) recurType else RecurType.NONE,
+                                recurValue.toIntOrNull() ?: 1,
+                            )
+                        },
+                    ) { Text("Save") }
+                }
             }
-        },
-        dismissButton = null,
-        confirmButton = {},
-    )
+
+            Spacer(modifier = Modifier.padding(bottom = 4.dp))
+        }
+    }
 
     // ── Calendar sub-dialog ───────────────────────────────────────────────────
     if (showCalendar) {

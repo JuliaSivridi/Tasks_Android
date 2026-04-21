@@ -45,7 +45,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
@@ -97,8 +96,6 @@ fun TaskFormSheet(
 ) {
     val isEditing = task != null
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    // Snap immediately to expanded state so the sheet opens at full height without animation lag.
-    LaunchedEffect(Unit) { sheetState.snapTo(SheetValue.Expanded) }
 
     // ── Form state ────────────────────────────────────────────────────────
 

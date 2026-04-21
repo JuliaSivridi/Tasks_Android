@@ -77,7 +77,7 @@ fun WidgetTaskRow(
         DeadlineStatus.TODAY     -> ColorProvider(Color(0xFF16a34a))
         DeadlineStatus.TOMORROW  -> ColorProvider(Color(0xFFfb923c))
         DeadlineStatus.THIS_WEEK -> ColorProvider(Color(0xFFa78bfa))
-        else                     -> GlanceTheme.colors.onSurfaceVariant
+        else                     -> WOnSurfaceVariant
     }
 
     val hasRow2 = dlLabel != null || labelItems.isNotEmpty() || folderName.isNotBlank()
@@ -114,7 +114,7 @@ fun WidgetTaskRow(
                 Text(
                     text  = if (task.isExpanded) "▼" else "▶",
                     style = TextStyle(
-                        color    = GlanceTheme.colors.onSurfaceVariant,
+                        color    = WOnSurfaceVariant,
                         fontSize = 11.sp,
                     ),
                 )
@@ -143,7 +143,7 @@ fun WidgetTaskRow(
                 modifier = GlanceModifier
                     .size(17.dp)
                     .cornerRadius(2.dp)
-                    .background(GlanceTheme.colors.surface),
+                    .background(WSurface),
             ) {}
         }
 
@@ -170,7 +170,7 @@ fun WidgetTaskRow(
                 text     = task.title,
                 maxLines = 2,
                 style    = TextStyle(
-                    color      = GlanceTheme.colors.onSurface,
+                    color      = WOnSurface,
                     fontSize   = 14.sp,
                     fontWeight = FontWeight.Normal,
                 ),
@@ -195,7 +195,7 @@ fun WidgetTaskRow(
                             else                      -> ", #"
                         }
                         val lColor = hexToColorProvider(hexColor)
-                            ?: GlanceTheme.colors.onSurfaceVariant
+                            ?: WOnSurfaceVariant
                         Text(
                             text  = "$prefix$name",
                             style = TextStyle(color = lColor, fontSize = 14.sp),
@@ -206,7 +206,7 @@ fun WidgetTaskRow(
                     if (folderName.isNotBlank()) {
                         val sep = if (dlLabel != null || labelItems.isNotEmpty()) " · " else ""
                         val fColor = hexToColorProvider(folderHexColor)
-                            ?: GlanceTheme.colors.onSurfaceVariant
+                            ?: WOnSurfaceVariant
                         Text(
                             text  = "$sep$folderName",
                             style = TextStyle(color = fColor, fontSize = 14.sp),
@@ -216,12 +216,12 @@ fun WidgetTaskRow(
             }
         }
     }
-    // Thin divider line below each row
+    // Thin divider line below each row — explicit colours match app's HorizontalDivider
     Box(
         modifier = GlanceModifier
             .fillMaxWidth()
             .height(0.5.dp)
-            .background(ColorProvider(Color(0x20808080))),  // ~12% gray, readable on light+dark
+            .background(WDivider),
     ) {}
     } // end Column
 }

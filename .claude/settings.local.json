@@ -17,7 +17,8 @@
       "Bash(export JAVA_HOME=\"/c/Program Files/Android/Android Studio/jbr\")",
       "Bash(del \"D:\\\\Projects\\\\Tasks_android\\\\app\\\\src\\\\main\\\\java\\\\com\\\\stler\\\\tasks\\\\ui\\\\task\\\\DeadlineSheet.kt\")",
       "Bash(node -e ' *)",
-      "Bash(awk '{print $NF, $5}')"
+      "Bash(awk '{print $NF, $5}')",
+      "Bash(git add *)"
     ]
   }
 }

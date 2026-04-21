@@ -82,7 +82,7 @@ class TaskListWidget : GlanceAppWidget() {
                 Column(
                     modifier = GlanceModifier
                         .fillMaxSize()
-                        .background(GlanceTheme.colors.surface),
+                        .background(WSurface),
                 ) {
                     WidgetHeader(title = title, screenUri = "stlertasks://all_tasks")
                     LazyColumn(modifier = GlanceModifier.fillMaxSize()) {

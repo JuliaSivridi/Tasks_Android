@@ -87,7 +87,7 @@ fun WidgetHeader(
             text     = title,
             modifier = titleMod,
             style    = TextStyle(
-                color      = GlanceTheme.colors.primary,
+                color      = WPrimary,
                 fontSize   = 18.sp,
                 fontWeight = FontWeight.Medium,
             ),
@@ -117,7 +117,7 @@ fun WidgetHeader(
             Text(
                 text  = "+",
                 style = TextStyle(
-                    color      = GlanceTheme.colors.primary,
+                    color      = WPrimary,
                     fontSize   = 20.sp,
                     fontWeight = FontWeight.Bold,
                 ),

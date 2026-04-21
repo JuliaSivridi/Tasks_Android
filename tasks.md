@@ -182,29 +182,29 @@ _Discovered during testing after Stage 9._
 - [ ] 9b.4 Labels sort_order — read column D from the `labels` sheet; sort labels in sidebar by `sort_order` ascending.
 
 ### Task behaviour
-- [ ] 9b.5 Complete with subtasks — when completing a task, recursively complete all descendants at every depth (same as PWA). Currently only the root task is marked done.
-- [ ] 9b.6 Postpone uses recur_value × recur_type — `DeadlinePickerDialog` Postpone button now advances by the task's own recurrence interval (days/weeks/months). ✅ Done (session 3).
-- [ ] 9b.7 Overdue grouping — all past-due tasks collapsed into single "Overdue" section in Upcoming screen and UpcomingWidget. ✅ Done (session 3).
+- [x] 9b.5 Complete with subtasks — when completing a task, recursively complete all descendants at every depth (same as PWA). `completeDescendants()` added to `TaskRepositoryImpl`. ✅ Done (session 3).
+- [x] 9b.6 Postpone uses recur_value × recur_type — `DeadlinePickerDialog` Postpone button now advances by the task's own recurrence interval (days/weeks/months). ✅ Done (session 3).
+- [x] 9b.7 Overdue grouping — all past-due tasks collapsed into single "Overdue" section in Upcoming screen and UpcomingWidget. ✅ Done (session 3).
 
 ### Sync & performance
 - [ ] 9b.8 Drag-to-reorder creates too many sync operations — current implementation fires `updateTask()` on every intermediate drag position, generating 50–300+ sync queue entries per drag. Fix: accumulate the final order only, write once when drag ends; use `sortOrder` diff, not `updatedAt`.
 - [ ] 9b.9 Widget refresh instability — completing a task from a widget sometimes takes 5–15 min for the widget to reflect the change. Investigate Glance `updateAll()` timing; ensure `refreshAll()` is called reliably after every mutation and that `provideGlance` re-reads fresh data.
 
 ### UI/UX
-- [ ] 9b.10 Primary color → `#e07e38` (matches PWA orange). App icon background color to match.
-- [ ] 9b.11 Sidebar narrower — 70% of screen width instead of ~90%.
-- [ ] 9b.12 Filter dropdown — replace label filter chips with a single multi-select dropdown to save vertical space.
-- [ ] 9b.13 Dividers in widgets — add thin `HorizontalDivider` between task rows in all three widgets (matches app list style).
-- [ ] 9b.14 Widget header padding — increase top/bottom padding in `WidgetHeader` (currently ≈2dp, target ≥8dp).
-- [ ] 9b.15 Widget header & day-header font weight — lighter than current Bold, but heavier than task-row text (SemiBold → Medium or similar).
-- [ ] 9b.16 Widget / app header color — widget title and day-section headers use primary color (orange).
-- [ ] 9b.17 Upcoming day-header weight — same font-weight reduction as widgets.
-- [ ] 9b.18 Deadline dialog — date and time chip borders should match (both use `FilterChip` style consistently); hide time chip until date is set.
-- [ ] 9b.19 TaskFormSheet — add calendar icon to date field; hide time field until date is set; align chip borders with `DeadlinePickerDialog`.
-- [ ] 9b.20 Repeat UI redesign — replace toggle switch with inline checkbox: `☐ Repeat` → when checked becomes `☑ Repeat every [N] [D/W/M]` on one line. Apply in both `DeadlinePickerDialog` and `TaskFormSheet`.
-- [ ] 9b.21 Slow animations — task form sheet opens with visible lag; keyboard animation jerky. Remove/reduce entry animations; open sheet at full height immediately.
-- [ ] 9b.22 LabelScreen hides label chips, FolderScreen hides folder chip. ✅ Done (session 3).
-- [ ] 9b.23 Cold-start blank Upcoming from widget tap. ✅ Done (session 3).
+- [x] 9b.10 Primary color → `#e07e38` (matches PWA orange). App icon background color verified correct. ✅ Done (session 3).
+- [x] 9b.11 Sidebar narrower — 70% of screen width instead of ~90%. `ModalDrawerSheet(modifier = Modifier.fillMaxWidth(0.70f))`. ✅ Done (session 3).
+- [x] 9b.12 Filter bar — 3 priority flag chips always visible + "Labels" chip with multi-select dropdown. Replaces all-in-one dropdown. ✅ Done (session 4).
+- [x] 9b.13 Dividers in widgets — solid `WDivider` `ColorProvider` between task rows (was invisible semi-transparent). ✅ Done (session 4).
+- [x] 9b.14 Widget header padding — `vertical = 10.dp` top/bottom in `WidgetHeader`. ✅ Done (session 3).
+- [x] 9b.15 Widget header & day-header font weight — `FontWeight.Medium` (between Bold and Normal). ✅ Done (session 3).
+- [x] 9b.16 Widget colour palette — explicit `WPrimary / WSurface / WOnSurface / WOnSurfaceVariant` `ColorProvider` constants; no longer depends on Material You dynamic colour. ✅ Done (session 4).
+- [x] 9b.17 Upcoming day-header weight — `FontWeight.Medium`. ✅ Done (session 3).
+- [x] 9b.18 Deadline dialog — both chips use `FilterChip(selected=false)` border style; time chip hidden until date is set; dialog converted to `ModalBottomSheet` for full width. ✅ Done (sessions 3–4).
+- [x] 9b.19 TaskFormSheet — calendar icon on date chip; time field hidden until date is set; chip borders consistent with deadline dialog. ✅ Done (session 3).
+- [x] 9b.20 Repeat UI redesign — inline `Checkbox` + `RepeatRow` in both `DeadlinePickerDialog` and `TaskFormSheet`. ✅ Done (session 3).
+- [~] 9b.21 Slow animations — form sheet opens quickly (`skipPartiallyExpanded = true`); keyboard slide-up animation is a system-level behaviour and cannot be easily suppressed from app code.
+- [x] 9b.22 LabelScreen hides label filter (showLabelFilter=false); FolderScreen label implicit. ✅ Done (session 3).
+- [x] 9b.23 Cold-start blank Upcoming from widget tap — guard against re-navigation when already on UPCOMING route. ✅ Done (session 3).
 
 ---
 

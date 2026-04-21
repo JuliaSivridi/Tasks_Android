@@ -40,7 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.stler.tasks.domain.model.Priority
-import com.stler.tasks.ui.alltasks.FilterDropdown
+import com.stler.tasks.ui.alltasks.FilterBar
 import com.stler.tasks.ui.task.TaskItem
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -199,8 +199,8 @@ fun UpcomingScreen(
             }
         }
 
-        // ── Filter dropdown ───────────────────────────────────────────────
-        FilterDropdown(
+        // ── Filter bar ────────────────────────────────────────────────────
+        FilterBar(
             labels           = labels,
             priorityFilter   = priorityFilter,
             labelFilter      = labelFilter,

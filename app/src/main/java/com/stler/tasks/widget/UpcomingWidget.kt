@@ -111,7 +111,7 @@ class UpcomingWidget : GlanceAppWidget() {
                 Column(
                     modifier = GlanceModifier
                         .fillMaxSize()
-                        .background(GlanceTheme.colors.surface),
+                        .background(WSurface),
                 ) {
                     WidgetHeader(
                         title     = "Upcoming",
@@ -151,7 +151,7 @@ private fun DateHeader(text: String) {
             .fillMaxWidth()
             .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp),
         style = TextStyle(
-            color      = GlanceTheme.colors.primary,
+            color      = WPrimary,
             fontSize   = 14.sp,
             fontWeight = FontWeight.Medium,
         ),
