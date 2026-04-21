@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  App logo for AuthScreen (72dp display).
+  30×30 viewport. Content group scaled to 0.78 so all elements sit well within
+  the orange rounded-rect, with ~5dp margin on all sides.
+  strokeWidth=1.8 compensates for scale (effective ≈ 1.4 viewport units ≈ 3.4dp at 72dp).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="72dp"
+    android:height="72dp"
+    android:viewportWidth="30"
+    android:viewportHeight="30">
+
+    <!-- Orange rounded-rect background (full viewport) -->
+    <path
+        android:pathData="M3,0 L27,0 A3,3 0 0 1 30,3 L30,27 A3,3 0 0 1 27,30 L3,30 A3,3 0 0 1 0,27 L0,3 A3,3 0 0 1 3,0 Z"
+        android:fillColor="#E07E38" />
+
+    <!--
+      Design content: scale=0.78, centered at (15,15).
+      Original design spans x=3..29, y=5..26, center=(16, 15.5).
+      translateX = 15 - 16×0.78 = 2.52
+      translateY = 15 - 15.5×0.78 = 2.91
+      Result: right edge ≈ 25.1, top edge ≈ 6.8, bottom edge ≈ 23.2 → ~5dp margin all around.
+    -->
+    <group
+        android:translateX="2.52"
+        android:translateY="2.91"
+        android:scaleX="0.78"
+        android:scaleY="0.78">
+
+        <!-- Checkbox: stroke-only rounded rect x=3,y=5 w=10,h=10 rx=1 -->
+        <path
+            android:pathData="M4,5 L12,5 A1,1 0 0 1 13,6 L13,14 A1,1 0 0 1 12,15 L4,15 A1,1 0 0 1 3,14 L3,6 A1,1 0 0 1 4,5 Z"
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="1.8" />
+
+        <!-- Checkmark below the checkbox -->
+        <path
+            android:pathData="M3,23 L6,26 L13,19"
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="1.8"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+
+        <!-- 4 horizontal lines (task titles) -->
+        <path
+            android:pathData="M18,6 L29,6"
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="1.8"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M18,12 L29,12"
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="1.8"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M18,18 L29,18"
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="1.8"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M18,24 L29,24"
+            android:fillColor="#00000000"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="1.8"
+            android:strokeLineCap="round" />
+
+    </group>
+
+</vector>

@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -v \"^\\\\./.gradle\\\\|^\\\\./.idea\\\\|^./build\\\\|\\\\.class$\")",
+      "Bash(gradlew.bat assembleDebug)",
+      "Read(//mnt/d/Projects/**)",
+      "Bash(./gradlew assembleDebug)",
+      "Bash(cmd.exe /c \"cd /d D:\\\\Projects\\\\Tasks_android && gradlew.bat assembleDebug 2>&1\")",
+      "Bash(cmd.exe /c \"cd /d D:\\\\Projects\\\\Tasks_android && gradlew.bat assembleDebug\")",
+      "Bash(powershell.exe -Command \"Set-Location 'D:\\\\Projects\\\\Tasks_android'; .\\\\gradlew.bat assembleDebug 2>&1\")",
+      "Bash(powershell.exe -Command 'Get-ChildItem '\\\\''C:\\\\Users\\\\Stler\\\\.gradle\\\\caches'\\\\'' -Recurse -Filter '\\\\''*.jar'\\\\'' | Where-Object { $_.Name -like '\\\\''*reorderable*'\\\\'' } | Select-Object -First 5 FullName')",
+      "Bash(powershell.exe -Command 'Get-ChildItem '\\\\''C:\\\\Users\\\\Stler\\\\.gradle\\\\caches'\\\\'' -Recurse -Filter '\\\\''*.jar'\\\\'' | Where-Object { $_.Name -like '\\\\''*reorderable*'\\\\'' } | Select-Object -First 1 -ExpandProperty FullName | ForEach-Object { & '\\\\''C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\\\\bin\\\\jar.exe'\\\\'' tf $_ 2>&1 | Select-String '\\\\''draggable|Reorderable|rememberReorder'\\\\'' | Select-Object -First 30 }')",
+      "Bash(powershell.exe -Command 'Get-ChildItem '\\\\''C:\\\\Users\\\\Stler\\\\.gradle\\\\caches'\\\\'' -Recurse -Filter '\\\\''*.jar'\\\\'' | Where-Object { $_.Name -like '\\\\''*reorderable*'\\\\'' } | Select-Object -First 1 -ExpandProperty FullName | ForEach-Object { & '\\\\''C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\\\\bin\\\\jar.exe'\\\\'' tf $_ 2>&1 | Select-String '\\\\''Handle|handle|DragHandle'\\\\'' }')",
+      "Bash(powershell.exe -Command 'Get-ChildItem '\\\\''C:\\\\Users\\\\Stler\\\\.gradle\\\\caches'\\\\'' -Recurse -Filter '\\\\''*.jar'\\\\'' | Where-Object { $_.Name -like '\\\\''*reorderable*'\\\\'' } | Select-Object -First 1 -ExpandProperty FullName | ForEach-Object { & '\\\\''C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\\\\bin\\\\jar.exe'\\\\'' tf $_ 2>&1 | Select-String '\\\\''Lazy|lazy'\\\\'' | Select-Object -First 20 }')",
+      "Bash(dir \"D:\\\\Projects\\\\Tasks\\\\src\" /B /S)",
+      "Bash(./gradlew :app:compileDebugKotlin)",
+      "Bash(export JAVA_HOME=\"/c/Program Files/Android/Android Studio/jbr\")",
+      "Bash(del \"D:\\\\Projects\\\\Tasks_android\\\\app\\\\src\\\\main\\\\java\\\\com\\\\stler\\\\tasks\\\\ui\\\\task\\\\DeadlineSheet.kt\")",
+      "Bash(node -e ' *)",
+      "Bash(awk '{print $NF, $5}')"
+    ]
+  }
+}
