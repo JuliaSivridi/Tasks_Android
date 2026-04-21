@@ -18,7 +18,14 @@
       "Bash(del \"D:\\\\Projects\\\\Tasks_android\\\\app\\\\src\\\\main\\\\java\\\\com\\\\stler\\\\tasks\\\\ui\\\\task\\\\DeadlineSheet.kt\")",
       "Bash(node -e ' *)",
       "Bash(awk '{print $NF, $5}')",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git branch *)",
+      "Bash(gh repo *)",
+      "Bash(where gh *)",
+      "Bash(git fetch *)",
+      "Bash(git checkout *)"
     ]
   }
 }

@@ -28,7 +28,7 @@ import java.time.format.TextStyle as JTextStyle
 import java.util.Locale
 
 private sealed class UpcomingRow {
-    data class Header(val text: String) : UpcomingRow()
+    data class Header(val text: String, val isOverdue: Boolean = false) : UpcomingRow()
     data class Item(
         val task: com.stler.tasks.domain.model.Task,
         val labelItems: List<Pair<String, String>>,  // (name, hexColor)
@@ -86,7 +86,7 @@ class UpcomingWidget : GlanceAppWidget() {
         val rows = buildList<UpcomingRow> {
             // ── Overdue section ───────────────────────────────────────────────
             if (overdueTasks.isNotEmpty()) {
-                add(UpcomingRow.Header("Overdue"))
+                add(UpcomingRow.Header("Overdue", isOverdue = true))
                 overdueTasks
                     .sortedWith(compareBy(
                         { it.deadlineDate },
@@ -125,7 +125,7 @@ class UpcomingWidget : GlanceAppWidget() {
                             }
                         }) { row ->
                             when (row) {
-                                is UpcomingRow.Header -> DateHeader(row.text)
+                                is UpcomingRow.Header -> DateHeader(row.text, row.isOverdue)
                                 is UpcomingRow.Item   -> WidgetTaskRow(
                                     task            = row.task,
                                     labelItems      = row.labelItems,
@@ -144,14 +144,15 @@ class UpcomingWidget : GlanceAppWidget() {
 }
 
 @Composable
-private fun DateHeader(text: String) {
+private fun DateHeader(text: String, isOverdue: Boolean = false) {
     Text(
         text     = text,
         modifier = GlanceModifier
             .fillMaxWidth()
             .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp),
         style = TextStyle(
-            color      = WPrimary,
+            // Overdue → red (matches app DayHeader); regular dates → muted text
+            color      = if (isOverdue) WError else WOnSurfaceVariant,
             fontSize   = 14.sp,
             fontWeight = FontWeight.Medium,
         ),

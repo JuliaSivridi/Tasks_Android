@@ -216,11 +216,11 @@ fun WidgetTaskRow(
             }
         }
     }
-    // Thin divider line below each row — explicit colours match app's HorizontalDivider
+    // Thin divider line below each row — 1dp so it renders as at least 1 physical pixel
     Box(
         modifier = GlanceModifier
             .fillMaxWidth()
-            .height(0.5.dp)
+            .height(1.dp)
             .background(WDivider),
     ) {}
     } // end Column

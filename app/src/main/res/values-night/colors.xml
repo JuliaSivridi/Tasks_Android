@@ -2,8 +2,9 @@
 <resources>
     <!-- Widget palette (dark/night) — mirrors app's DarkColorScheme -->
     <color name="widget_primary">#D98D52</color>
-    <color name="widget_surface">#363636</color>
+    <color name="widget_surface">#1C1C1C</color>
     <color name="widget_on_surface">#F2F2F2</color>
     <color name="widget_on_surface_variant">#949494</color>
     <color name="widget_divider">#4A4A4A</color>
+    <color name="widget_error">#CC5252</color>
 </resources>
