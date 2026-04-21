@@ -151,8 +151,8 @@ private fun DateHeader(text: String, isOverdue: Boolean = false) {
             .fillMaxWidth()
             .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp),
         style = TextStyle(
-            // Overdue → red (matches app DayHeader); regular dates → muted text
-            color      = if (isOverdue) WError else WOnSurfaceVariant,
+            // Overdue → red (matches app DayHeader); regular dates → primary text
+            color      = if (isOverdue) WError else WOnSurface,
             fontSize   = 14.sp,
             fontWeight = FontWeight.Medium,
         ),

@@ -24,14 +24,18 @@ fun CompletedScreen(viewModel: CompletedViewModel = hiltViewModel()) {
     val folders        by viewModel.folders.collectAsStateWithLifecycle()
     val priorityFilter by viewModel.priorityFilter.collectAsStateWithLifecycle()
     val labelFilter    by viewModel.labelFilter.collectAsStateWithLifecycle()
+    val folderFilter   by viewModel.folderFilter.collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize()) {
         FilterBar(
             labels           = labels,
+            folders          = folders,
             priorityFilter   = priorityFilter,
             labelFilter      = labelFilter,
+            folderFilter     = folderFilter,
             onTogglePriority = { viewModel.togglePriorityFilter(it) },
             onToggleLabel    = { viewModel.toggleLabelFilter(it) },
+            onToggleFolder   = { viewModel.toggleFolderFilter(it) },
         )
 
         LazyColumn(modifier = Modifier.fillMaxSize()) {

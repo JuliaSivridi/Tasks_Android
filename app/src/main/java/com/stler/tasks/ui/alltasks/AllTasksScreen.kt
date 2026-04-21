@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -31,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.Priority
 import com.stler.tasks.ui.task.TaskItem
@@ -44,19 +46,23 @@ fun AllTasksScreen(
     onAddSubtask : (com.stler.tasks.domain.model.Task) -> Unit = {},
     viewModel    : AllTasksViewModel = hiltViewModel(),
 ) {
-    val filteredTasks by viewModel.filteredTasks.collectAsStateWithLifecycle()
-    val labels by viewModel.labels.collectAsStateWithLifecycle()
-    val folders by viewModel.folders.collectAsStateWithLifecycle()
+    val filteredTasks  by viewModel.filteredTasks.collectAsStateWithLifecycle()
+    val labels         by viewModel.labels.collectAsStateWithLifecycle()
+    val folders        by viewModel.folders.collectAsStateWithLifecycle()
     val priorityFilter by viewModel.priorityFilter.collectAsStateWithLifecycle()
-    val labelFilter by viewModel.labelFilter.collectAsStateWithLifecycle()
+    val labelFilter    by viewModel.labelFilter.collectAsStateWithLifecycle()
+    val folderFilter   by viewModel.folderFilter.collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize()) {
         FilterBar(
             labels           = labels,
+            folders          = folders,
             priorityFilter   = priorityFilter,
             labelFilter      = labelFilter,
+            folderFilter     = folderFilter,
             onTogglePriority = { viewModel.togglePriorityFilter(it) },
             onToggleLabel    = { viewModel.toggleLabelFilter(it) },
+            onToggleFolder   = { viewModel.toggleFolderFilter(it) },
         )
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             items(filteredTasks, key = { it.id }) { task ->
@@ -85,26 +91,29 @@ fun AllTasksScreen(
 }
 
 /**
- * Filter bar used on AllTasks, Upcoming, and Label screens.
+ * Filter bar shared across AllTasks, Upcoming, Completed screens.
  *
- * Layout:
- *   [🚩 Urgent] [🚩 Important] [🚩 Normal]   [Labels ▾]
+ * Layout (left to right):
+ *   [🚩 Urgent] [🚩 Important] [🚩 Normal]   [Labels ▾]  [Folders ▾]
  *
- * Priority chips are always visible; tapping one toggles it in the active filter.
- * The Labels chip is only shown when [showLabelFilter] = true and [labels] is non-empty;
- * tapping it opens a multi-select dropdown.
- *
- * Future: a [Folders] chip will be added with the same dropdown pattern.
+ * Priority chips are always visible.
+ * Labels and Folders chips each open a multi-select dropdown.
+ * Pass [showLabelFilter]=false (LabelScreen) or [showFolderFilter]=false
+ * to hide the respective chip entirely.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FilterBar(
     labels          : List<Label>,
+    folders         : List<Folder> = emptyList(),
     priorityFilter  : Set<Priority>,
     labelFilter     : Set<String>,
+    folderFilter    : Set<String> = emptySet(),
     onTogglePriority: (Priority) -> Unit,
     onToggleLabel   : (String) -> Unit,
+    onToggleFolder  : (String) -> Unit = {},
     showLabelFilter : Boolean = true,
+    showFolderFilter: Boolean = true,
 ) {
     Row(
         modifier              = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -160,6 +169,50 @@ fun FilterBar(
                             leadingIcon  = {
                                 Icon(Icons.Outlined.Label, null,
                                     tint     = lbl.color.toComposeColor(),
+                                    modifier = Modifier.size(16.dp))
+                            },
+                            trailingIcon = if (active) ({
+                                Icon(Icons.Outlined.Check, null, modifier = Modifier.size(16.dp))
+                            }) else null,
+                        )
+                    }
+                }
+            }
+        }
+
+        // ── Folders dropdown ─────────────────────────────────────────────────
+        if (showFolderFilter && folders.isNotEmpty()) {
+            var expanded  by remember { mutableStateOf(false) }
+            val activeCount = folderFilter.size
+            Box {
+                FilterChip(
+                    selected = activeCount > 0,
+                    onClick  = { expanded = true },
+                    label    = {
+                        Row(
+                            verticalAlignment     = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(Icons.Outlined.Folder, null, modifier = Modifier.size(14.dp))
+                            Text(
+                                text  = if (activeCount > 0) "Folders ($activeCount)" else "Folders",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    },
+                )
+                DropdownMenu(
+                    expanded         = expanded,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    folders.forEach { fld ->
+                        val active = fld.id in folderFilter
+                        DropdownMenuItem(
+                            text         = { Text(fld.name, color = fld.color.toComposeColor()) },
+                            onClick      = { onToggleFolder(fld.id) },
+                            leadingIcon  = {
+                                Icon(Icons.Outlined.Folder, null,
+                                    tint     = fld.color.toComposeColor(),
                                     modifier = Modifier.size(16.dp))
                             },
                             trailingIcon = if (active) ({

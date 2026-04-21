@@ -38,14 +38,19 @@ class AllTasksViewModel @Inject constructor(
     private val _labelFilter = MutableStateFlow<Set<String>>(emptySet())
     val labelFilter: StateFlow<Set<String>> = _labelFilter.asStateFlow()
 
+    private val _folderFilter = MutableStateFlow<Set<String>>(emptySet())
+    val folderFilter: StateFlow<Set<String>> = _folderFilter.asStateFlow()
+
     val filteredTasks: StateFlow<List<Task>> = combine(
         tasks,
         _priorityFilter,
         _labelFilter,
-    ) { list, pf, lf ->
+        _folderFilter,
+    ) { list, pf, lf, ff ->
         list.filter { task ->
             (pf.isEmpty() || task.priority in pf) &&
-                (lf.isEmpty() || task.labels.any { it in lf })
+                (lf.isEmpty() || task.labels.any { it in lf }) &&
+                (ff.isEmpty() || task.folderId in ff)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -55,6 +60,10 @@ class AllTasksViewModel @Inject constructor(
 
     fun toggleLabelFilter(id: String) {
         _labelFilter.update { if (id in it) it - id else it + id }
+    }
+
+    fun toggleFolderFilter(id: String) {
+        _folderFilter.update { if (id in it) it - id else it + id }
     }
 
     fun completeTask(id: String) = viewModelScope.launch { repository.completeTask(id) }

@@ -66,6 +66,7 @@ fun UpcomingScreen(
     val folders         by viewModel.folders.collectAsStateWithLifecycle()
     val priorityFilter  by viewModel.priorityFilter.collectAsStateWithLifecycle()
     val labelFilter     by viewModel.labelFilter.collectAsStateWithLifecycle()
+    val folderFilter    by viewModel.folderFilter.collectAsStateWithLifecycle()
 
     val today    = remember { LocalDate.now() }
     val listState = rememberLazyListState()
@@ -202,10 +203,13 @@ fun UpcomingScreen(
         // ── Filter bar ────────────────────────────────────────────────────
         FilterBar(
             labels           = labels,
+            folders          = folders,
             priorityFilter   = priorityFilter,
             labelFilter      = labelFilter,
+            folderFilter     = folderFilter,
             onTogglePriority = { viewModel.togglePriorityFilter(it) },
             onToggleLabel    = { viewModel.toggleLabelFilter(it) },
+            onToggleFolder   = { viewModel.toggleFolderFilter(it) },
         )
 
         // ── Task list — all dates, scrollable ─────────────────────────────
