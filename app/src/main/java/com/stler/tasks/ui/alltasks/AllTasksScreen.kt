@@ -137,9 +137,9 @@ fun FilterBar(
                         Text(priorityFilter.size.toString(), style = MaterialTheme.typography.labelSmall)
                 },
                 colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor   = MaterialTheme.colorScheme.primaryContainer,
-                    selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    selectedLabelColor       = MaterialTheme.colorScheme.onPrimaryContainer,
+                    selectedContainerColor   = MaterialTheme.colorScheme.surfaceVariant,
+                    selectedLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    selectedLabelColor       = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
             )
             DropdownMenu(

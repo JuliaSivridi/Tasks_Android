@@ -146,13 +146,13 @@ class SheetsMapper @Inject constructor() {
         }
 
     /**
-     * Prefix a value with a leading apostrophe so Google Sheets stores it as plain text
-     * when using valueInputOption=USER_ENTERED (same format as the PWA).
-     * Empty strings are written as-is (no apostrophe); null → empty string.
+     * Convert any value to a String for RAW Sheets writes — same as PWA's String() cast.
+     * Integers and booleans become their string representations ("1", "TRUE").
+     * Null → "".  Empty strings stay "".
      */
     private fun Any?.text(): String = when {
         this == null -> ""
-        this is String && this.isEmpty() -> ""
-        else -> "'$this"
+        this is String -> this
+        else -> this.toString()
     }
 }
