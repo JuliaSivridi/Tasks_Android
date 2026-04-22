@@ -1,6 +1,6 @@
 # Stler Tasks Android — Task Decomposition
 
-**Updated:** 2026-04-17
+**Updated:** 2026-04-21
 **Spec:** `docs/architecture-spec.md`
 **Source reference:** PWA at `D:\Projects\Tasks` (scanned for full UI parity)
 
@@ -176,10 +176,10 @@
 _Discovered during testing after Stage 9._
 
 ### Data correctness
-- [ ] 9b.1 Google Sheets "'" prefix — verify `sort_order`, `recur_value`, `is_expanded` are written with a leading apostrophe (Sheets text-force) so they are not interpreted as numbers. Check all numeric/boolean fields against PWA schema.
-- [ ] 9b.2 Folder not persisted — verify folder write path in `TaskRepositoryImpl`; `sort_order` must use `"'"` prefix like PWA; check all four folder columns (id, name, color, sort_order).
-- [ ] 9b.3 Full data-schema audit — compare every field in tasks/folders/labels sheets with PWA `SheetsMapper` to ensure column positions and value formats match exactly.
-- [ ] 9b.4 Labels sort_order — read column D from the `labels` sheet; sort labels in sidebar by `sort_order` ascending.
+- [x] 9b.1 Google Sheets "'" prefix — `valueInputOption="RAW"` sends native types; `int()` / `bool()` helpers handle both `Number` and `String` returns from Sheets. No apostrophe prefix needed. ✅ Verified.
+- [x] 9b.2 Folder not persisted — folder write path verified correct: 4 columns A–D, INSERT uses `append` (full row), UPDATE uses `lastColOf("folder")="D"`. Root cause was labels using col C not D (fixed in 9b.4). ✅ Verified.
+- [x] 9b.3 Full data-schema audit — tasks 17 cols (A–Q), folders 4 cols (A–D), labels 4 cols (A–D); all column positions, booleans ("TRUE"/"FALSE"), integers (RAW Int), dateStr() serial-date conversion verified correct. ✅ Done.
+- [x] 9b.4 Labels sort_order — read column D from the `labels` sheet; sort labels in sidebar by `sort_order` ascending. Domain model, entity, DAO ORDER BY, SheetsMapper, SyncWorker lastColOf, DB v3. ✅ Done (session 5).
 
 ### Task behaviour
 - [x] 9b.5 Complete with subtasks — when completing a task, recursively complete all descendants at every depth (same as PWA). `completeDescendants()` added to `TaskRepositoryImpl`. ✅ Done (session 3).
@@ -193,7 +193,7 @@ _Discovered during testing after Stage 9._
 ### UI/UX
 - [x] 9b.10 Primary color → `#e07e38` (matches PWA orange). App icon background color verified correct. ✅ Done (session 3).
 - [x] 9b.11 Sidebar narrower — 70% of screen width instead of ~90%. `ModalDrawerSheet(modifier = Modifier.fillMaxWidth(0.70f))`. ✅ Done (session 3).
-- [x] 9b.12 Filter bar — 3 priority flag chips always visible + "Labels" chip with multi-select dropdown. Replaces all-in-one dropdown. ✅ Done (session 4).
+- [x] 9b.12 Filter bar — redesigned to 3 icon-only chips (priority/labels/folders), each with its own DropdownMenu; count badge when active; no text wrapping. ✅ Done (session 5).
 - [x] 9b.13 Dividers in widgets — solid `WDivider` `ColorProvider` between task rows (was invisible semi-transparent). ✅ Done (session 4).
 - [x] 9b.14 Widget header padding — `vertical = 10.dp` top/bottom in `WidgetHeader`. ✅ Done (session 3).
 - [x] 9b.15 Widget header & day-header font weight — `FontWeight.Medium` (between Bold and Normal). ✅ Done (session 3).
@@ -202,7 +202,10 @@ _Discovered during testing after Stage 9._
 - [x] 9b.18 Deadline dialog — both chips use `FilterChip(selected=false)` border style; time chip hidden until date is set; dialog converted to `ModalBottomSheet` for full width. ✅ Done (sessions 3–4).
 - [x] 9b.19 TaskFormSheet — calendar icon on date chip; time field hidden until date is set; chip borders consistent with deadline dialog. ✅ Done (session 3).
 - [x] 9b.20 Repeat UI redesign — inline `Checkbox` + `RepeatRow` in both `DeadlinePickerDialog` and `TaskFormSheet`. ✅ Done (session 3).
-- [~] 9b.21 Slow animations — form sheet opens quickly (`skipPartiallyExpanded = true`); keyboard slide-up animation is a system-level behaviour and cannot be easily suppressed from app code.
+- [x] 9b.21 Slow animations — form sheet opens quickly (`skipPartiallyExpanded = true`); keyboard slide-up animation is a system-level behaviour and cannot be easily suppressed from app code. ✅ Done.
+- [x] 9b.24 Date header order — "16 Apr · Thursday · Today" (Today/Tomorrow label moved to end) in both UpcomingScreen and UpcomingWidget. ✅ Done (session 5).
+- [x] 9b.25 Repeat row hidden when no date — RepeatRow not shown in TaskFormSheet and DeadlinePickerDialog until a deadline date is selected. ✅ Done (session 5).
+- [x] 9b.26 Folder filter — folder dropdown chip added to FilterBar on AllTasks, Upcoming and Completed screens; ViewModels updated with folderFilter flow + toggleFolderFilter(). ✅ Done (session 5).
 - [x] 9b.22 LabelScreen hides label filter (showLabelFilter=false); FolderScreen label implicit. ✅ Done (session 3).
 - [x] 9b.23 Cold-start blank Upcoming from widget tap — guard against re-navigation when already on UPCOMING route. ✅ Done (session 3).
 
