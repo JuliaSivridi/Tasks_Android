@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface LabelDao {
 
-    @Query("SELECT * FROM labels ORDER BY sort_order ASC, name ASC")
+    @Query("SELECT * FROM labels ORDER BY sortOrder ASC, name ASC")
     fun observeAll(): Flow<List<LabelEntity>>
 
     @Query("SELECT * FROM labels")
