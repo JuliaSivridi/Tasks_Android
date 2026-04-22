@@ -640,6 +640,10 @@ internal fun RepeatRow(
                         selected = recurType == rt,
                         onClick  = { onTypeChange(rt) },
                         label    = { Text(lbl, style = MaterialTheme.typography.labelSmall) },
+                        colors   = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor  = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor      = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
                     )
                     Spacer(Modifier.width(4.dp))
                 }

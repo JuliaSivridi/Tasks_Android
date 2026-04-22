@@ -27,6 +27,6 @@ data class ValuesBody(
 
 /** Body for POST spreadsheets/{id}/values:batchUpdate */
 data class BatchUpdateValuesBody(
-    @SerializedName("valueInputOption") val valueInputOption: String = "RAW",
+    @SerializedName("valueInputOption") val valueInputOption: String = "USER_ENTERED",
     @SerializedName("data") val data: List<ValuesBody>,
 )

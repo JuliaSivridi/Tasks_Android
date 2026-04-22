@@ -318,7 +318,7 @@ private fun DayPill(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(
-                if (isToday) MaterialTheme.colorScheme.secondaryContainer
+                if (isToday) MaterialTheme.colorScheme.primaryContainer
                 else Color.Transparent
             )
             .padding(horizontal = 6.dp, vertical = 4.dp),
@@ -327,13 +327,13 @@ private fun DayPill(
             text = date.dayOfMonth.toString(),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-            color = if (isToday) MaterialTheme.colorScheme.onSecondaryContainer
+            color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer
                     else MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text = date.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()),
             style = MaterialTheme.typography.bodySmall,
-            color = if (isToday) MaterialTheme.colorScheme.onSecondaryContainer
+            color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer
                     else MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Box(

@@ -62,8 +62,9 @@ class MainViewModel @Inject constructor(
     // ── Folder CRUD ───────────────────────────────────────────────────────
 
     fun createFolder(name: String, color: String) = viewModelScope.launch {
+        val nextOrder = (folders.value.maxOfOrNull { it.sortOrder } ?: -1) + 1
         taskRepository.createFolder(
-            Folder(id = generateId("fld"), name = name, color = color)
+            Folder(id = generateId("fld"), name = name, color = color, sortOrder = nextOrder)
         )
     }
 
@@ -78,8 +79,9 @@ class MainViewModel @Inject constructor(
     // ── Label CRUD ────────────────────────────────────────────────────────
 
     fun createLabel(name: String, color: String) = viewModelScope.launch {
+        val nextOrder = (labels.value.maxOfOrNull { it.sortOrder } ?: -1) + 1
         taskRepository.createLabel(
-            Label(id = generateId("lbl"), name = name, color = color)
+            Label(id = generateId("lbl"), name = name, color = color, sortOrder = nextOrder)
         )
     }
 

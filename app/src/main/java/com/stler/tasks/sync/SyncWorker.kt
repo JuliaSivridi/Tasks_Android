@@ -96,10 +96,14 @@ class SyncWorker @AssistedInject constructor(
 
         when (item.operation) {
             "INSERT" -> {
+                // Use explicit column range (e.g. "tasks!A:Q") so Sheets' table-detection
+                // is constrained to our columns only, preventing column-shift bugs when the
+                // sheet has extra columns from other sources (e.g. PWA metadata).
+                val appendRange = "$sheetName!A:${lastColOf(item.entityType)}"
                 sheetsApi.append(
                     spreadsheetId = spreadsheetId,
-                    range = sheetName,
-                    body = ValuesBody(range = sheetName, values = listOf(entityRow(item))),
+                    range = appendRange,
+                    body = ValuesBody(range = appendRange, values = listOf(entityRow(item))),
                 )
             }
             "UPDATE" -> {

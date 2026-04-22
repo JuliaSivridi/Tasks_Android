@@ -48,12 +48,12 @@ class SheetsMapper @Inject constructor() {
     }
 
     fun taskToRow(task: TaskEntity): List<Any?> = listOf(
-        task.id, task.parentId, task.folderId, task.title,
-        task.status, task.priority, task.deadlineDate, task.deadlineTime,
-        if (task.isRecurring) "TRUE" else "FALSE",   // store as text like PWA
-        task.recurType, task.recurValue, task.labels,
-        task.sortOrder, task.createdAt, task.updatedAt, task.completedAt,
-        if (task.isExpanded) "TRUE" else "FALSE",    // store as text like PWA
+        task.id.text(), task.parentId.text(), task.folderId.text(), task.title.text(),
+        task.status.text(), task.priority.text(), task.deadlineDate.text(), task.deadlineTime.text(),
+        (if (task.isRecurring) "TRUE" else "FALSE").text(),
+        task.recurType.text(), task.recurValue.text(), task.labels.text(),
+        task.sortOrder.text(), task.createdAt.text(), task.updatedAt.text(), task.completedAt.text(),
+        (if (task.isExpanded) "TRUE" else "FALSE").text(),
     )
 
     // ── Folders ───────────────────────────────────────────────────────────
@@ -69,7 +69,7 @@ class SheetsMapper @Inject constructor() {
     }
 
     fun folderToRow(folder: FolderEntity): List<Any?> = listOf(
-        folder.id, folder.name, folder.color, folder.sortOrder,
+        folder.id.text(), folder.name.text(), folder.color.text(), folder.sortOrder.text(),
     )
 
     // ── Labels ────────────────────────────────────────────────────────────
@@ -85,7 +85,7 @@ class SheetsMapper @Inject constructor() {
     }
 
     fun labelToRow(label: LabelEntity): List<Any?> = listOf(
-        label.id, label.name, label.color, label.sortOrder,
+        label.id.text(), label.name.text(), label.color.text(), label.sortOrder.text(),
     )
 
     // ── Row-number lookup (for UPDATE / DELETE push) ───────────────────────
@@ -144,4 +144,15 @@ class SheetsMapper @Inject constructor() {
             is String -> v.toIntOrNull() ?: default
             else -> default
         }
+
+    /**
+     * Prefix a value with a leading apostrophe so Google Sheets stores it as plain text
+     * when using valueInputOption=USER_ENTERED (same format as the PWA).
+     * Empty strings are written as-is (no apostrophe); null → empty string.
+     */
+    private fun Any?.text(): String = when {
+        this == null -> ""
+        this is String && this.isEmpty() -> ""
+        else -> "'$this"
+    }
 }

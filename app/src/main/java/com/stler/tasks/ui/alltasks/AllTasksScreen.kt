@@ -18,6 +18,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -135,6 +136,11 @@ fun FilterBar(
                     if (priorityFilter.isNotEmpty())
                         Text(priorityFilter.size.toString(), style = MaterialTheme.typography.labelSmall)
                 },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor   = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    selectedLabelColor       = MaterialTheme.colorScheme.onPrimaryContainer,
+                ),
             )
             DropdownMenu(
                 expanded         = priorityExpanded,
@@ -169,6 +175,11 @@ fun FilterBar(
                         if (labelFilter.isNotEmpty())
                             Text(labelFilter.size.toString(), style = MaterialTheme.typography.labelSmall)
                     },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor   = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        selectedLabelColor       = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
                 )
                 DropdownMenu(
                     expanded         = labelsExpanded,
@@ -203,6 +214,11 @@ fun FilterBar(
                         if (folderFilter.isNotEmpty())
                             Text(folderFilter.size.toString(), style = MaterialTheme.typography.labelSmall)
                     },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor   = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        selectedLabelColor       = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
                 )
                 DropdownMenu(
                     expanded         = foldersExpanded,

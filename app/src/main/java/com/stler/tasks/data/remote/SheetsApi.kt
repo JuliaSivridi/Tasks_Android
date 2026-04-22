@@ -31,7 +31,7 @@ interface SheetsApi {
     suspend fun append(
         @Path("spreadsheetId") spreadsheetId: String,
         @Path("range") range: String,
-        @Query("valueInputOption") inputOption: String = "RAW",
+        @Query("valueInputOption") inputOption: String = "USER_ENTERED",
         @Query("insertDataOption") insertOption: String = "INSERT_ROWS",
         @Body body: ValuesBody,
     ): ValuesResponse
