@@ -286,9 +286,9 @@ private fun DayHeader(date: LocalDate, today: LocalDate) {
             .replaceFirstChar { it.uppercase() }
         buildString {
             append(datePart)
-            if (special != null) { append(" ‧ "); append(special) }
             append(" ‧ ")
             append(weekdayPart)
+            if (special != null) { append(" ‧ "); append(special) }
         }
     }
 

@@ -18,7 +18,7 @@ import com.stler.tasks.data.local.entity.TaskEntity
         LabelEntity::class,
         SyncQueueEntity::class,
     ],
-    version = 2,
+    version = 3,   // v3: labels.sort_order added
     exportSchema = true,
 )
 abstract class TaskDatabase : RoomDatabase() {

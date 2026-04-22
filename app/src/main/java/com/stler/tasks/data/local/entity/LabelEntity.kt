@@ -7,18 +7,21 @@ import com.stler.tasks.domain.model.Label
 @Entity(tableName = "labels")
 data class LabelEntity(
     @PrimaryKey val id: String,
-    val name: String,
-    val color: String,    // hex, e.g. "#3b82f6"
+    val name     : String,
+    val color    : String,    // hex, e.g. "#3b82f6"
+    val sortOrder: Int = 0,   // column D in the labels sheet
 )
 
 fun LabelEntity.toDomain() = Label(
-    id = id,
-    name = name,
-    color = color,
+    id        = id,
+    name      = name,
+    color     = color,
+    sortOrder = sortOrder,
 )
 
 fun Label.toEntity() = LabelEntity(
-    id = id,
-    name = name,
-    color = color,
+    id        = id,
+    name      = name,
+    color     = color,
+    sortOrder = sortOrder,
 )

@@ -150,7 +150,7 @@ class SyncWorker @AssistedInject constructor(
     private fun lastColOf(entityType: String) = when (entityType) {
         "task"   -> "Q"   // 17 columns A–Q
         "folder" -> "D"   // 4 columns A–D (id, name, color, sort_order)
-        "label"  -> "C"   // 3 columns A–C (id, name, color)
+        "label"  -> "D"   // 4 columns A–D (id, name, color, sort_order)
         else     -> "Z"
     }
 

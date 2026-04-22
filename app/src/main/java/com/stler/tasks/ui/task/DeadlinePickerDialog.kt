@@ -170,15 +170,17 @@ fun DeadlinePickerDialog(
                 }
             }
 
-            // ── Row 2: Repeat (inline checkbox design) ────────────────────────
-            RepeatRow(
-                isChecked     = isRecurring,
-                onToggle      = { isRecurring = it },
-                recurValue    = recurValue,
-                onValueChange = { recurValue = it },
-                recurType     = recurType,
-                onTypeChange  = { recurType = it },
-            )
+            // ── Row 2: Repeat — only shown when a date is selected ───────────
+            if (selectedDate.isNotBlank()) {
+                RepeatRow(
+                    isChecked     = isRecurring,
+                    onToggle      = { isRecurring = it },
+                    recurValue    = recurValue,
+                    onValueChange = { recurValue = it },
+                    recurType     = recurType,
+                    onTypeChange  = { recurType = it },
+                )
+            }
 
             HorizontalDivider()
 

@@ -91,15 +91,15 @@ fun AllTasksScreen(
 }
 
 /**
- * Filter bar shared across AllTasks, Upcoming, Completed screens.
+ * Compact filter bar: three icon-only chips, each opening its own multi-select dropdown.
  *
- * Layout (left to right):
- *   [🚩 Urgent] [🚩 Important] [🚩 Normal]   [Labels ▾]  [Folders ▾]
+ *   [🚩]  [🏷]  [📁]
  *
- * Priority chips are always visible.
- * Labels and Folders chips each open a multi-select dropdown.
- * Pass [showLabelFilter]=false (LabelScreen) or [showFolderFilter]=false
- * to hide the respective chip entirely.
+ * When a filter is active the chip renders selected (filled background) and shows
+ * a small count badge in the label slot — no long text, so the row never wraps.
+ *
+ * Parameters [showLabelFilter] / [showFolderFilter] hide the respective chip when
+ * not relevant (e.g. LabelScreen hides the label chip, FolderScreen hides folder chip).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -115,51 +115,64 @@ fun FilterBar(
     showLabelFilter : Boolean = true,
     showFolderFilter: Boolean = true,
 ) {
+    var priorityExpanded by remember { mutableStateOf(false) }
+    var labelsExpanded   by remember { mutableStateOf(false) }
+    var foldersExpanded  by remember { mutableStateOf(false) }
+
     Row(
         modifier              = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment     = Alignment.CenterVertically,
     ) {
-        // ── Priority flag chips ──────────────────────────────────────────────
-        listOf(Priority.URGENT, Priority.IMPORTANT, Priority.NORMAL).forEach { p ->
+
+        // ── Priority chip ─────────────────────────────────────────────────
+        Box {
             FilterChip(
-                selected = p in priorityFilter,
-                onClick  = { onTogglePriority(p) },
-                label    = {
-                    Icon(
-                        Icons.Outlined.Flag,
-                        contentDescription = p.name,
-                        modifier = Modifier.size(14.dp),
-                        tint     = priorityColor(p),
-                    )
+                selected    = priorityFilter.isNotEmpty(),
+                onClick     = { priorityExpanded = true },
+                leadingIcon = { Icon(Icons.Outlined.Flag, null, Modifier.size(16.dp)) },
+                label       = {
+                    if (priorityFilter.isNotEmpty())
+                        Text(priorityFilter.size.toString(), style = MaterialTheme.typography.labelSmall)
                 },
             )
+            DropdownMenu(
+                expanded         = priorityExpanded,
+                onDismissRequest = { priorityExpanded = false },
+            ) {
+                listOf(Priority.URGENT to "Urgent", Priority.IMPORTANT to "Important", Priority.NORMAL to "Normal")
+                    .forEach { (p, name) ->
+                        val active = p in priorityFilter
+                        DropdownMenuItem(
+                            text         = { Text(name) },
+                            onClick      = { onTogglePriority(p) },
+                            leadingIcon  = {
+                                Icon(Icons.Outlined.Flag, null,
+                                    tint = priorityColor(p), modifier = Modifier.size(16.dp))
+                            },
+                            trailingIcon = if (active) ({
+                                Icon(Icons.Outlined.Check, null, modifier = Modifier.size(16.dp))
+                            }) else null,
+                        )
+                    }
+            }
         }
 
-        // ── Labels dropdown ──────────────────────────────────────────────────
+        // ── Labels chip ───────────────────────────────────────────────────
         if (showLabelFilter && labels.isNotEmpty()) {
-            var expanded  by remember { mutableStateOf(false) }
-            val activeCount = labelFilter.size
             Box {
                 FilterChip(
-                    selected = activeCount > 0,
-                    onClick  = { expanded = true },
-                    label    = {
-                        Row(
-                            verticalAlignment     = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Icon(Icons.Outlined.Label, null, modifier = Modifier.size(14.dp))
-                            Text(
-                                text  = if (activeCount > 0) "Labels ($activeCount)" else "Labels",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
+                    selected    = labelFilter.isNotEmpty(),
+                    onClick     = { labelsExpanded = true },
+                    leadingIcon = { Icon(Icons.Outlined.Label, null, Modifier.size(16.dp)) },
+                    label       = {
+                        if (labelFilter.isNotEmpty())
+                            Text(labelFilter.size.toString(), style = MaterialTheme.typography.labelSmall)
                     },
                 )
                 DropdownMenu(
-                    expanded         = expanded,
-                    onDismissRequest = { expanded = false },
+                    expanded         = labelsExpanded,
+                    onDismissRequest = { labelsExpanded = false },
                 ) {
                     labels.forEach { lbl ->
                         val active = lbl.id in labelFilter
@@ -168,8 +181,7 @@ fun FilterBar(
                             onClick      = { onToggleLabel(lbl.id) },
                             leadingIcon  = {
                                 Icon(Icons.Outlined.Label, null,
-                                    tint     = lbl.color.toComposeColor(),
-                                    modifier = Modifier.size(16.dp))
+                                    tint = lbl.color.toComposeColor(), modifier = Modifier.size(16.dp))
                             },
                             trailingIcon = if (active) ({
                                 Icon(Icons.Outlined.Check, null, modifier = Modifier.size(16.dp))
@@ -180,30 +192,21 @@ fun FilterBar(
             }
         }
 
-        // ── Folders dropdown ─────────────────────────────────────────────────
+        // ── Folders chip ──────────────────────────────────────────────────
         if (showFolderFilter && folders.isNotEmpty()) {
-            var expanded  by remember { mutableStateOf(false) }
-            val activeCount = folderFilter.size
             Box {
                 FilterChip(
-                    selected = activeCount > 0,
-                    onClick  = { expanded = true },
-                    label    = {
-                        Row(
-                            verticalAlignment     = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Icon(Icons.Outlined.Folder, null, modifier = Modifier.size(14.dp))
-                            Text(
-                                text  = if (activeCount > 0) "Folders ($activeCount)" else "Folders",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
+                    selected    = folderFilter.isNotEmpty(),
+                    onClick     = { foldersExpanded = true },
+                    leadingIcon = { Icon(Icons.Outlined.Folder, null, Modifier.size(16.dp)) },
+                    label       = {
+                        if (folderFilter.isNotEmpty())
+                            Text(folderFilter.size.toString(), style = MaterialTheme.typography.labelSmall)
                     },
                 )
                 DropdownMenu(
-                    expanded         = expanded,
-                    onDismissRequest = { expanded = false },
+                    expanded         = foldersExpanded,
+                    onDismissRequest = { foldersExpanded = false },
                 ) {
                     folders.forEach { fld ->
                         val active = fld.id in folderFilter
@@ -212,8 +215,7 @@ fun FilterBar(
                             onClick      = { onToggleFolder(fld.id) },
                             leadingIcon  = {
                                 Icon(Icons.Outlined.Folder, null,
-                                    tint     = fld.color.toComposeColor(),
-                                    modifier = Modifier.size(16.dp))
+                                    tint = fld.color.toComposeColor(), modifier = Modifier.size(16.dp))
                             },
                             trailingIcon = if (active) ({
                                 Icon(Icons.Outlined.Check, null, modifier = Modifier.size(16.dp))

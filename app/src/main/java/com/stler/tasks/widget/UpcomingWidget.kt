@@ -181,9 +181,9 @@ private fun formatDateHeader(dateStr: String, today: LocalDate): String {
         }
         buildString {
             append(datePart)
-            if (special != null) { append(" · "); append(special) }
             append(" · ")
             append(weekday)
+            if (special != null) { append(" · "); append(special) }
         }
     } catch (_: Exception) { dateStr }
 }

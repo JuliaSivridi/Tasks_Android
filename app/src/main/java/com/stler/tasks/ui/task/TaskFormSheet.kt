@@ -256,15 +256,17 @@ fun TaskFormSheet(
                 }
             }
 
-            // ── Repeat (inline checkbox design) ───────────────────────────
-            RepeatRow(
-                isChecked    = isRecurring,
-                onToggle     = { isRecurring = it },
-                recurValue   = recurValue,
-                onValueChange = { recurValue = it },
-                recurType    = recurType,
-                onTypeChange = { recurType = it },
-            )
+            // ── Repeat — only shown when a date is set ────────────────────
+            if (deadlineDate.isNotBlank()) {
+                RepeatRow(
+                    isChecked     = isRecurring,
+                    onToggle      = { isRecurring = it },
+                    recurValue    = recurValue,
+                    onValueChange = { recurValue = it },
+                    recurType     = recurType,
+                    onTypeChange  = { recurType = it },
+                )
+            }
 
             // ── Priority ──────────────────────────────────────────────────
             SectionLabel("Priority")

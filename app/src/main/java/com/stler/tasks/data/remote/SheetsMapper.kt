@@ -17,8 +17,8 @@ import javax.inject.Inject
  * Folder columns (A–D):
  *   0=id, 1=name, 2=color, 3=sort_order
  *
- * Label columns (A–C):
- *   0=id, 1=name, 2=color
+ * Label columns (A–D):
+ *   0=id, 1=name, 2=color, 3=sort_order
  */
 class SheetsMapper @Inject constructor() {
 
@@ -77,14 +77,15 @@ class SheetsMapper @Inject constructor() {
     fun rowToLabel(row: List<Any?>): LabelEntity? {
         val id = row.str(0).takeIf { it.isNotBlank() } ?: return null
         return LabelEntity(
-            id = id,
-            name = row.str(1),
-            color = row.str(2).ifEmpty { "#6b7280" },
+            id        = id,
+            name      = row.str(1),
+            color     = row.str(2).ifEmpty { "#6b7280" },
+            sortOrder = row.int(3, 0),   // column D added by user
         )
     }
 
     fun labelToRow(label: LabelEntity): List<Any?> = listOf(
-        label.id, label.name, label.color,
+        label.id, label.name, label.color, label.sortOrder,
     )
 
     // ── Row-number lookup (for UPDATE / DELETE push) ───────────────────────
