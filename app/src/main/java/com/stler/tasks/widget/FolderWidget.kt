@@ -1,10 +1,13 @@
 package com.stler.tasks.widget
 
 import android.content.Context
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
@@ -12,39 +15,47 @@ import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Column
 import androidx.glance.layout.fillMaxSize
-import androidx.glance.appwidget.GlanceAppWidgetManager
+import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.Task
 import dagger.hilt.android.EntryPointAccessors
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.Flow
 
 private data class FolderRow(
-    val task: Task,
-    val depth: Int,
+    val task       : Task,
+    val depth      : Int,
     val hasChildren: Boolean,
-    val labelItems: List<Pair<String, String>>, // (name, hexColor)
+    val labelItems : List<Pair<String, String>>, // (name, hexColor)
 )
 
 class FolderWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
-        val folderId = WidgetPrefs.getFolderId(context, appWidgetId)
+        val folderId    = WidgetPrefs.getFolderId(context, appWidgetId)
 
         val repo = EntryPointAccessors
             .fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
             .taskRepository()
 
-        val allLabels  = repo.observeLabels().first()
-        val folders    = repo.observeFolders().first()
-        val folderName = folders.find { it.id == folderId }?.name ?: "Inbox"
-        val tasks      = repo.observePendingInFolder(folderId).first()
-
-        val displayList = buildList<FolderRow> {
-            addRecursive(tasks, allLabels, parentId = null, depth = 0)
-        }
+        // ── Obtain flows once — collected reactively inside provideContent ────
+        // When a task is completed (or any DB change occurs), Room emits new data,
+        // collectAsState picks it up, and the widget recomposes with correct data
+        // immediately — without waiting for a new SessionWorker to start.
+        val tasksFlow  : Flow<List<Task>>   = repo.observePendingInFolder(folderId)
+        val labelsFlow : Flow<List<Label>>  = repo.observeLabels()
+        val foldersFlow: Flow<List<Folder>> = repo.observeFolders()
 
         provideContent {
+            val tasks   by tasksFlow.collectAsState(initial = emptyList())
+            val labels  by labelsFlow.collectAsState(initial = emptyList())
+            val folders by foldersFlow.collectAsState(initial = emptyList())
+
+            val folderName  = folders.find { it.id == folderId }?.name ?: "Inbox"
+            val displayList = buildList<FolderRow> {
+                addRecursive(tasks, labels, parentId = null, depth = 0)
+            }
+
             GlanceTheme {
                 Column(
                     modifier = GlanceModifier
@@ -63,7 +74,6 @@ class FolderWidget : GlanceAppWidget() {
                                 indentLevel = row.depth,
                                 hasChildren = row.hasChildren,
                                 labelItems  = row.labelItems,
-                                // Folder name not shown (all tasks are in this folder)
                             )
                         }
                     }
@@ -78,10 +88,10 @@ class FolderWidget : GlanceAppWidget() {
  * Supports unlimited nesting depth — each level is indented by [depth] * 16dp.
  */
 private fun MutableList<FolderRow>.addRecursive(
-    allTasks  : List<Task>,
-    allLabels : List<Label>,
-    parentId  : String?,
-    depth     : Int,
+    allTasks : List<Task>,
+    allLabels: List<Label>,
+    parentId : String?,
+    depth    : Int,
 ) {
     val children = if (parentId == null)
         allTasks.filter { it.isRoot }

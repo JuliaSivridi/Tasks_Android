@@ -2,19 +2,15 @@ package com.stler.tasks.ui.folder
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,7 +29,7 @@ import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
 /**
- * Folder task list with drag-to-reorder and indent/outdent controls.
+ * Folder task list with drag-to-reorder.
  *
  * ## Performance fix
  * The reorderable library's [onMove] fires on every drag frame (every pixel).
@@ -45,13 +41,6 @@ import sh.calvin.reorderable.rememberReorderableLazyListState
  *              + stores the intended final sibling indices in [pendingReorder].
  *  - [isDragging] → false (user lifts finger) → one [reorderSiblings] call
  *                   with the stored from/to indices → 1 batch DB write, 1 widget refresh.
- *
- * ## Indent / Outdent
- *  - [→] button: makes the current task a child of the task immediately above it.
- *    Only shown when a task above exists in the list.
- *  - [←] button: promotes the current task one level up (to its grandparent or root).
- *    Only shown when the task has depth > 0.
- *  Both call [FolderViewModel.reparentTask] which already handles all DB + widget logic.
  */
 @Composable
 fun FolderScreen(
@@ -116,12 +105,9 @@ fun FolderScreen(
         state    = lazyListState,
         modifier = Modifier.fillMaxSize(),
     ) {
-        itemsIndexed(localList, key = { _, node -> node.task.id }) { index, node ->
+        itemsIndexed(localList, key = { _, node -> node.task.id }) { _, node ->
             val task  = node.task
             val depth = node.depth
-
-            // Task immediately above this one in the displayed list (potential indent target)
-            val taskAbove = if (index > 0) localList[index - 1] else null
 
             ReorderableItem(reorderableState, key = task.id) { isDragging ->
 
@@ -145,57 +131,14 @@ fun FolderScreen(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-
-                    // ── Outdent (←): promote task one level up ────────────────
-                    // Visible when task has a parent (depth > 0).
-                    // Finds the parent node in the current list, then uses that
-                    // parent's parentId as the new parentId (grandparent or "").
-                    if (depth > 0) {
-                        IconButton(
-                            onClick = {
-                                val parentNode    = localList.find { it.task.id == task.parentId }
-                                val grandparentId = parentNode?.task?.parentId ?: ""
-                                viewModel.reparentTask(task.id, grandparentId)
-                            },
-                            modifier = Modifier.size(28.dp),
-                        ) {
-                            Icon(
-                                imageVector        = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
-                                contentDescription = "Outdent",
-                                modifier           = Modifier.size(16.dp),
-                                tint               = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    } else {
-                        Spacer(Modifier.size(28.dp))
-                    }
-
-                    // ── Indent (→): make task a child of the task above ───────
-                    // Visible when there is at least one task above this one.
-                    if (taskAbove != null) {
-                        IconButton(
-                            onClick  = { viewModel.reparentTask(task.id, taskAbove.task.id) },
-                            modifier = Modifier.size(28.dp),
-                        ) {
-                            Icon(
-                                imageVector        = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                                contentDescription = "Indent",
-                                modifier           = Modifier.size(16.dp),
-                                tint               = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    } else {
-                        Spacer(Modifier.size(28.dp))
-                    }
-
-                    // ── Drag handle ───────────────────────────────────────────
+                    // Drag handle on the far left
                     Icon(
-                        imageVector        = Icons.Outlined.DragHandle,
+                        imageVector = Icons.Outlined.DragHandle,
                         contentDescription = "Drag to reorder",
-                        modifier           = Modifier
+                        modifier = Modifier
                             .size(20.dp)
                             .draggableHandle(),
-                        tint               = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
 
                     TaskItem(

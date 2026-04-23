@@ -2,6 +2,8 @@ package com.stler.tasks.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -20,8 +22,11 @@ import androidx.glance.layout.padding
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import com.stler.tasks.domain.model.Folder
+import com.stler.tasks.domain.model.Label
+import com.stler.tasks.domain.model.Task
 import dagger.hilt.android.EntryPointAccessors
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle as JTextStyle
@@ -30,9 +35,9 @@ import java.util.Locale
 private sealed class UpcomingRow {
     data class Header(val text: String, val isOverdue: Boolean = false) : UpcomingRow()
     data class Item(
-        val task: com.stler.tasks.domain.model.Task,
-        val labelItems: List<Pair<String, String>>,  // (name, hexColor)
-        val folderName: String,
+        val task          : Task,
+        val labelItems    : List<Pair<String, String>>,  // (name, hexColor)
+        val folderName    : String,
         val folderHexColor: String,
     ) : UpcomingRow()
 }
@@ -44,69 +49,73 @@ class UpcomingWidget : GlanceAppWidget() {
             .fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
             .taskRepository()
 
-        val allLabels  = repo.observeLabels().first()
-        val allFolders = repo.observeFolders().first()
+        // ── Obtain flows once — collected reactively inside provideContent ────
+        // This makes the widget auto-update whenever the DB changes (e.g. task
+        // completed) without needing an explicit updateAll() call.
+        val tasksFlow   : Flow<List<Task>>   = repo.observeAllPendingTasks()
+        val labelsFlow  : Flow<List<Label>>  = repo.observeLabels()
+        val foldersFlow : Flow<List<Folder>> = repo.observeFolders()
 
-        // All pending tasks with a deadline — same as UpcomingViewModel (no isRoot filter).
-        // Sort: by date → timed tasks before no-time tasks → then by time → then by sortOrder.
-        val tasks = repo.observeAllPendingTasks().first()
-            .filter { it.deadlineDate.isNotBlank() }
-            .sortedWith(
-                compareBy(
-                    { it.deadlineDate },
-                    { if (it.deadlineTime.isBlank()) 1 else 0 },
-                    { it.deadlineTime },
-                    { it.sortOrder },
-                )
-            )
+        provideContent {
+            // collectAsState subscribes inside the Glance composition; any DB
+            // change causes a recomposition and re-renders the widget with fresh data.
+            val allTasks   by tasksFlow.collectAsState(initial = emptyList())
+            val allLabels  by labelsFlow.collectAsState(initial = emptyList())
+            val allFolders by foldersFlow.collectAsState(initial = emptyList())
 
-        val today = LocalDate.now()
+            val today = LocalDate.now()
 
-        // Split tasks into overdue (< today) and future/today groups.
-        // All overdue tasks share a single "Overdue" header — matching PWA behaviour.
-        val overdueTasks = tasks.filter {
-            runCatching { LocalDate.parse(it.deadlineDate) < today }.getOrDefault(false)
-        }
-        val upcomingTasks = tasks.filter {
-            runCatching { LocalDate.parse(it.deadlineDate) >= today }.getOrDefault(true)
-        }
-
-        fun taskToItem(task: com.stler.tasks.domain.model.Task): UpcomingRow.Item {
-            val folder = allFolders.find { it.id == task.folderId }
-            return UpcomingRow.Item(
-                task           = task,
-                labelItems     = task.labels.mapNotNull { lid ->
-                    allLabels.find { it.id == lid }?.let { lbl -> lbl.name to lbl.color }
-                },
-                folderName     = folder?.name ?: "Inbox",
-                folderHexColor = folder?.color ?: "",
-            )
-        }
-
-        val rows = buildList<UpcomingRow> {
-            // ── Overdue section ───────────────────────────────────────────────
-            if (overdueTasks.isNotEmpty()) {
-                add(UpcomingRow.Header("Overdue", isOverdue = true))
-                overdueTasks
-                    .sortedWith(compareBy(
+            val tasks = allTasks
+                .filter { it.deadlineDate.isNotBlank() }
+                .sortedWith(
+                    compareBy(
                         { it.deadlineDate },
                         { if (it.deadlineTime.isBlank()) 1 else 0 },
                         { it.deadlineTime },
-                    ))
-                    .forEach { add(taskToItem(it)) }
-            }
-            // ── Future / today sections (one header per date) ─────────────────
-            upcomingTasks
-                .groupBy { it.deadlineDate }
-                .entries
-                .sortedBy { it.key }
-                .forEach { (dateStr, group) ->
-                    add(UpcomingRow.Header(formatDateHeader(dateStr, today)))
-                    group.forEach { add(taskToItem(it)) }
-                }
-        }
+                        { it.sortOrder },
+                    )
+                )
 
-        provideContent {
+            val overdueTasks = tasks.filter {
+                runCatching { LocalDate.parse(it.deadlineDate) < today }.getOrDefault(false)
+            }
+            val upcomingTasks = tasks.filter {
+                runCatching { LocalDate.parse(it.deadlineDate) >= today }.getOrDefault(true)
+            }
+
+            fun taskToItem(task: Task): UpcomingRow.Item {
+                val folder = allFolders.find { it.id == task.folderId }
+                return UpcomingRow.Item(
+                    task           = task,
+                    labelItems     = task.labels.mapNotNull { lid ->
+                        allLabels.find { it.id == lid }?.let { lbl -> lbl.name to lbl.color }
+                    },
+                    folderName     = folder?.name ?: "Inbox",
+                    folderHexColor = folder?.color ?: "",
+                )
+            }
+
+            val rows = buildList<UpcomingRow> {
+                if (overdueTasks.isNotEmpty()) {
+                    add(UpcomingRow.Header("Overdue", isOverdue = true))
+                    overdueTasks
+                        .sortedWith(compareBy(
+                            { it.deadlineDate },
+                            { if (it.deadlineTime.isBlank()) 1 else 0 },
+                            { it.deadlineTime },
+                        ))
+                        .forEach { add(taskToItem(it)) }
+                }
+                upcomingTasks
+                    .groupBy { it.deadlineDate }
+                    .entries
+                    .sortedBy { it.key }
+                    .forEach { (dateStr, group) ->
+                        add(UpcomingRow.Header(formatDateHeader(dateStr, today)))
+                        group.forEach { add(taskToItem(it)) }
+                    }
+            }
+
             GlanceTheme {
                 Column(
                     modifier = GlanceModifier
@@ -151,7 +160,6 @@ private fun DateHeader(text: String, isOverdue: Boolean = false) {
             .fillMaxWidth()
             .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 6.dp),
         style = TextStyle(
-            // Overdue → red (matches app DayHeader); regular dates → primary text
             color      = if (isOverdue) WError else WOnSurface,
             fontSize   = 14.sp,
             fontWeight = FontWeight.Medium,
@@ -159,13 +167,6 @@ private fun DateHeader(text: String, isOverdue: Boolean = false) {
     )
 }
 
-/**
- * Formats a date header identical to the app's DayHeader:
- *   "17 Apr · Today · Thursday"
- *   "18 Apr · Tomorrow · Friday"
- *   "25 Apr · Saturday"
- *   "1 Jan · Overdue" (past dates)
- */
 private fun formatDateHeader(dateStr: String, today: LocalDate): String {
     return try {
         val date       = LocalDate.parse(dateStr)

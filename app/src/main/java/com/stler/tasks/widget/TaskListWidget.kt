@@ -1,6 +1,8 @@
 package com.stler.tasks.widget
 
 import android.content.Context
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
@@ -13,8 +15,11 @@ import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Column
 import androidx.glance.layout.fillMaxSize
+import com.stler.tasks.domain.model.Folder
+import com.stler.tasks.domain.model.Label
+import com.stler.tasks.domain.model.Task
 import dagger.hilt.android.EntryPointAccessors
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.Flow
 
 class TaskListWidget : GlanceAppWidget() {
 
@@ -28,56 +33,64 @@ class TaskListWidget : GlanceAppWidget() {
             .fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
             .taskRepository()
 
-        val allLabels  = repo.observeLabels().first()
-        val allFolders = repo.observeFolders().first()
-
-        // All pending tasks at all depths
-        var tasks = repo.observeAllPendingTasks().first()
-        if (filterFolder   != null) tasks = tasks.filter { it.folderId == filterFolder }
-        if (filterLabel    != null) tasks = tasks.filter { filterLabel in it.labels }
-        if (filterPriority != null) tasks = tasks.filter { it.priority.name.lowercase() == filterPriority }
+        // ── Obtain flows once — collected reactively inside provideContent ────
+        val tasksFlow  : Flow<List<Task>>   = repo.observeAllPendingTasks()
+        val labelsFlow : Flow<List<Label>>  = repo.observeLabels()
+        val foldersFlow: Flow<List<Folder>> = repo.observeFolders()
 
         // Build a compact filter summary: "@Folder #Label !1/!2/!3"
-        val titleParts = buildList {
-            if (filterFolder != null) {
-                val name = allFolders.find { it.id == filterFolder }?.name ?: "Folder"
-                add("@$name")
-            }
-            if (filterLabel != null) {
-                val name = allLabels.find { it.id == filterLabel }?.name ?: "Label"
-                add("#$name")
-            }
-            if (filterPriority != null) {
-                add(when (filterPriority) {
-                    "urgent"    -> "!1"
-                    "important" -> "!2"
-                    else        -> "!3"
-                })
-            }
-        }
-        val title = if (titleParts.isEmpty()) "Tasks" else titleParts.joinToString(" ")
-
-        // Resolve display data before provideContent (no coroutines inside)
-        data class Row(
-            val task: com.stler.tasks.domain.model.Task,
-            val labelItems: List<Pair<String, String>>,
-            val folderName: String,
-            val folderHexColor: String,
-        )
-
-        val rows = tasks.map { task ->
-            val folder = allFolders.find { it.id == task.folderId }
-            Row(
-                task           = task,
-                labelItems     = task.labels.mapNotNull { lid ->
-                    allLabels.find { it.id == lid }?.let { lbl -> lbl.name to lbl.color }
-                },
-                folderName     = if (filterFolder != null) "" else (folder?.name ?: "Inbox"),
-                folderHexColor = if (filterFolder != null) "" else (folder?.color ?: ""),
-            )
+        // (Filter prefs are widget-config-time constants, so they don't need to be reactive)
+        val titleParts = buildList<String> {
+            // folder/label names resolved lazily below, inside provideContent
         }
 
         provideContent {
+            val allTasks   by tasksFlow.collectAsState(initial = emptyList())
+            val allLabels  by labelsFlow.collectAsState(initial = emptyList())
+            val allFolders by foldersFlow.collectAsState(initial = emptyList())
+
+            val tasks = allTasks
+                .let { list -> if (filterFolder   != null) list.filter { it.folderId == filterFolder } else list }
+                .let { list -> if (filterLabel    != null) list.filter { filterLabel in it.labels }    else list }
+                .let { list -> if (filterPriority != null) list.filter { it.priority.name.lowercase() == filterPriority } else list }
+
+            val title = buildList {
+                if (filterFolder != null) {
+                    val name = allFolders.find { it.id == filterFolder }?.name ?: "Folder"
+                    add("@$name")
+                }
+                if (filterLabel != null) {
+                    val name = allLabels.find { it.id == filterLabel }?.name ?: "Label"
+                    add("#$name")
+                }
+                if (filterPriority != null) {
+                    add(when (filterPriority) {
+                        "urgent"    -> "!1"
+                        "important" -> "!2"
+                        else        -> "!3"
+                    })
+                }
+            }.joinToString(" ").ifEmpty { "Tasks" }
+
+            data class Row(
+                val task          : Task,
+                val labelItems    : List<Pair<String, String>>,
+                val folderName    : String,
+                val folderHexColor: String,
+            )
+
+            val rows = tasks.map { task ->
+                val folder = allFolders.find { it.id == task.folderId }
+                Row(
+                    task           = task,
+                    labelItems     = task.labels.mapNotNull { lid ->
+                        allLabels.find { it.id == lid }?.let { lbl -> lbl.name to lbl.color }
+                    },
+                    folderName     = if (filterFolder != null) "" else (folder?.name ?: "Inbox"),
+                    folderHexColor = if (filterFolder != null) "" else (folder?.color ?: ""),
+                )
+            }
+
             GlanceTheme {
                 Column(
                     modifier = GlanceModifier
