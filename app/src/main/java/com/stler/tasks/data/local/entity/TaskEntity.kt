@@ -1,13 +1,22 @@
 package com.stler.tasks.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.stler.tasks.domain.model.Priority
 import com.stler.tasks.domain.model.RecurType
 import com.stler.tasks.domain.model.Task
 import com.stler.tasks.domain.model.TaskStatus
 
-@Entity(tableName = "tasks")
+@Entity(
+    tableName = "tasks",
+    indices = [
+        Index("parentId"),      // hierarchical queries (children, softDelete recursion)
+        Index("folderId"),      // folder screen + deleteFolder migration
+        Index("status"),        // pending / completed / deleted filter on every screen
+        Index("deadlineDate"),  // upcoming screen + widget deadline filter
+    ],
+)
 data class TaskEntity(
     @PrimaryKey val id: String,
     val parentId: String = "",

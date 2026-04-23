@@ -211,6 +211,33 @@ _Discovered during testing after Stage 9._
 
 ---
 
+## Stage 9c — Architecture & Performance Fixes
+
+_Identified by static codebase analysis after Stage 9b._
+
+### Critical
+- [x] 9c.1 `restoreTask()` missing widget refresh — `widgetRefresher.refreshAll()` was not called after restoring a task; widget showed stale data after restore from Completed screen. ✅ Done (session 6).
+
+### High — N+1 queries
+- [x] 9c.2 `softDeleteDescendants()` called `taskDao.getAll()` on every recursion level — O(depth × N) DB reads. Fix: load all tasks once in `deleteTask()`, pass the snapshot into recursion. ✅ Done (session 6).
+- [x] 9c.3 `completeDescendants()` same N+1 pattern. Fix: load all tasks once in `completeTask()`, pass snapshot. ✅ Done (session 6).
+- [x] 9c.4 `deleteFolder()` called `taskDao.upsert()` individually in a loop — N separate DB transactions. Fix: `taskDao.upsertAll()` batch + single NOW value. ✅ Done (session 6).
+
+### Medium — Performance
+- [x] 9c.5 Missing DB indices on `tasks` table — `parentId`, `folderId`, `status`, `deadlineDate` unindexed; all queries were full table scans. Added `@Index` on all four columns; DB version bumped to 4 (`fallbackToDestructiveMigration` handles upgrade). ✅ Done (session 6).
+- [x] 9c.6 `UpcomingViewModel.allGroupedTasks` — outer `try/catch` returned `emptyMap()` on any exception, clearing the entire Upcoming screen for a single bad date. Fixed: filter already skips malformed dates with `runCatching`; `groupBy` is now safe; outer catch removed so individual bad tasks are skipped rather than wiping the view. ✅ Done (session 6).
+
+### UX
+- [x] 9c.7 Reparent (indent/outdent) via "..." menu in `FolderScreen` — "Make subtask of above" and "Move up a level" inserted between "Add subtask" and "Edit" in `TaskMobileMenu`; shown only when applicable (task above exists / depth > 0). ✅ Done (session 6).
+
+### Deferred (lower priority)
+- [ ] 9c.8 `fetchAllAndSave()` not wrapped in a single DB transaction — tasks, folders, labels upserted in three separate transactions; partial sync failure could leave inconsistent state.
+- [ ] 9c.9 `!!` force-unwraps in `GoogleAuthRepository` (`pendingIntent!!`, `accessToken!!`) — should use safe unwrap with explicit error.
+- [ ] 9c.10 `checkNotNull(savedStateHandle["folderId/labelId"])` in ViewModels — crashes on invalid navigation; should emit an error state instead.
+- [ ] 9c.11 Missing error handling in repository suspend functions — `SQLiteException` propagates silently through `viewModelScope.launch { }`.
+
+---
+
 ## Stage 10 — Polish & Build
 
 - [ ] 10.1 Dark/light theme: verify all screens and widgets against spec §4 color values

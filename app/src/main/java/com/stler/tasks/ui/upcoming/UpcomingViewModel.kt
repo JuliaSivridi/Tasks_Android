@@ -68,34 +68,33 @@ class UpcomingViewModel @Inject constructor(
         _labelFilter,
         _folderFilter,
     ) { tasks, pf, lf, ff ->
-        try {
-            val today = LocalDate.now()
-            tasks
-                .filter { task ->
-                    (pf.isEmpty() || task.priority in pf) &&
-                        (lf.isEmpty() || task.labels.any { it in lf }) &&
-                        (ff.isEmpty() || task.folderId in ff) &&
-                        runCatching { LocalDate.parse(task.deadlineDate) }.isSuccess
-                }
-                // All overdue dates (< today) collapse into LocalDate.MIN so they appear
-                // under a single "Overdue" header — same behaviour as the PWA.
-                .groupBy { task ->
-                    val date = LocalDate.parse(task.deadlineDate)
-                    if (date < today) LocalDate.MIN else date
-                }
-                .toSortedMap()
-                .mapValues { (key, list) ->
-                    list.sortedWith(compareBy(
-                        // Within the overdue group, sort by actual deadline date first
-                        { if (key == LocalDate.MIN) it.deadlineDate else "" },
-                        { if (it.deadlineTime.isBlank()) 1 else 0 },
-                        { it.deadlineTime },
-                        { it.createdAt },
-                    ))
-                }
-        } catch (_: Exception) {
-            emptyMap()
-        }
+        val today = LocalDate.now()
+        tasks
+            .filter { task ->
+                (pf.isEmpty() || task.priority in pf) &&
+                    (lf.isEmpty() || task.labels.any { it in lf }) &&
+                    (ff.isEmpty() || task.folderId in ff) &&
+                    task.deadlineDate.isNotBlank() &&
+                    // Skip individual tasks with malformed dates — don't clear the whole list
+                    runCatching { LocalDate.parse(task.deadlineDate) }.isSuccess
+            }
+            // All overdue dates (< today) collapse into LocalDate.MIN so they appear
+            // under a single "Overdue" header — same behaviour as the PWA.
+            // deadlineDate is guaranteed parseable by the filter above.
+            .groupBy { task ->
+                val date = LocalDate.parse(task.deadlineDate)
+                if (date < today) LocalDate.MIN else date
+            }
+            .toSortedMap()
+            .mapValues { (key, list) ->
+                list.sortedWith(compareBy(
+                    // Within the overdue group, sort by actual deadline date first
+                    { if (key == LocalDate.MIN) it.deadlineDate else "" },
+                    { if (it.deadlineTime.isBlank()) 1 else 0 },
+                    { it.deadlineTime },
+                    { it.createdAt },
+                ))
+            }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     // ── Week strip navigation ─────────────────────────────────────────────

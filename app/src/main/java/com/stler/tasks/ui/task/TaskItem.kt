@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Autorenew
 import androidx.compose.material.icons.outlined.Check
@@ -74,6 +76,10 @@ fun TaskItem(
     onAddSubtask: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    /** Non-null only in FolderScreen when a task exists directly above → shown as "Make subtask of above". */
+    onIndent: (() -> Unit)? = null,
+    /** Non-null only in FolderScreen when task has a parent → shown as "Move up a level". */
+    onOutdent: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val isCompleted = task.status == TaskStatus.COMPLETED
@@ -320,6 +326,8 @@ fun TaskItem(
                     showMobileMenu = false
                     onAddSubtask()
                 },
+                onIndent  = onIndent?.let { cb -> { showMobileMenu = false; cb() } },
+                onOutdent = onOutdent?.let { cb -> { showMobileMenu = false; cb() } },
                 onEdit = {
                     showMobileMenu = false
                     onEdit()
@@ -403,11 +411,15 @@ fun TaskItem(
 
 @Composable
 private fun TaskMobileMenu(
-    task: Task,
-    onPriority: () -> Unit,
-    onLabels: () -> Unit,
+    task     : Task,
+    onPriority  : () -> Unit,
+    onLabels    : () -> Unit,
     onAddSubtask: () -> Unit,
-    onEdit: () -> Unit,
+    /** Non-null → show "Make subtask of above" item. */
+    onIndent : (() -> Unit)?,
+    /** Non-null → show "Move up a level" item. */
+    onOutdent: (() -> Unit)?,
+    onEdit  : () -> Unit,
     onDelete: () -> Unit,
 ) {
     Column(modifier = Modifier.padding(bottom = 24.dp)) {
@@ -459,6 +471,34 @@ private fun TaskMobileMenu(
             },
             modifier = Modifier.clickable { onAddSubtask() },
         )
+        // Make subtask of above — only in FolderScreen when a task exists directly above
+        if (onIndent != null) {
+            ListItem(
+                headlineContent = { Text("Make subtask of above") },
+                leadingContent = {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+                modifier = Modifier.clickable { onIndent() },
+            )
+        }
+        // Move up a level — only in FolderScreen when task has a parent
+        if (onOutdent != null) {
+            ListItem(
+                headlineContent = { Text("Move up a level") },
+                leadingContent = {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+                modifier = Modifier.clickable { onOutdent() },
+            )
+        }
         // Edit
         ListItem(
             headlineContent = { Text("Edit") },

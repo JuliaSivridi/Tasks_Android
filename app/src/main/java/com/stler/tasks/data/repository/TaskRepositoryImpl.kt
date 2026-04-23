@@ -96,22 +96,26 @@ class TaskRepositoryImpl @Inject constructor(
 
     override suspend fun deleteTask(id: String) {
         val entity = taskDao.getById(id) ?: return
-        val now    = nowIso()
-        val deleted = entity.copy(status = "deleted", updatedAt = now)
+        val now      = nowIso()
+        val allTasks = taskDao.getAll()   // load once; passed into recursion (no N+1)
+        val deleted  = entity.copy(status = "deleted", updatedAt = now)
         taskDao.upsert(deleted)
         enqueue("task", "UPDATE", id, deleted)
-        softDeleteDescendants(id, now)
+        softDeleteDescendants(id, now, allTasks)
         widgetRefresher.refreshAll()
     }
 
-    /** Recursively marks all non-deleted children of [parentId] as deleted. */
-    private suspend fun softDeleteDescendants(parentId: String, now: String) {
-        val children = taskDao.getAll().filter { it.parentId == parentId && it.status != "deleted" }
+    /**
+     * Recursively marks all non-deleted children of [parentId] as deleted.
+     * [allTasks] is loaded once by the caller — no extra DB queries per level.
+     */
+    private suspend fun softDeleteDescendants(parentId: String, now: String, allTasks: List<com.stler.tasks.data.local.entity.TaskEntity>) {
+        val children = allTasks.filter { it.parentId == parentId && it.status != "deleted" }
         for (child in children) {
             val deleted = child.copy(status = "deleted", updatedAt = now)
             taskDao.upsert(deleted)
             enqueue("task", "UPDATE", child.id, deleted)
-            softDeleteDescendants(child.id, now)
+            softDeleteDescendants(child.id, now, allTasks)
         }
     }
 
@@ -133,25 +137,28 @@ class TaskRepositoryImpl @Inject constructor(
             taskDao.upsert(advanced)
             enqueue("task", "UPDATE", id, advanced)
         } else {
-            val updated = entity.copy(status = "completed", completedAt = now, updatedAt = now)
+            val allTasks = taskDao.getAll()   // load once; passed into recursion (no N+1)
+            val updated  = entity.copy(status = "completed", completedAt = now, updatedAt = now)
             taskDao.upsert(updated)
             enqueue("task", "UPDATE", id, updated)
-            // Also complete all descendants at every depth (mirrors PWA behaviour)
-            completeDescendants(id, now)
+            completeDescendants(id, now, allTasks)
         }
         widgetRefresher.refreshAll()
     }
 
-    /** Recursively marks all pending children of [parentId] as completed (skips deleted). */
-    private suspend fun completeDescendants(parentId: String, now: String) {
-        val children = taskDao.getAll().filter { it.parentId == parentId && it.status != "deleted" }
+    /**
+     * Recursively marks all pending children of [parentId] as completed (skips deleted).
+     * [allTasks] is loaded once by the caller — no extra DB queries per level.
+     */
+    private suspend fun completeDescendants(parentId: String, now: String, allTasks: List<com.stler.tasks.data.local.entity.TaskEntity>) {
+        val children = allTasks.filter { it.parentId == parentId && it.status != "deleted" }
         for (child in children) {
             if (child.status != "completed") {
                 val updated = child.copy(status = "completed", completedAt = now, updatedAt = now)
                 taskDao.upsert(updated)
                 enqueue("task", "UPDATE", child.id, updated)
             }
-            completeDescendants(child.id, now)   // recurse regardless (subtasks may have their own children)
+            completeDescendants(child.id, now, allTasks)
         }
     }
 
@@ -160,6 +167,7 @@ class TaskRepositoryImpl @Inject constructor(
         val updated = entity.copy(status = "pending", completedAt = "", updatedAt = nowIso())
         taskDao.upsert(updated)
         enqueue("task", "UPDATE", id, updated)
+        widgetRefresher.refreshAll()   // was missing — widget now updates after restore
     }
 
     // ── Folder mutations ──────────────────────────────────────────────────
@@ -177,14 +185,15 @@ class TaskRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteFolder(id: String) {
-        // Move non-deleted tasks to Inbox
-        taskDao.getAll()
+        // Move non-deleted tasks to Inbox — batch upsert (1 transaction, not N)
+        val now          = nowIso()
+        val tasksToMove  = taskDao.getAll()
             .filter { it.folderId == id && it.status != "deleted" }
-            .forEach { task ->
-                val moved = task.copy(folderId = "fld-inbox", updatedAt = nowIso())
-                taskDao.upsert(moved)
-                enqueue("task", "UPDATE", task.id, moved)
-            }
+            .map    { it.copy(folderId = "fld-inbox", updatedAt = now) }
+        if (tasksToMove.isNotEmpty()) {
+            taskDao.upsertAll(tasksToMove)
+            tasksToMove.forEach { enqueue("task", "UPDATE", it.id, it) }
+        }
         folderDao.deleteById(id)
         enqueue("folder", "DELETE", id, null)
     }

@@ -105,9 +105,12 @@ fun FolderScreen(
         state    = lazyListState,
         modifier = Modifier.fillMaxSize(),
     ) {
-        itemsIndexed(localList, key = { _, node -> node.task.id }) { _, node ->
+        itemsIndexed(localList, key = { _, node -> node.task.id }) { index, node ->
             val task  = node.task
             val depth = node.depth
+
+            // Task immediately above in the displayed list — indent target.
+            val taskAbove = if (index > 0) localList[index - 1] else null
 
             ReorderableItem(reorderableState, key = task.id) { isDragging ->
 
@@ -157,6 +160,18 @@ fun FolderScreen(
                         onAddSubtask        = { onAddSubtask(node.task) },
                         onEdit              = { onEditTask(node.task) },
                         onDelete            = { viewModel.deleteTask(task.id) },
+                        // Reparent actions: shown in "..." menu only in FolderScreen
+                        onIndent  = taskAbove?.let { above ->
+                            { viewModel.reparentTask(task.id, above.task.id) }
+                        },
+                        onOutdent = if (depth > 0) {
+                            {
+                                val grandparentId = localList
+                                    .find { it.task.id == task.parentId }
+                                    ?.task?.parentId ?: ""
+                                viewModel.reparentTask(task.id, grandparentId)
+                            }
+                        } else null,
                         modifier            = Modifier.weight(1f),
                     )
                 }
