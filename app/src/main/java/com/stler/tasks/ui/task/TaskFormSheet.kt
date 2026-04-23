@@ -52,6 +52,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -448,17 +449,43 @@ fun TaskFormSheet(
             // ── Buttons ───────────────────────────────────────────────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = onDismiss) { Text("Cancel") }
-                Spacer(Modifier.width(8.dp))
-                TextButton(
-                    onClick = { submit() },
-                ) {
-                    Icon(Icons.Outlined.Check, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(if (isEditing) "Save" else "Create")
+                // Left: Clear / Postpone — only in edit mode
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (isEditing && (deadlineDate.isNotBlank() || deadlineTime.isNotBlank())) {
+                        TextButton(onClick = {
+                            deadlineDate = ""
+                            deadlineTime = ""
+                            isRecurring  = false
+                            recurType    = RecurType.DAYS
+                            recurValue   = "1"
+                        }) { Text("Clear") }
+                    }
+                    if (isEditing && isRecurring && deadlineDate.isNotBlank()) {
+                        TextButton(onClick = {
+                            runCatching {
+                                val n = recurValue.toIntOrNull() ?: 1
+                                val base = LocalDate.parse(deadlineDate)
+                                deadlineDate = when (recurType) {
+                                    RecurType.WEEKS  -> base.plusWeeks(n.toLong())
+                                    RecurType.MONTHS -> base.plusMonths(n.toLong())
+                                    else             -> base.plusDays(n.toLong())
+                                }.toString()
+                            }
+                        }) { Text("Postpone") }
+                    }
+                }
+                // Right: Cancel + Save/Create
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(onClick = { submit() }) {
+                        Icon(Icons.Outlined.Check, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(if (isEditing) "Save" else "Create")
+                    }
                 }
             }
         }
@@ -641,8 +668,8 @@ internal fun RepeatRow(
                         onClick  = { onTypeChange(rt) },
                         label    = { Text(lbl, style = MaterialTheme.typography.labelSmall) },
                         colors   = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor  = MaterialTheme.colorScheme.surfaceVariant,
-                            selectedLabelColor      = MaterialTheme.colorScheme.onSurfaceVariant,
+                            selectedContainerColor  = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFE0E0E0),
+                            selectedLabelColor      = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF424242),
                         ),
                     )
                     Spacer(Modifier.width(4.dp))

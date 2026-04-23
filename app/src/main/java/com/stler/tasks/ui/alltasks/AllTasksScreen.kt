@@ -17,12 +17,16 @@ import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +68,7 @@ fun AllTasksScreen(
             onTogglePriority = { viewModel.togglePriorityFilter(it) },
             onToggleLabel    = { viewModel.toggleLabelFilter(it) },
             onToggleFolder   = { viewModel.toggleFolderFilter(it) },
+            onClearAll       = { viewModel.clearAllFilters() },
         )
         LazyColumn(modifier = Modifier.fillMaxSize()) {
             items(filteredTasks, key = { it.id }) { task ->
@@ -91,13 +96,23 @@ fun AllTasksScreen(
     }
 }
 
+// ── Neutral chip colors — bypasses Material You warm tint ────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun neutralChipColors() = FilterChipDefaults.filterChipColors(
+    selectedContainerColor   = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFE0E0E0),
+    selectedLeadingIconColor = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF424242),
+    selectedLabelColor       = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF424242),
+)
+
 /**
  * Compact filter bar: three icon-only chips, each opening its own multi-select dropdown.
  *
- *   [🚩]  [🏷]  [📁]
+ *   [✕]  [🚩]  [🏷]  [📁]
  *
  * When a filter is active the chip renders selected (filled background) and shows
  * a small count badge in the label slot — no long text, so the row never wraps.
+ * The [✕] reset button is visible only when at least one filter is active.
  *
  * Parameters [showLabelFilter] / [showFolderFilter] hide the respective chip when
  * not relevant (e.g. LabelScreen hides the label chip, FolderScreen hides folder chip).
@@ -113,9 +128,12 @@ fun FilterBar(
     onTogglePriority: (Priority) -> Unit,
     onToggleLabel   : (String) -> Unit,
     onToggleFolder  : (String) -> Unit = {},
+    onClearAll      : () -> Unit = {},
     showLabelFilter : Boolean = true,
     showFolderFilter: Boolean = true,
 ) {
+    val hasFilters = priorityFilter.isNotEmpty() || labelFilter.isNotEmpty() || folderFilter.isNotEmpty()
+
     var priorityExpanded by remember { mutableStateOf(false) }
     var labelsExpanded   by remember { mutableStateOf(false) }
     var foldersExpanded  by remember { mutableStateOf(false) }
@@ -125,6 +143,18 @@ fun FilterBar(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment     = Alignment.CenterVertically,
     ) {
+
+        // ── Clear-all button — visible only when a filter is active ───────
+        if (hasFilters) {
+            IconButton(onClick = onClearAll, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    imageVector = Icons.Outlined.Close,
+                    contentDescription = "Clear all filters",
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
 
         // ── Priority chip ─────────────────────────────────────────────────
         Box {
@@ -136,11 +166,7 @@ fun FilterBar(
                     if (priorityFilter.isNotEmpty())
                         Text(priorityFilter.size.toString(), style = MaterialTheme.typography.labelSmall)
                 },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor   = MaterialTheme.colorScheme.surfaceVariant,
-                    selectedLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    selectedLabelColor       = MaterialTheme.colorScheme.onSurfaceVariant,
-                ),
+                colors = neutralChipColors(),
             )
             DropdownMenu(
                 expanded         = priorityExpanded,
@@ -175,11 +201,7 @@ fun FilterBar(
                         if (labelFilter.isNotEmpty())
                             Text(labelFilter.size.toString(), style = MaterialTheme.typography.labelSmall)
                     },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor   = MaterialTheme.colorScheme.primaryContainer,
-                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        selectedLabelColor       = MaterialTheme.colorScheme.onPrimaryContainer,
-                    ),
+                    colors = neutralChipColors(),
                 )
                 DropdownMenu(
                     expanded         = labelsExpanded,
@@ -214,11 +236,7 @@ fun FilterBar(
                         if (folderFilter.isNotEmpty())
                             Text(folderFilter.size.toString(), style = MaterialTheme.typography.labelSmall)
                     },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor   = MaterialTheme.colorScheme.primaryContainer,
-                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        selectedLabelColor       = MaterialTheme.colorScheme.onPrimaryContainer,
-                    ),
+                    colors = neutralChipColors(),
                 )
                 DropdownMenu(
                     expanded         = foldersExpanded,

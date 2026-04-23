@@ -136,6 +136,12 @@ class UpcomingViewModel @Inject constructor(
         _folderFilter.update { if (id in it) it - id else it + id }
     }
 
+    fun clearAllFilters() {
+        _priorityFilter.value = emptySet()
+        _labelFilter.value    = emptySet()
+        _folderFilter.value   = emptySet()
+    }
+
     // ── Task mutations ────────────────────────────────────────────────────
 
     fun completeTask(id: String) = viewModelScope.launch { repository.completeTask(id) }

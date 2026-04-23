@@ -36,6 +36,7 @@ fun CompletedScreen(viewModel: CompletedViewModel = hiltViewModel()) {
             onTogglePriority = { viewModel.togglePriorityFilter(it) },
             onToggleLabel    = { viewModel.toggleLabelFilter(it) },
             onToggleFolder   = { viewModel.toggleFolderFilter(it) },
+            onClearAll       = { viewModel.clearAllFilters() },
         )
 
         LazyColumn(modifier = Modifier.fillMaxSize()) {

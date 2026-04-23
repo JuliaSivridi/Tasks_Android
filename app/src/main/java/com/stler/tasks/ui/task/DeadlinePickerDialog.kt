@@ -10,9 +10,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
@@ -21,7 +19,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -190,23 +187,17 @@ fun DeadlinePickerDialog(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment     = Alignment.CenterVertically,
             ) {
-                // Left: × clear all  +  → postpone
+                // Left: Clear (when date/time set)  +  Postpone (recurring only)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick  = { onConfirm("", "", false, RecurType.DAYS, 1) },
-                        modifier = Modifier.size(36.dp),
-                    ) {
-                        Icon(
-                            Icons.Outlined.Close,
-                            contentDescription = "No date",
-                            modifier = Modifier.size(20.dp),
-                            tint     = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    if (selectedDate.isNotBlank() || selectedTime.isNotBlank()) {
+                        TextButton(onClick = { onConfirm("", "", false, RecurType.DAYS, 1) }) {
+                            Text("Clear")
+                        }
                     }
                     // Postpone: only for recurring tasks — advances deadline by the task's own
                     // recurrence interval (recur_value days/weeks/months) and saves immediately.
                     if (isRecurring && selectedDate.isNotBlank()) {
-                        IconButton(
+                        TextButton(
                             onClick = {
                                 runCatching {
                                     val n = recurValue.toIntOrNull() ?: 1
@@ -219,15 +210,7 @@ fun DeadlinePickerDialog(
                                     onConfirm(postponed, selectedTime, true, recurType, n)
                                 }
                             },
-                            modifier = Modifier.size(36.dp),
-                        ) {
-                            Icon(
-                                Icons.Outlined.ArrowForward,
-                                contentDescription = "Postpone",
-                                modifier = Modifier.size(20.dp),
-                                tint     = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                        ) { Text("Postpone") }
                     }
                 }
                 // Right: Cancel  +  Save

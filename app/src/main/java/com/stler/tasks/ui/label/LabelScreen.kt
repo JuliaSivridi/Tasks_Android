@@ -35,6 +35,7 @@ fun LabelScreen(
             labelFilter     = emptySet(),
             onTogglePriority = { viewModel.togglePriorityFilter(it) },
             onToggleLabel   = {},
+            onClearAll      = { viewModel.clearAllFilters() },
             showLabelFilter = false,   // label is implicit (we're already inside a label view)
         )
         LazyColumn(modifier = Modifier.fillMaxSize()) {

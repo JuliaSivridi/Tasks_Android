@@ -49,6 +49,10 @@ class LabelViewModel @Inject constructor(
         _priorityFilter.update { if (p in it) it - p else it + p }
     }
 
+    fun clearAllFilters() {
+        _priorityFilter.value = emptySet()
+    }
+
     fun completeTask(id: String) = viewModelScope.launch { repository.completeTask(id) }
 
     fun deleteTask(id: String) = viewModelScope.launch { repository.deleteTask(id) }

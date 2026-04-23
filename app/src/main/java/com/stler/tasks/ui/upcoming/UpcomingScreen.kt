@@ -1,6 +1,7 @@
 package com.stler.tasks.ui.upcoming
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -210,6 +211,7 @@ fun UpcomingScreen(
             onTogglePriority = { viewModel.togglePriorityFilter(it) },
             onToggleLabel    = { viewModel.toggleLabelFilter(it) },
             onToggleFolder   = { viewModel.toggleFolderFilter(it) },
+            onClearAll       = { viewModel.clearAllFilters() },
         )
 
         // ── Task list — all dates, scrollable ─────────────────────────────
@@ -313,28 +315,26 @@ private fun DayPill(
     hasTasks: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val todayBg      = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFE0E0E0)
+    val todayContent = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF424242)
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(
-                if (isToday) MaterialTheme.colorScheme.primaryContainer
-                else Color.Transparent
-            )
+            .background(if (isToday) todayBg else Color.Transparent)
             .padding(horizontal = 6.dp, vertical = 4.dp),
     ) {
         Text(
             text = date.dayOfMonth.toString(),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-            color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer
-                    else MaterialTheme.colorScheme.onSurface,
+            color = if (isToday) todayContent else MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text = date.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()),
             style = MaterialTheme.typography.bodySmall,
-            color = if (isToday) MaterialTheme.colorScheme.onPrimaryContainer
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (isToday) todayContent else MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Box(
             modifier = Modifier

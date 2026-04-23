@@ -87,9 +87,24 @@ class TaskRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteTask(id: String) {
-        taskDao.deleteById(id)
-        enqueue("task", "DELETE", id, null)
+        val entity = taskDao.getById(id) ?: return
+        val now = nowIso()
+        val deleted = entity.copy(status = "deleted", updatedAt = now)
+        taskDao.upsert(deleted)
+        enqueue("task", "UPDATE", id, deleted)
+        softDeleteDescendants(id, now)
         widgetRefresher.refreshAll()
+    }
+
+    /** Recursively marks all non-deleted children of [parentId] as deleted. */
+    private suspend fun softDeleteDescendants(parentId: String, now: String) {
+        val children = taskDao.getAll().filter { it.parentId == parentId && it.status != "deleted" }
+        for (child in children) {
+            val deleted = child.copy(status = "deleted", updatedAt = now)
+            taskDao.upsert(deleted)
+            enqueue("task", "UPDATE", child.id, deleted)
+            softDeleteDescendants(child.id, now)
+        }
     }
 
     override suspend fun toggleExpanded(id: String, isExpanded: Boolean) {
@@ -118,9 +133,9 @@ class TaskRepositoryImpl @Inject constructor(
         widgetRefresher.refreshAll()
     }
 
-    /** Recursively marks all pending children of [parentId] as completed. */
+    /** Recursively marks all pending children of [parentId] as completed (skips deleted). */
     private suspend fun completeDescendants(parentId: String, now: String) {
-        val children = taskDao.getAll().filter { it.parentId == parentId }
+        val children = taskDao.getAll().filter { it.parentId == parentId && it.status != "deleted" }
         for (child in children) {
             if (child.status != "completed") {
                 val updated = child.copy(status = "completed", completedAt = now, updatedAt = now)
@@ -153,9 +168,9 @@ class TaskRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteFolder(id: String) {
-        // Move tasks to Inbox
+        // Move non-deleted tasks to Inbox
         taskDao.getAll()
-            .filter { it.folderId == id }
+            .filter { it.folderId == id && it.status != "deleted" }
             .forEach { task ->
                 val moved = task.copy(folderId = "fld-inbox", updatedAt = nowIso())
                 taskDao.upsert(moved)

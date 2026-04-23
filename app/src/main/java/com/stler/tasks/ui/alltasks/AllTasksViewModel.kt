@@ -66,6 +66,12 @@ class AllTasksViewModel @Inject constructor(
         _folderFilter.update { if (id in it) it - id else it + id }
     }
 
+    fun clearAllFilters() {
+        _priorityFilter.value = emptySet()
+        _labelFilter.value    = emptySet()
+        _folderFilter.value   = emptySet()
+    }
+
     fun completeTask(id: String) = viewModelScope.launch { repository.completeTask(id) }
 
     fun deleteTask(id: String) = viewModelScope.launch { repository.deleteTask(id) }
