@@ -76,7 +76,7 @@ class TaskRepositoryImpl @Inject constructor(
         val entity = task.toEntity()
         taskDao.upsert(entity)
         enqueue("task", "INSERT", task.id, entity)
-        widgetRefresher.refreshAll()
+        widgetRefresher.refreshAll()   // debounced, fire-and-forget
     }
 
     override suspend fun updateTask(task: Task) {
@@ -86,9 +86,17 @@ class TaskRepositoryImpl @Inject constructor(
         widgetRefresher.refreshAll()
     }
 
+    override suspend fun updateTasks(tasks: List<Task>) {
+        if (tasks.isEmpty()) return
+        val entities = tasks.map { it.toEntity() }
+        taskDao.upsertAll(entities)                           // single transaction
+        entities.forEach { enqueue("task", "UPDATE", it.id, it) }
+        widgetRefresher.refreshAll()
+    }
+
     override suspend fun deleteTask(id: String) {
         val entity = taskDao.getById(id) ?: return
-        val now = nowIso()
+        val now    = nowIso()
         val deleted = entity.copy(status = "deleted", updatedAt = now)
         taskDao.upsert(deleted)
         enqueue("task", "UPDATE", id, deleted)
@@ -113,6 +121,7 @@ class TaskRepositoryImpl @Inject constructor(
         val updated = entity.copy(isExpanded = isExpanded)
         taskDao.upsert(updated)
         enqueue("task", "UPDATE", id, updated)
+        widgetRefresher.refreshAll()
     }
 
     override suspend fun completeTask(id: String) {

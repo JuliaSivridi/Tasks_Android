@@ -87,6 +87,13 @@ class FolderViewModel @Inject constructor(
      * in the siblings list, then rewrites sortOrder = index * 10.
      * [fromIndex] / [toIndex] are indices within the *siblings* list only.
      */
+    /**
+     * Reorder siblings within [parentId]: moves item at [fromIndex] to [toIndex]
+     * in the siblings list, then rewrites sortOrder = index * 10.
+     *
+     * Uses a single batch DB transaction (updateTasks) so N siblings produce
+     * exactly 1 DB write, 1 widget refresh, and N sync-queue entries.
+     */
     fun reorderSiblings(parentId: String, fromIndex: Int, toIndex: Int) = viewModelScope.launch {
         val siblings = allTasks.value
             .filter { it.parentId == parentId }
@@ -95,9 +102,9 @@ class FolderViewModel @Inject constructor(
         if (fromIndex !in siblings.indices || toIndex !in siblings.indices) return@launch
         val moved = siblings.removeAt(fromIndex)
         siblings.add(toIndex, moved)
-        siblings.forEachIndexed { i, task ->
-            repository.updateTask(task.copy(sortOrder = i * 10, updatedAt = nowIso()))
-        }
+        val now     = nowIso()
+        val updated = siblings.mapIndexed { i, task -> task.copy(sortOrder = i * 10, updatedAt = now) }
+        repository.updateTasks(updated)
     }
 
     /**

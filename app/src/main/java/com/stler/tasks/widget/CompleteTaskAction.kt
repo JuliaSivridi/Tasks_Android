@@ -5,34 +5,36 @@ import android.content.Intent
 import android.net.Uri
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
-import androidx.glance.appwidget.updateAll
 import androidx.glance.appwidget.action.ActionCallback
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-val taskIdKey   = ActionParameters.Key<String>("taskId")
-val folderIdKey = ActionParameters.Key<String>("folderId")
-val expandKey   = ActionParameters.Key<Boolean>("expand")
+val taskIdKey    = ActionParameters.Key<String>("taskId")
+val folderIdKey  = ActionParameters.Key<String>("folderId")
+val expandKey    = ActionParameters.Key<Boolean>("expand")
 val screenUriKey = ActionParameters.Key<String>("screenUri")
 
 /** Marks a task complete via the repository, then refreshes all widget instances. */
 class CompleteTaskAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val taskId = parameters[taskIdKey] ?: return
-        val repo = repo(context)
-        withContext(Dispatchers.IO) { repo.completeTask(taskId) }
-        refreshAll(context)
+        // completeTask() already calls widgetRefresher.refreshAll() internally.
+        withContext(Dispatchers.IO) { repo(context).completeTask(taskId) }
     }
 }
 
-/** Toggles isExpanded on a task and refreshes folder widgets. */
+/**
+ * Toggles isExpanded on a task and refreshes all widget instances.
+ * Previously only refreshed FolderWidget; now goes through the debounced
+ * WidgetRefresher singleton so all three widget types stay in sync.
+ */
 class ToggleExpandAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val taskId = parameters[taskIdKey] ?: return
         val expand = parameters[expandKey] ?: return
+        // toggleExpanded() calls widgetRefresher.refreshAll() internally.
         withContext(Dispatchers.IO) { repo(context).toggleExpanded(taskId, expand) }
-        withContext(Dispatchers.Main) { FolderWidget().updateAll(context) }
     }
 }
 
@@ -76,12 +78,4 @@ private fun startDeepLink(context: Context, uri: String) {
             Intent.FLAG_ACTIVITY_CLEAR_TOP,
         )
     context.startActivity(intent)
-}
-
-// Uses updateAll() (Glance extension, more reliable than per-GlanceId update).
-// withContext(Dispatchers.Main) is required by Glance's RemoteViews pipeline.
-private suspend fun refreshAll(context: Context) = withContext(Dispatchers.Main) {
-    UpcomingWidget().updateAll(context)
-    FolderWidget().updateAll(context)
-    TaskListWidget().updateAll(context)
 }

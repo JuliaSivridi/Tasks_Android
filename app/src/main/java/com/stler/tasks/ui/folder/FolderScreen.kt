@@ -14,6 +14,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,6 +28,20 @@ import com.stler.tasks.ui.task.TaskItem
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
+/**
+ * Folder task list with drag-to-reorder.
+ *
+ * ## Performance fix
+ * The reorderable library's [onMove] fires on every drag frame (every pixel).
+ * Previously, each frame called [FolderViewModel.reorderSiblings] which wrote
+ * N rows × N frames to the DB and triggered N widget refreshes.
+ *
+ * Now:
+ *  - [onMove] → only updates the local optimistic [localList] (pure UI, no DB)
+ *              + stores the intended final sibling indices in [pendingReorder].
+ *  - [isDragging] → false (user lifts finger) → one [reorderSiblings] call
+ *                   with the stored from/to indices → 1 batch DB write, 1 widget refresh.
+ */
 @Composable
 fun FolderScreen(
     folderId     : String,
@@ -35,7 +50,7 @@ fun FolderScreen(
     viewModel    : FolderViewModel = hiltViewModel(),
 ) {
     val displayList by viewModel.displayList.collectAsStateWithLifecycle()
-    val labels by viewModel.labels.collectAsStateWithLifecycle()
+    val labels      by viewModel.labels.collectAsStateWithLifecycle()
 
     if (displayList.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -47,42 +62,74 @@ fun FolderScreen(
     // Local mutable list for optimistic reorder UI (drag preview before DB write)
     var localList by remember(displayList) { mutableStateOf(displayList) }
 
+    // ── Pending reorder — set in onMove, consumed when isDragging → false ─────
+    // Plain mutable object (not mutableStateOf) so that intermediate drag frames
+    // don't trigger recomposition.
+    val pendingReorder = remember {
+        object {
+            var parentId : String = ""
+            var fromIdx  : Int    = -1
+            var toIdx    : Int    = -1
+        }
+    }
+
     val lazyListState = rememberLazyListState()
 
     val reorderableState = rememberReorderableLazyListState(
         lazyListState = lazyListState,
     ) { from, to ->
-        // Optimistic reorder in local list (pure UI swap)
+        // ── Step 1: update optimistic local list (pure UI, no DB) ─────────────
         val mutable = localList.toMutableList()
-        val moved = mutable.removeAt(from.index)
-        mutable.add(to.index, moved)
+        val movedNode = mutable.removeAt(from.index)
+        mutable.add(to.index, movedNode)
         localList = mutable
 
-        // Persist only when drag ends (handled via onDragStopped below)
-        // Here we update the DB immediately by sibling index:
-        val draggedNode = localList[to.index]
-        val parentId = draggedNode.task.parentId
-
-        // Compute from/to within the sibling group
-        val siblings = displayList.filter { it.task.parentId == parentId }
+        // ── Step 2: store final sibling indices for persistence on drop ────────
+        // fromIdx is always relative to displayList (original DB order, stable during drag).
+        // toIdx   is relative to localList (optimistic order, updates each frame).
+        val draggedNode     = localList[to.index]
+        val parentId        = draggedNode.task.parentId
+        val siblings        = displayList.filter { it.task.parentId == parentId }
         val siblingsInLocal = localList.filter { it.task.parentId == parentId }
-        val fromSiblingIdx = siblings.indexOfFirst { it.task.id == draggedNode.task.id }
-        val toSiblingIdx = siblingsInLocal.indexOfFirst { it.task.id == draggedNode.task.id }
+        val fromSiblingIdx  = siblings.indexOfFirst { it.task.id == draggedNode.task.id }
+        val toSiblingIdx    = siblingsInLocal.indexOfFirst { it.task.id == draggedNode.task.id }
 
-        if (fromSiblingIdx >= 0 && toSiblingIdx >= 0 && fromSiblingIdx != toSiblingIdx) {
-            viewModel.reorderSiblings(parentId, fromSiblingIdx, toSiblingIdx)
+        if (fromSiblingIdx >= 0 && toSiblingIdx >= 0) {
+            pendingReorder.parentId = parentId
+            pendingReorder.fromIdx  = fromSiblingIdx
+            pendingReorder.toIdx    = toSiblingIdx
         }
     }
 
     LazyColumn(
-        state = lazyListState,
+        state    = lazyListState,
         modifier = Modifier.fillMaxSize(),
     ) {
         itemsIndexed(localList, key = { _, node -> node.task.id }) { _, node ->
-            val task = node.task
+            val task  = node.task
             val depth = node.depth
 
             ReorderableItem(reorderableState, key = task.id) { isDragging ->
+
+                // ── Persist on drop: isDragging flips true → false ────────────
+                // Only the dragged item transitions to false at drop; other items
+                // remain false throughout, so their LaunchedEffect fires only on
+                // first composition (when pendingReorder is still uninitialised).
+                LaunchedEffect(isDragging) {
+                    if (!isDragging && pendingReorder.fromIdx >= 0 && pendingReorder.toIdx >= 0
+                        && pendingReorder.fromIdx != pendingReorder.toIdx
+                    ) {
+                        viewModel.reorderSiblings(
+                            pendingReorder.parentId,
+                            pendingReorder.fromIdx,
+                            pendingReorder.toIdx,
+                        )
+                        // Reset so a stale pending reorder can't fire twice
+                        pendingReorder.fromIdx = -1
+                        pendingReorder.toIdx   = -1
+                    }
+                }
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     // Drag handle on the far left
                     Icon(
@@ -95,27 +142,27 @@ fun FolderScreen(
                     )
 
                     TaskItem(
-                        task = task,
-                        labels = labels,
-                        depth = depth,
-                        hasChildren = node.childCount > 0,
+                        task                = task,
+                        labels              = labels,
+                        depth               = depth,
+                        hasChildren         = node.childCount > 0,
                         completedChildCount = node.completedChildCount,
-                        totalChildCount = node.childCount + node.completedChildCount,
-                        showFolder = false,
-                        onCheckedChange = { checked -> if (checked) viewModel.completeTask(task.id) },
-                        onExpand = { viewModel.toggleExpanded(task) },
-                        onDeadlineChange = { d, t, isRec, rType, rVal -> viewModel.updateDeadline(task.id, d, t, isRec, rType, rVal) },
-                        onPriorityChange = { p -> viewModel.updatePriority(task.id, p) },
-                        onLabelChange = { l -> viewModel.updateLabels(task.id, l) },
-                        onAddSubtask = { onAddSubtask(node.task) },
-                        onEdit = { onEditTask(node.task) },
-                        onDelete = { viewModel.deleteTask(task.id) },
-                        modifier = Modifier.weight(1f),
+                        totalChildCount     = node.childCount + node.completedChildCount,
+                        showFolder          = false,
+                        onCheckedChange     = { checked -> if (checked) viewModel.completeTask(task.id) },
+                        onExpand            = { viewModel.toggleExpanded(task) },
+                        onDeadlineChange    = { d, t, isRec, rType, rVal -> viewModel.updateDeadline(task.id, d, t, isRec, rType, rVal) },
+                        onPriorityChange    = { p -> viewModel.updatePriority(task.id, p) },
+                        onLabelChange       = { l -> viewModel.updateLabels(task.id, l) },
+                        onAddSubtask        = { onAddSubtask(node.task) },
+                        onEdit              = { onEditTask(node.task) },
+                        onDelete            = { viewModel.deleteTask(task.id) },
+                        modifier            = Modifier.weight(1f),
                     )
                 }
                 HorizontalDivider(
                     thickness = 0.5.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant,
+                    color     = MaterialTheme.colorScheme.outlineVariant,
                 )
             }
         }

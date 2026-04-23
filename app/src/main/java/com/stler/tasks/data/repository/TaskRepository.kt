@@ -46,6 +46,8 @@ interface TaskRepository {
 
     suspend fun createTask(task: Task)
     suspend fun updateTask(task: Task)
+    /** Batch-update multiple tasks in a single DB transaction. */
+    suspend fun updateTasks(tasks: List<Task>)
     suspend fun deleteTask(id: String)
 
     /** Toggle is_expanded WITHOUT bumping updated_at (spec §4.5) */
