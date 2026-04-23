@@ -70,6 +70,8 @@ import androidx.compose.ui.unit.dp
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.Priority
+import com.stler.tasks.ui.theme.Border
+import com.stler.tasks.ui.theme.OnChipSelected
 import com.stler.tasks.domain.model.RecurType
 import com.stler.tasks.domain.model.Task
 import com.stler.tasks.util.toComposeColor
@@ -668,8 +670,8 @@ internal fun RepeatRow(
                         onClick  = { onTypeChange(rt) },
                         label    = { Text(lbl, style = MaterialTheme.typography.labelSmall) },
                         colors   = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor  = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFE0E0E0),
-                            selectedLabelColor      = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF424242),
+                            selectedContainerColor  = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceVariant else Border,
+                            selectedLabelColor      = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else OnChipSelected,
                         ),
                     )
                     Spacer(Modifier.width(4.dp))

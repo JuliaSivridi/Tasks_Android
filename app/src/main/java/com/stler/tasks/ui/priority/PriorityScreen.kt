@@ -15,6 +15,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.stler.tasks.domain.model.Priority
 import com.stler.tasks.ui.task.TaskItem
+import com.stler.tasks.ui.util.ErrorSnackbarEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,6 +28,8 @@ fun PriorityScreen(
     val filteredTasks by viewModel.filteredTasks.collectAsStateWithLifecycle()
     val labels        by viewModel.labels.collectAsStateWithLifecycle()
     val folders       by viewModel.folders.collectAsStateWithLifecycle()
+
+    ErrorSnackbarEffect(viewModel)
 
     LaunchedEffect(priority) {
         val p = when (priority) {

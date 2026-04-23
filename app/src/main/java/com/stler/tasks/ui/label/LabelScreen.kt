@@ -15,6 +15,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.stler.tasks.ui.alltasks.FilterBar
 import com.stler.tasks.ui.task.TaskItem
+import com.stler.tasks.ui.util.ErrorSnackbarEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,6 +28,8 @@ fun LabelScreen(
     val labels by viewModel.labels.collectAsStateWithLifecycle()
     val folders by viewModel.folders.collectAsStateWithLifecycle()
     val priorityFilter by viewModel.priorityFilter.collectAsStateWithLifecycle()
+
+    ErrorSnackbarEffect(viewModel)
 
     Column(modifier = Modifier.fillMaxSize()) {
         FilterBar(

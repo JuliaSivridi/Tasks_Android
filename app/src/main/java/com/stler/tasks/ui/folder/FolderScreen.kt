@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.stler.tasks.ui.task.TaskItem
+import com.stler.tasks.ui.util.ErrorSnackbarEffect
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -51,6 +52,8 @@ fun FolderScreen(
 ) {
     val displayList by viewModel.displayList.collectAsStateWithLifecycle()
     val labels      by viewModel.labels.collectAsStateWithLifecycle()
+
+    ErrorSnackbarEffect(viewModel)
 
     if (displayList.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

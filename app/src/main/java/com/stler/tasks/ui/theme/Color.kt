@@ -29,9 +29,21 @@ val Accent = Color(0xFFFDF6ED)           // hsl(38 60% 96%) – very light orang
 val AccentForeground = Color(0xFF8F4F1C) // hsl(25 60% 35%)
 val AccentDark = Color(0xFF2E2E2E)       // hsl(0 0% 18%)
 
+// ── Sidebar selection ─────────────────────────────────────────────────────────
+// NavigationDrawerItem selected background — clearly visible neutral gray.
+// Used explicitly on each nav item so it doesn't affect other M3 components
+// that also read primaryContainer (chips, FAB tonal variants, etc.).
+val NavSelected     = Color(0xFFE4E4E4)  // light mode: mid-light gray
+// dark mode reuses AccentDark (0xFF2E2E2E) — already correct
+
 // ── Secondary / Muted ─────────────────────────────────────────────────────────
 val Secondary = Color(0xFFF5F3F1)        // hsl(25 8% 95%)
 val SecondaryDark = Color(0xFF363636)
+
+// ── Chip selection (neutral, bypasses Material You warm tint) ─────────────────
+// FilterChip selected state in light mode: container = Border gray, text = OnChipSelected.
+// Dark mode falls back to surfaceVariant / onSurfaceVariant from the theme.
+val OnChipSelected = Color(0xFF424242)   // hsl(0 0% 26%) – dark gray chip text/icon
 
 // ── Borders ───────────────────────────────────────────────────────────────────
 val Border = Color(0xFFE0E0E0)           // hsl(0 0% 88%)

@@ -240,10 +240,10 @@ _Identified by static codebase analysis after Stage 9b._
 
 ## Stage 10 — Polish & Build
 
-- [ ] 10.1 Dark/light theme: verify all screens and widgets against spec §4 color values
-- [ ] 10.2 Priority and deadline colors: cross-check exact hex values
-- [ ] 10.3 All icons: Lucide outlined, correct icon per action (see spec §4)
-- [ ] 10.4 Error handling: offline state, expired token, sync failure → user-visible feedback
+- [x] 10.1 Dark/light theme: verified all screens. Fixed sidebar selected-item highlight (`NavigationDrawerItem` was using `primaryContainer = #FDF6ED` cream; replaced with explicit `NavSelected = #E4E4E4` gray via `sidebarItemColors()` helper, dark mode keeps `AccentDark`). Fixed hardcoded `Color(0xFFE0E0E0)` / `Color(0xFF424242)` in AllTasksScreen, UpcomingScreen, TaskFormSheet — now use `Border` / `OnChipSelected` named constants. ✅ Done (session 7).
+- [x] 10.2 Priority and deadline colors: confirmed correct (Urgent #F87171, Important #FB923C, Normal #9CA3AF; Overdue #F87171, Today #16A34A, Tomorrow #FB923C, ThisWeek #A78BFA). Eliminated duplicate definitions — `TaskColors.kt` now imports from `Color.kt` (single source of truth). SidebarMenu and WidgetTaskRow hardcodes replaced with named constants. ✅ Done (session 7).
+- [x] 10.3 All icons: audit confirmed every icon uses `Icons.Outlined.*`. No `Icons.Filled.*` found anywhere. ✅ Done (session 7).
+- [x] 10.4 Error handling: `BaseViewModel.safeLaunch` now forwards exceptions to a `Channel<String>` (`uiError` flow). `LocalSnackbarHostState` CompositionLocal + `ErrorSnackbarEffect` helper wired to all 6 task screens; single `SnackbarHost` in `MainScreen` Scaffold surfaces messages to the user. ✅ Done (session 7).
 - [ ] 10.5 Build debug APK: `./gradlew assembleDebug`
 - [ ] 10.6 Run verification checklist from spec §17
 

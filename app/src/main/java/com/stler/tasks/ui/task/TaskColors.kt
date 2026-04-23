@@ -4,6 +4,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import com.stler.tasks.domain.model.Priority
+import com.stler.tasks.ui.theme.DeadlineOverdue
+import com.stler.tasks.ui.theme.DeadlineThisWeek
+import com.stler.tasks.ui.theme.DeadlineToday
+import com.stler.tasks.ui.theme.DeadlineTomorrow
+import com.stler.tasks.ui.theme.PriorityImportant
+import com.stler.tasks.ui.theme.PriorityNormal
+import com.stler.tasks.ui.theme.PriorityUrgent
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
@@ -11,23 +18,16 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 // ── Priority colours ─────────────────────────────────────────────────────────
-
-val PriorityUrgent = Color(0xFFf87171)
-val PriorityImportant = Color(0xFFfb923c)
-val PriorityNormal = Color(0xFF9ca3af)
+// Source of truth is ui/theme/Color.kt — re-exported here for convenience.
 
 fun priorityColor(priority: Priority): Color = when (priority) {
-    Priority.URGENT -> PriorityUrgent
+    Priority.URGENT    -> PriorityUrgent
     Priority.IMPORTANT -> PriorityImportant
-    Priority.NORMAL -> PriorityNormal
+    Priority.NORMAL    -> PriorityNormal
 }
 
 // ── Deadline colours ──────────────────────────────────────────────────────────
-
-val DeadlineOverdue = Color(0xFFf87171)
-val DeadlineToday = Color(0xFF16a34a)
-val DeadlineTomorrow = Color(0xFFfb923c)
-val DeadlineThisWeek = Color(0xFFa78bfa)
+// Source of truth is ui/theme/Color.kt — re-exported here for convenience.
 
 enum class DeadlineStatus { NONE, OVERDUE, TODAY, TOMORROW, THIS_WEEK, FUTURE }
 

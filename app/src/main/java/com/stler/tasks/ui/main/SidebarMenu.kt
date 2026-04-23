@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -42,6 +43,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -58,6 +60,11 @@ import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.sync.SyncState
 import com.stler.tasks.ui.navigation.Screen
+import com.stler.tasks.ui.theme.AccentDark
+import com.stler.tasks.ui.theme.NavSelected
+import com.stler.tasks.ui.theme.PriorityImportant
+import com.stler.tasks.ui.theme.PriorityNormal
+import com.stler.tasks.ui.theme.PriorityUrgent
 import com.stler.tasks.util.toComposeColor
 
 @Composable
@@ -132,9 +139,9 @@ fun SidebarMenu(
                 onAdd = null,
             )
             if (sidebarState.prioritiesOpen) {
-                PriorityNavItem("Urgent",    Color(0xFFf87171), currentRoute, currentPriority, onNavigate)
-                PriorityNavItem("Important", Color(0xFFfb923c), currentRoute, currentPriority, onNavigate)
-                PriorityNavItem("Normal",    Color(0xFF9ca3af), currentRoute, currentPriority, onNavigate)
+                PriorityNavItem("Urgent",    PriorityUrgent,    currentRoute, currentPriority, onNavigate)
+                PriorityNavItem("Important", PriorityImportant, currentRoute, currentPriority, onNavigate)
+                PriorityNavItem("Normal",    PriorityNormal,    currentRoute, currentPriority, onNavigate)
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -188,6 +195,19 @@ fun SidebarMenu(
     }
 }
 
+// ── Shared colors ──────────────────────────────────────────────────────────────
+
+/**
+ * Explicit selected-container color for all sidebar nav items.
+ * NavigationDrawerItem defaults to primaryContainer, which in light mode is a
+ * barely-visible cream (#FDF6ED). We use a neutral gray instead so the active
+ * item is always clearly legible regardless of system theme.
+ */
+@Composable
+private fun sidebarItemColors() = NavigationDrawerItemDefaults.colors(
+    selectedContainerColor = if (isSystemInDarkTheme()) AccentDark else NavSelected,
+)
+
 // ── Reusable items ─────────────────────────────────────────────────────────────
 
 @Composable
@@ -203,6 +223,7 @@ private fun SimpleNavItem(
         selected = selected,
         onClick = onClick,
         modifier = Modifier.padding(horizontal = 12.dp),
+        colors = sidebarItemColors(),
     )
 }
 
@@ -221,6 +242,7 @@ private fun PriorityNavItem(
         selected = currentRoute == Screen.PRIORITY && currentPriority == key,
         onClick = { onNavigate(Screen.priorityRoute(key)) },
         modifier = Modifier.padding(horizontal = 12.dp),
+        colors = sidebarItemColors(),
     )
 }
 
@@ -241,6 +263,7 @@ private fun FolderNavItem(
         label = { Text(folder.name) },
         selected = isSelected,
         onClick = onClick,
+        colors = sidebarItemColors(),
         badge = {
             IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
                 Icon(Icons.Outlined.MoreVert, contentDescription = "Options", modifier = Modifier.size(16.dp))
@@ -280,6 +303,7 @@ private fun LabelNavItem(
         label = { Text(label.name) },
         selected = isSelected,
         onClick = onClick,
+        colors = sidebarItemColors(),
         badge = {
             IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
                 Icon(Icons.Outlined.MoreVert, contentDescription = "Options", modifier = Modifier.size(16.dp))

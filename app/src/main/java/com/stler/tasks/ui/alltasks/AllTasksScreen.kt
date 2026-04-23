@@ -40,7 +40,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.Priority
+import com.stler.tasks.ui.theme.Border
+import com.stler.tasks.ui.theme.OnChipSelected
 import com.stler.tasks.ui.task.TaskItem
+import com.stler.tasks.ui.util.ErrorSnackbarEffect
 import com.stler.tasks.ui.task.priorityColor
 import com.stler.tasks.util.toComposeColor
 
@@ -57,6 +60,8 @@ fun AllTasksScreen(
     val priorityFilter by viewModel.priorityFilter.collectAsStateWithLifecycle()
     val labelFilter    by viewModel.labelFilter.collectAsStateWithLifecycle()
     val folderFilter   by viewModel.folderFilter.collectAsStateWithLifecycle()
+
+    ErrorSnackbarEffect(viewModel)
 
     Column(modifier = Modifier.fillMaxSize()) {
         FilterBar(
@@ -100,9 +105,9 @@ fun AllTasksScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun neutralChipColors() = FilterChipDefaults.filterChipColors(
-    selectedContainerColor   = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFE0E0E0),
-    selectedLeadingIconColor = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF424242),
-    selectedLabelColor       = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF424242),
+    selectedContainerColor   = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceVariant else Border,
+    selectedLeadingIconColor = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else OnChipSelected,
+    selectedLabelColor       = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else OnChipSelected,
 )
 
 /**

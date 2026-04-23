@@ -9,7 +9,10 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -39,6 +42,7 @@ import com.stler.tasks.ui.task.TaskFormResult
 import com.stler.tasks.ui.task.TaskFormSheet
 import com.stler.tasks.ui.task.TaskFormViewModel
 import com.stler.tasks.ui.upcoming.UpcomingScreen
+import com.stler.tasks.ui.util.LocalSnackbarHostState
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -60,9 +64,10 @@ fun MainScreen(
     viewModel: MainViewModel = hiltViewModel(),
     formViewModel: TaskFormViewModel = hiltViewModel(),
 ) {
-    val navController = rememberNavController()
-    val drawerState   = rememberDrawerState(DrawerValue.Closed)
-    val scope         = rememberCoroutineScope()
+    val navController     = rememberNavController()
+    val drawerState       = rememberDrawerState(DrawerValue.Closed)
+    val scope             = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     val folders      by viewModel.folders.collectAsStateWithLifecycle()
     val labels       by viewModel.labels.collectAsStateWithLifecycle()
@@ -198,6 +203,7 @@ fun MainScreen(
 
     // ── UI ────────────────────────────────────────────────────────────────────
 
+    CompositionLocalProvider(LocalSnackbarHostState provides snackbarHostState) {
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -240,6 +246,7 @@ fun MainScreen(
                     Icon(Icons.Outlined.Add, contentDescription = "Add task")
                 }
             },
+            snackbarHost = { SnackbarHost(snackbarHostState) },
         ) { innerPadding ->
             NavHost(
                 navController    = navController,
@@ -333,4 +340,5 @@ fun MainScreen(
             onDismiss       = { showForm = false },
         )
     }
+    } // end CompositionLocalProvider(LocalSnackbarHostState)
 }

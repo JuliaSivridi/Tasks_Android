@@ -43,6 +43,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.stler.tasks.domain.model.Priority
 import com.stler.tasks.ui.alltasks.FilterBar
 import com.stler.tasks.ui.task.TaskItem
+import com.stler.tasks.ui.theme.Border
+import com.stler.tasks.ui.util.ErrorSnackbarEffect
+import com.stler.tasks.ui.theme.DeadlineToday
+import com.stler.tasks.ui.theme.OnChipSelected
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
@@ -68,6 +72,8 @@ fun UpcomingScreen(
     val priorityFilter  by viewModel.priorityFilter.collectAsStateWithLifecycle()
     val labelFilter     by viewModel.labelFilter.collectAsStateWithLifecycle()
     val folderFilter    by viewModel.folderFilter.collectAsStateWithLifecycle()
+
+    ErrorSnackbarEffect(viewModel)
 
     val today    = remember { LocalDate.now() }
     val listState = rememberLazyListState()
@@ -315,8 +321,8 @@ private fun DayPill(
     hasTasks: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val todayBg      = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceVariant else Color(0xFFE0E0E0)
-    val todayContent = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFF424242)
+    val todayBg      = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceVariant else Border
+    val todayContent = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else OnChipSelected
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -342,7 +348,7 @@ private fun DayPill(
                 .clip(CircleShape)
                 .background(
                     when {
-                        isToday  -> Color(0xFF16a34a)
+                        isToday  -> DeadlineToday
                         hasTasks -> MaterialTheme.colorScheme.primary
                         else     -> Color.Transparent
                     }
