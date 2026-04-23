@@ -10,7 +10,6 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -27,8 +26,9 @@ import javax.inject.Singleton
  *
  * ## Threading
  * [refreshAll] is non-suspend / fire-and-forget — callers do not block.
- * The actual [GlanceAppWidget.updateAll] calls run on the Main dispatcher
- * as required by Glance's RemoteViews pipeline.
+ * [GlanceAppWidget.updateAll] is called on [Dispatchers.Default] (the scope's
+ * dispatcher); no Main thread required — Glance schedules a SessionWorker via
+ * WorkManager, which is thread-safe.
  */
 @Singleton
 class WidgetRefresher @Inject constructor(
@@ -53,7 +53,12 @@ class WidgetRefresher @Inject constructor(
         trigger.tryEmit(Unit)
     }
 
-    private suspend fun doRefresh() = withContext(Dispatchers.Main) {
+    /**
+     * Glance's updateAll() schedules a SessionWorker via WorkManager, which is
+     * thread-safe.  No Main-dispatcher requirement — removing withContext(Dispatchers.Main)
+     * eliminates the 300-530 ms UI-thread blocks visible in PerfMonitor doFrame logs.
+     */
+    private suspend fun doRefresh() {
         UpcomingWidget().updateAll(context)
         FolderWidget().updateAll(context)
         TaskListWidget().updateAll(context)
