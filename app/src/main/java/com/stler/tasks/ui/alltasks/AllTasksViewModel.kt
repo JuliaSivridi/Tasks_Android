@@ -1,12 +1,12 @@
 package com.stler.tasks.ui.alltasks
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.stler.tasks.data.repository.TaskRepository
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.Priority
 import com.stler.tasks.domain.model.Task
+import com.stler.tasks.ui.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,13 +15,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class AllTasksViewModel @Inject constructor(
     private val repository: TaskRepository,
-) : ViewModel() {
+) : BaseViewModel() {
 
     val tasks: StateFlow<List<Task>> = repository.observeAllPendingTasks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -72,9 +71,9 @@ class AllTasksViewModel @Inject constructor(
         _folderFilter.value   = emptySet()
     }
 
-    fun completeTask(id: String) = viewModelScope.launch { repository.completeTask(id) }
+    fun completeTask(id: String) = safeLaunch { repository.completeTask(id) }
 
-    fun deleteTask(id: String) = viewModelScope.launch { repository.deleteTask(id) }
+    fun deleteTask(id: String) = safeLaunch { repository.deleteTask(id) }
 
     fun updateDeadline(
         id         : String,
@@ -83,8 +82,8 @@ class AllTasksViewModel @Inject constructor(
         isRecurring: Boolean,
         recurType  : com.stler.tasks.domain.model.RecurType,
         recurValue : Int,
-    ) = viewModelScope.launch {
-        val task = tasks.value.find { it.id == id } ?: return@launch
+    ) = safeLaunch {
+        val task = tasks.value.find { it.id == id } ?: return@safeLaunch
         repository.updateTask(
             task.copy(
                 deadlineDate = date,
@@ -97,13 +96,13 @@ class AllTasksViewModel @Inject constructor(
         )
     }
 
-    fun updatePriority(id: String, p: Priority) = viewModelScope.launch {
-        val task = tasks.value.find { it.id == id } ?: return@launch
+    fun updatePriority(id: String, p: Priority) = safeLaunch {
+        val task = tasks.value.find { it.id == id } ?: return@safeLaunch
         repository.updateTask(task.copy(priority = p, updatedAt = nowIso()))
     }
 
-    fun updateLabels(id: String, lbls: List<String>) = viewModelScope.launch {
-        val task = tasks.value.find { it.id == id } ?: return@launch
+    fun updateLabels(id: String, lbls: List<String>) = safeLaunch {
+        val task = tasks.value.find { it.id == id } ?: return@safeLaunch
         repository.updateTask(task.copy(labels = lbls, updatedAt = nowIso()))
     }
 

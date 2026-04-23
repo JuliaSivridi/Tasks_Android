@@ -118,11 +118,15 @@ class GoogleAuthRepository @Inject constructor(
             .await()
 
         if (authResult.hasResolution()) {
-            return@runCatching SignInStep.NeedsAuthorization(authResult.pendingIntent!!)
+            val intent = authResult.pendingIntent
+                ?: throw IllegalStateException("hasResolution() is true but pendingIntent is null")
+            return@runCatching SignInStep.NeedsAuthorization(intent)
         }
 
         // Step 3 & 4 — finalize
-        completeSignIn(authResult.accessToken!!, googleCredential)
+        val token = authResult.accessToken
+            ?: throw IllegalStateException("No access token in authorization result")
+        completeSignIn(token, googleCredential)
         SignInStep.Success
     }
 

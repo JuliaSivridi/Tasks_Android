@@ -1,12 +1,12 @@
 package com.stler.tasks.ui.completed
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.stler.tasks.data.repository.TaskRepository
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.Priority
 import com.stler.tasks.domain.model.Task
+import com.stler.tasks.ui.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -15,13 +15,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class CompletedViewModel @Inject constructor(
     private val repository: TaskRepository,
-) : ViewModel() {
+) : BaseViewModel() {
 
     private val allTasks: StateFlow<List<Task>> = repository.observeCompletedTasks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -66,7 +65,7 @@ class CompletedViewModel @Inject constructor(
         _folderFilter.value   = emptySet()
     }
 
-    fun restoreTask(id: String) = viewModelScope.launch { repository.restoreTask(id) }
+    fun restoreTask(id: String) = safeLaunch { repository.restoreTask(id) }
 
-    fun deleteTask(id: String) = viewModelScope.launch { repository.deleteTask(id) }
+    fun deleteTask(id: String) = safeLaunch { repository.deleteTask(id) }
 }

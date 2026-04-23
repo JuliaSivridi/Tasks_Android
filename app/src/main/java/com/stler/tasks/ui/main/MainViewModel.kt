@@ -1,8 +1,8 @@
 package com.stler.tasks.ui.main
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.stler.tasks.auth.AuthData
+import com.stler.tasks.ui.BaseViewModel
 import com.stler.tasks.auth.GoogleAuthRepository
 import com.stler.tasks.data.repository.TaskRepository
 import com.stler.tasks.domain.model.Folder
@@ -16,7 +16,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 private fun generateId(prefix: String): String =
@@ -28,7 +27,7 @@ class MainViewModel @Inject constructor(
     private val authRepository: GoogleAuthRepository, // used for authData flow
     private val syncManager: SyncManager,
     private val sidebarPreferences: SidebarPreferences,
-) : ViewModel() {
+) : BaseViewModel() {
 
     /** All pending tasks at any depth — used for deeplink task lookup. */
     val allTasksForDeepLink: Flow<List<Task>> = taskRepository.observeAllPendingTasks()
@@ -53,7 +52,7 @@ class MainViewModel @Inject constructor(
         syncManager.triggerSync()
     }
 
-    fun toggleSection(section: String) = viewModelScope.launch {
+    fun toggleSection(section: String) = safeLaunch {
         sidebarPreferences.toggleSection(section)
     }
 
@@ -61,35 +60,35 @@ class MainViewModel @Inject constructor(
 
     // ── Folder CRUD ───────────────────────────────────────────────────────
 
-    fun createFolder(name: String, color: String) = viewModelScope.launch {
+    fun createFolder(name: String, color: String) = safeLaunch {
         val nextOrder = (folders.value.maxOfOrNull { it.sortOrder } ?: -1) + 1
         taskRepository.createFolder(
             Folder(id = generateId("fld"), name = name, color = color, sortOrder = nextOrder)
         )
     }
 
-    fun updateFolder(folder: Folder, name: String, color: String) = viewModelScope.launch {
+    fun updateFolder(folder: Folder, name: String, color: String) = safeLaunch {
         taskRepository.updateFolder(folder.copy(name = name, color = color))
     }
 
-    fun deleteFolder(folderId: String) = viewModelScope.launch {
+    fun deleteFolder(folderId: String) = safeLaunch {
         taskRepository.deleteFolder(folderId)
     }
 
     // ── Label CRUD ────────────────────────────────────────────────────────
 
-    fun createLabel(name: String, color: String) = viewModelScope.launch {
+    fun createLabel(name: String, color: String) = safeLaunch {
         val nextOrder = (labels.value.maxOfOrNull { it.sortOrder } ?: -1) + 1
         taskRepository.createLabel(
             Label(id = generateId("lbl"), name = name, color = color, sortOrder = nextOrder)
         )
     }
 
-    fun updateLabel(label: Label, name: String, color: String) = viewModelScope.launch {
+    fun updateLabel(label: Label, name: String, color: String) = safeLaunch {
         taskRepository.updateLabel(label.copy(name = name, color = color))
     }
 
-    fun deleteLabel(labelId: String) = viewModelScope.launch {
+    fun deleteLabel(labelId: String) = safeLaunch {
         taskRepository.deleteLabel(labelId)
     }
 }

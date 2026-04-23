@@ -230,11 +230,11 @@ _Identified by static codebase analysis after Stage 9b._
 ### UX
 - [x] 9c.7 Reparent (indent/outdent) via "..." menu in `FolderScreen` — "Make subtask of above" and "Move up a level" inserted between "Add subtask" and "Edit" in `TaskMobileMenu`; shown only when applicable (task above exists / depth > 0). ✅ Done (session 6).
 
-### Deferred (lower priority)
-- [ ] 9c.8 `fetchAllAndSave()` not wrapped in a single DB transaction — tasks, folders, labels upserted in three separate transactions; partial sync failure could leave inconsistent state.
-- [ ] 9c.9 `!!` force-unwraps in `GoogleAuthRepository` (`pendingIntent!!`, `accessToken!!`) — should use safe unwrap with explicit error.
-- [ ] 9c.10 `checkNotNull(savedStateHandle["folderId/labelId"])` in ViewModels — crashes on invalid navigation; should emit an error state instead.
-- [ ] 9c.11 Missing error handling in repository suspend functions — `SQLiteException` propagates silently through `viewModelScope.launch { }`.
+### Previously deferred — now done
+- [x] 9c.8 `fetchAllAndSave()` not wrapped in a single DB transaction — wrapped all three upserts in `db.withTransaction { }`; `TaskDatabase` added to `TaskRepositoryImpl` constructor. ✅ Done (session 7).
+- [x] 9c.9 `!!` force-unwraps in `GoogleAuthRepository` (`pendingIntent!!`, `accessToken!!`) — replaced with safe unwraps throwing explicit `IllegalStateException`. ✅ Done (session 7).
+- [x] 9c.10 `checkNotNull(savedStateHandle["folderId/labelId"])` in ViewModels — replaced with `savedStateHandle.get<String>() ?: run { Log.e(...); "" }` in both `FolderViewModel` and `LabelViewModel`. ✅ Done (session 7).
+- [x] 9c.11 Missing error handling in repository suspend functions — `UpcomingViewModel`, `FolderViewModel`, and `MainViewModel` now extend `BaseViewModel` and use `safeLaunch`; all `viewModelScope.launch` replaced. ✅ Done (session 7).
 
 ---
 

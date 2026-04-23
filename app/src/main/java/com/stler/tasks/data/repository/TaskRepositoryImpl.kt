@@ -1,6 +1,8 @@
 package com.stler.tasks.data.repository
 
+import androidx.room.withTransaction
 import com.google.gson.Gson
+import com.stler.tasks.data.local.TaskDatabase
 import com.stler.tasks.data.local.dao.FolderDao
 import com.stler.tasks.data.local.dao.LabelDao
 import com.stler.tasks.data.local.dao.SyncQueueDao
@@ -25,6 +27,7 @@ import javax.inject.Singleton
 
 @Singleton
 class TaskRepositoryImpl @Inject constructor(
+    private val db: TaskDatabase,
     private val taskDao: TaskDao,
     private val folderDao: FolderDao,
     private val labelDao: LabelDao,
@@ -232,20 +235,24 @@ class TaskRepositoryImpl @Inject constructor(
         )
         val ranges = response.valueRanges
 
-        ranges.getOrNull(0)?.values?.drop(1)
-            ?.mapNotNull { mapper.rowToTask(it) }
-            ?.filter { it.id !in pendingIds }
-            ?.let { taskDao.upsertAll(it) }
+        // All three upserts are wrapped in a single transaction so a network failure
+        // mid-sync cannot leave tasks, folders, and labels in an inconsistent state.
+        db.withTransaction {
+            ranges.getOrNull(0)?.values?.drop(1)
+                ?.mapNotNull { mapper.rowToTask(it) }
+                ?.filter { it.id !in pendingIds }
+                ?.let { taskDao.upsertAll(it) }
 
-        ranges.getOrNull(1)?.values?.drop(1)
-            ?.mapNotNull { mapper.rowToFolder(it) }
-            ?.filter { it.id !in pendingIds }
-            ?.let { folderDao.upsertAll(it) }
+            ranges.getOrNull(1)?.values?.drop(1)
+                ?.mapNotNull { mapper.rowToFolder(it) }
+                ?.filter { it.id !in pendingIds }
+                ?.let { folderDao.upsertAll(it) }
 
-        ranges.getOrNull(2)?.values?.drop(1)
-            ?.mapNotNull { mapper.rowToLabel(it) }
-            ?.filter { it.id !in pendingIds }
-            ?.let { labelDao.upsertAll(it) }
+            ranges.getOrNull(2)?.values?.drop(1)
+                ?.mapNotNull { mapper.rowToLabel(it) }
+                ?.filter { it.id !in pendingIds }
+                ?.let { labelDao.upsertAll(it) }
+        }
     }
 
     // ── Private helpers ───────────────────────────────────────────────────

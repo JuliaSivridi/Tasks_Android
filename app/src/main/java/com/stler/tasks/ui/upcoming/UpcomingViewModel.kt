@@ -1,8 +1,8 @@
 package com.stler.tasks.ui.upcoming
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.stler.tasks.data.repository.TaskRepository
+import com.stler.tasks.ui.BaseViewModel
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.Priority
@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
@@ -25,7 +24,7 @@ import javax.inject.Inject
 @HiltViewModel
 class UpcomingViewModel @Inject constructor(
     private val repository: TaskRepository,
-) : ViewModel() {
+) : BaseViewModel() {
 
     private val tasksWithDeadline: StateFlow<List<Task>> =
         repository.observeAllPendingTasksWithDeadline()
@@ -143,8 +142,8 @@ class UpcomingViewModel @Inject constructor(
 
     // ── Task mutations ────────────────────────────────────────────────────
 
-    fun completeTask(id: String) = viewModelScope.launch { repository.completeTask(id) }
-    fun deleteTask(id: String)   = viewModelScope.launch { repository.deleteTask(id) }
+    fun completeTask(id: String) = safeLaunch { repository.completeTask(id) }
+    fun deleteTask(id: String)   = safeLaunch { repository.deleteTask(id) }
 
     fun updateDeadline(
         id         : String,
@@ -153,8 +152,8 @@ class UpcomingViewModel @Inject constructor(
         isRecurring: Boolean,
         recurType  : com.stler.tasks.domain.model.RecurType,
         recurValue : Int,
-    ) = viewModelScope.launch {
-        val t = tasksWithDeadline.value.find { it.id == id } ?: return@launch
+    ) = safeLaunch {
+        val t = tasksWithDeadline.value.find { it.id == id } ?: return@safeLaunch
         repository.updateTask(
             t.copy(
                 deadlineDate = date,
@@ -167,13 +166,13 @@ class UpcomingViewModel @Inject constructor(
         )
     }
 
-    fun updatePriority(id: String, p: Priority) = viewModelScope.launch {
-        val t = tasksWithDeadline.value.find { it.id == id } ?: return@launch
+    fun updatePriority(id: String, p: Priority) = safeLaunch {
+        val t = tasksWithDeadline.value.find { it.id == id } ?: return@safeLaunch
         repository.updateTask(t.copy(priority = p, updatedAt = nowIso()))
     }
 
-    fun updateLabels(id: String, lbls: List<String>) = viewModelScope.launch {
-        val t = tasksWithDeadline.value.find { it.id == id } ?: return@launch
+    fun updateLabels(id: String, lbls: List<String>) = safeLaunch {
+        val t = tasksWithDeadline.value.find { it.id == id } ?: return@safeLaunch
         repository.updateTask(t.copy(labels = lbls, updatedAt = nowIso()))
     }
 
