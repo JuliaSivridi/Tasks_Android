@@ -187,8 +187,8 @@ _Discovered during testing after Stage 9._
 - [x] 9b.7 Overdue grouping — all past-due tasks collapsed into single "Overdue" section in Upcoming screen and UpcomingWidget. ✅ Done (session 3).
 
 ### Sync & performance
-- [ ] 9b.8 Drag-to-reorder creates too many sync operations — current implementation fires `updateTask()` on every intermediate drag position, generating 50–300+ sync queue entries per drag. Fix: accumulate the final order only, write once when drag ends; use `sortOrder` diff, not `updatedAt`.
-- [ ] 9b.9 Widget refresh instability — completing a task from a widget sometimes takes 5–15 min for the widget to reflect the change. Investigate Glance `updateAll()` timing; ensure `refreshAll()` is called reliably after every mutation and that `provideGlance` re-reads fresh data.
+- [x] 9b.8 Drag-to-reorder creates too many sync operations — deferred DB write to drag-drop event (isDragging → false); single `updateTasks()` batch transaction per drag; `pendingReorder` stores only final from/to indices. ✅ Done (session 6).
+- [x] 9b.9 Widget refresh instability — root cause: all three widgets fetched data via `.first()` before `provideContent`, capturing it as a stale closure. Glance recomposes existing sessions without re-running `provideGlance()`, so data was never refreshed (~39s delay until new SessionWorker). Fix: moved all DB queries inside `provideContent` using `collectAsState()` — widgets now react to Room Flow emissions immediately. ✅ Done (session 6).
 
 ### UI/UX
 - [x] 9b.10 Primary color → `#e07e38` (matches PWA orange). App icon background color verified correct. ✅ Done (session 3).
