@@ -124,17 +124,19 @@ fun DeadlinePickerDialog(
                             verticalAlignment     = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
+                            val dateColor = if (selectedDate.isNotBlank())
+                                deadlineColor(deadlineStatus(selectedDate))
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
                             Icon(
                                 Icons.Outlined.CalendarMonth, null,
                                 modifier = Modifier.size(13.dp),
-                                tint = if (selectedDate.isNotBlank()) MaterialTheme.colorScheme.primary
-                                       else MaterialTheme.colorScheme.onSurfaceVariant,
+                                tint = dateColor,
                             )
                             Text(
                                 text  = if (selectedDate.isBlank()) "No date" else formatDate(selectedDate),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = if (selectedDate.isNotBlank()) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = dateColor,
                             )
                         }
                     },
@@ -149,17 +151,21 @@ fun DeadlinePickerDialog(
                                 verticalAlignment     = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
+                                // Time chip uses the same status color as the date chip —
+                                // both chips belong to the same deadline.
+                                val timeColor = if (selectedTime.isNotBlank())
+                                    deadlineColor(deadlineStatus(selectedDate))
+                                else
+                                    MaterialTheme.colorScheme.onSurfaceVariant
                                 Icon(
                                     Icons.Outlined.Schedule, null,
                                     modifier = Modifier.size(13.dp),
-                                    tint = if (selectedTime.isNotBlank()) MaterialTheme.colorScheme.primary
-                                           else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = timeColor,
                                 )
                                 Text(
                                     text  = if (selectedTime.isBlank()) "No time" else selectedTime,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (selectedTime.isNotBlank()) MaterialTheme.colorScheme.primary
-                                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    color = timeColor,
                                 )
                             }
                         },
