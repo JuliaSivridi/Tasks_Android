@@ -241,16 +241,18 @@ fun TaskFormSheet(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
+                                // Time chip inherits the same status color as the date chip —
+                                // both belong to the same deadline. dlStatus is computed above.
                                 Icon(
                                     Icons.Outlined.Schedule, null,
                                     modifier = Modifier.size(13.dp),
-                                    tint = if (deadlineTime.isNotBlank()) MaterialTheme.colorScheme.primary
+                                    tint = if (deadlineTime.isNotBlank()) deadlineColor(dlStatus)
                                            else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Text(
                                     text  = if (deadlineTime.isBlank()) "No time" else deadlineTime,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (deadlineTime.isNotBlank()) MaterialTheme.colorScheme.primary
+                                    color = if (deadlineTime.isNotBlank()) deadlineColor(dlStatus)
                                             else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
