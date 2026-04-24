@@ -1,63 +1,131 @@
 # Stler Tasks — Android
 
-A native Android task manager — the companion app to [Stler Tasks PWA](https://stler-tasks.vercel.app). Shares the same Google Sheets backend, so tasks sync seamlessly between the web app and the phone.
+A native Android task manager — the companion app to [Stler Tasks PWA](https://stler-tasks.vercel.app). Both apps share the same `db_tasks` Google Spreadsheet, so tasks, folders, and labels stay in sync between web and phone automatically.
 
-> Inspired by [Todoist](https://todoist.com/) — one of the finest personal task managers out there. Stler Tasks delivers a similar UX as a native Android app backed solely by Google Sheets, with no subscription fee.
+> Inspired by [Todoist](https://todoist.com/) — personal task management without a subscription, backed by your own Google Sheets.
 
 ---
 
 ## Features
 
-- **Multiple views** — Upcoming (day-grouped with week strip), All Tasks, Priority, Folders, Labels, Completed
-- **Priority levels** — Urgent / Important / Normal with color-coded flags and dedicated sidebar navigation
-- **Task hierarchy** — subtasks with expand/collapse and drag-to-reorder within folders
-- **Indent / outdent** — reparent tasks via the "..." menu (Make subtask of above / Move up a level)
-- **Deadlines** — date + optional time, color-coded: overdue (red) / today (green) / tomorrow (orange) / this week (violet)
-- **Recurring tasks** — daily / weekly / monthly; completing advances the deadline automatically
-- **Labels & Folders** — organize tasks with colored labels and folders; both collapsible in the sidebar
-- **Home screen widgets** — Upcoming tasks, Folder tasks, and configurable Task List widgets via Glance
-- **Offline-first** — full read/write without internet via Room (SQLite); syncs automatically on reconnect
-- **Google Sheets sync** — tasks, folders, and labels live in the user's own `db_tasks` spreadsheet
+**Task management**
+- Create tasks with title, priority, deadline (date + optional time), labels, and folder
+- Subtasks at any depth with expand/collapse; progress counter on the parent row
+- Recurring tasks — daily / weekly / monthly; completing a recurring task advances the deadline automatically, not marks it done
+- Smart input: type `@FolderName` or `#LabelName` in the title to set folder / add label instantly
+
+**Organization**
+- **Folders** — group tasks; drag to reorder within a folder; hierarchical subtask tree
+- **Labels** — colored tags, multiple per task; filterable across all views
+- **Priority** — Urgent / Important / Normal; color-coded flags on every task row
+
+**Views**
+- **Upcoming** — tasks grouped by day with a scrollable week strip; overdue section at the top
+- **All Tasks** — flat list of all pending tasks
+- **Priority** — separate tab per priority level
+- **Folders / Labels** — dedicated screen per folder or label
+- **Completed** — archive of done tasks with one-tap restore
+
+**Deadlines**
+- Color-coded by urgency: overdue · today · tomorrow · this week · future
+- Swipe left on any task to open the deadline picker instantly
+- Postpone button inside the deadline picker (advances by the task's own recurrence interval)
+
+**Swipe gestures**
+- Swipe right → complete (green flash, then task disappears or deadline advances)
+- Swipe left → open deadline picker (snaps back after closing)
+
+**Widgets** — three home screen widgets via Jetpack Glance:
+- **Upcoming** — next 7 days grouped by date
+- **Folder** — any single folder, hierarchical
+- **Task List** — configurable by folder / label / priority
+
+**Sync & offline**
+- Full read/write offline via Room (SQLite); sync queue flushes when back online
+- Background sync every 30 minutes via WorkManager; manual sync from the sidebar
+- First sign-in automatically creates the `db_tasks` spreadsheet — no manual setup
+
+---
 
 ## Tech Stack
 
-| Layer | Technology |
+| Layer | Technology | Version |
+|---|---|---|
+| Language | Kotlin | 2.2.10 |
+| UI | Jetpack Compose + Material 3 | BOM 2026.02.01 |
+| Widgets | Jetpack Glance | 1.1.0 |
+| Architecture | MVVM + Repository | — |
+| DI | Hilt | 2.59.2 |
+| Local DB | Room | 2.7.1 |
+| Async | Coroutines + Flow | 1.10.2 |
+| Background sync | WorkManager | 2.10.1 |
+| Auth | Credential Manager + Google Identity API | 21.3.0 / 1.1.1 |
+| Network | Retrofit + OkHttp | 2.11.0 / 4.12.0 |
+| Remote storage | Google Sheets API v4 | — |
+| Drag & drop | sh.calvin.reorderable | 2.4.3 |
+| Min SDK | 26 (Android 8.0) | — |
+
+---
+
+## Architecture
+
+```
+ui/
+  main/        — Navigation drawer, top bar, main scaffold, FAB
+  upcoming/    — Week strip + day-grouped task list
+  alltasks/    — Flat task list with priority / label / folder filters
+  folder/      — Hierarchical task list with drag-to-reorder
+  label/       — Tasks filtered by label
+  priority/    — Tasks filtered by priority level
+  completed/   — Completed tasks with restore / delete
+  task/        — TaskItem, TaskFormSheet, DeadlinePickerDialog, pickers
+  theme/       — Color palette, Typography, Theme
+data/
+  local/       — Room DB (version 4), DAOs, entities
+  remote/      — Retrofit + SheetsMapper (row ↔ entity)
+  repository/  — TaskRepositoryImpl (single source of truth)
+sync/          — SyncWorker (WorkManager), SyncManager, SyncState
+auth/          — GoogleAuthRepository, AuthPreferences (DataStore)
+widget/        — Glance widgets (Upcoming, Folder, TaskList) + actions
+di/            — Hilt modules
+```
+
+**Data flow:** every mutation writes to Room immediately (triggers UI recomposition) and enqueues a SyncQueue entry. SyncWorker drains the queue on the next sync cycle, then pulls fresh data from Sheets into Room.
+
+---
+
+## Data Model
+
+All data lives in a Google Spreadsheet named `db_tasks` — one per Google account, shared with the PWA.
+
+| Sheet | Columns (A → last) |
 |---|---|
-| Language | Kotlin |
-| UI | Jetpack Compose + Material3 |
-| Widgets | Jetpack Glance |
-| Architecture | MVVM + Repository |
-| DI | Hilt |
-| Local DB | Room (SQLite) |
-| Async | Coroutines + Flow |
-| Navigation | Navigation Compose |
-| Auth | Credential Manager + Google Identity Services (OAuth 2.0) |
-| Network | Retrofit + OkHttp |
-| Sync | WorkManager |
-| Drag & drop | sh.calvin.reorderable |
-| Remote DB | Google Sheets API v4 |
-| Min SDK | 26 (Android 8.0) |
+| `tasks` | id · parent_id · folder_id · title · status · priority · deadline_date · deadline_time · is_recurring · recur_type · recur_value · labels · sort_order · created_at · updated_at · completed_at · is_expanded |
+| `folders` | id · name · color · sort_order |
+| `labels` | id · name · color · sort_order |
+
+Row 1 of every sheet is a header row. Deleted rows are cleared (all cells emptied) rather than physically removed.
+
+---
 
 ## Setup
 
 ### Prerequisites
 
-- Google account
-- Google Cloud project with **Google Sheets API v4** and **Google Drive API v3** enabled
-- OAuth 2.0 Client ID — type: **Android** (with your app's SHA-1) + type: **Web application** (for token exchange)
 - Android Studio Hedgehog or newer
+- Google account
+- Google Cloud project with **Google Sheets API** and **Google Drive API** enabled
 
 ### Google Cloud Console
 
-1. Go to [console.cloud.google.com](https://console.cloud.google.com)
-2. Enable **Google Sheets API v4** and **Google Drive API v3**
-3. Create an OAuth 2.0 Client ID → type: **Android**
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) and enable **Google Sheets API** and **Google Drive API**
+2. Create an OAuth 2.0 Client ID → type **Android**
    - Package name: `com.stler.tasks`
-   - SHA-1: run `./gradlew signingReport` to get it
-4. Create an OAuth 2.0 Client ID → type: **Web application** (needed for the token exchange flow)
-5. Add your Google account as a **test user** in the OAuth consent screen
+   - SHA-1: run `./gradlew signingReport`
+3. Create an OAuth 2.0 Client ID → type **Web application** (needed for the token exchange)
+4. Set the OAuth consent screen to **Production** so any Google account can sign in
 
-### Local Development
+### Local development
 
 ```bash
 git clone https://github.com/JuliaSivridi/Tasks_Android.git
@@ -65,58 +133,25 @@ cd Tasks_Android
 ```
 
 Add your Web Client ID to `app/src/main/res/values/strings.xml`:
+
 ```xml
 <string name="google_web_client_id">YOUR_WEB_CLIENT_ID.apps.googleusercontent.com</string>
 ```
 
-Open the project in Android Studio and run on a device or emulator (API 26+).
+Open in Android Studio and run on a device or emulator (API 26+).
 
-## Data Model
+On first sign-in the app automatically finds or creates the `db_tasks` spreadsheet — no manual spreadsheet setup required.
 
-Shares the same `db_tasks` Google Spreadsheet as the PWA. The app finds it automatically via Drive API on first login.
+### Release builds
 
-| Sheet | Columns |
-|---|---|
-| `tasks` | id, parent_id, folder_id, title, status, priority, deadline_date, deadline_time, is_recurring, recur_type, recur_value, labels, sort_order, created_at, updated_at, completed_at, is_expanded |
-| `folders` | id, name, color, sort_order |
-| `labels` | id, name, color, sort_order |
+The GitHub Actions workflow (`.github/workflows/release.yml`) builds a signed APK on every `v*` tag push and attaches it to a GitHub Release.
 
-## Architecture
+Required secrets: `KEYSTORE_BASE64` · `KEYSTORE_PASSWORD` · `KEY_ALIAS` · `KEY_PASSWORD`
 
-```
-ui/
-  main/          — Navigation drawer, top bar, main scaffold
-  upcoming/      — Week strip + day-grouped task list
-  alltasks/      — Flat task list with priority/label/folder filters
-  folder/        — Hierarchical task list with drag-to-reorder
-  label/         — Tasks filtered by label
-  priority/      — Tasks filtered by priority level
-  completed/     — Completed tasks with restore/delete
-  task/          — TaskItem, TaskFormSheet, DeadlinePickerDialog, etc.
-  theme/         — Color palette, Typography, Theme
-data/
-  local/         — Room database, DAOs, entities
-  remote/        — Retrofit API, SheetsMapper
-  repository/    — TaskRepositoryImpl (single source of truth)
-sync/            — SyncWorker (WorkManager), SyncManager
-auth/            — GoogleAuthRepository, AuthPreferences (DataStore)
-widget/          — Glance widgets (Upcoming, Folder, TaskList)
-di/              — Hilt modules
-```
-
-## Widgets
-
-Three home screen widgets are available — long-press the home screen → Widgets → Stler Tasks:
-
-| Widget | Description |
-|---|---|
-| **Upcoming** | Next 7 days of tasks grouped by date |
-| **Folder** | All pending tasks in a chosen folder |
-| **Task List** | Configurable list with a custom title |
-
-Tap any task row in a widget to open the app directly on that task.
+---
 
 ## Related
 
 - **PWA version:** [github.com/JuliaSivridi/Tasks](https://github.com/JuliaSivridi/Tasks) — React + TypeScript, same Google Sheets backend
 - **Live PWA:** [stler-tasks.vercel.app](https://stler-tasks.vercel.app)
+- **Technical specification:** [`docs/tech-spec.html`](docs/tech-spec.html)
