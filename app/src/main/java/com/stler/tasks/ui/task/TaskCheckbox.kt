@@ -13,6 +13,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.stler.tasks.domain.model.Priority
 
@@ -21,6 +25,8 @@ fun TaskCheckbox(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     priority: Priority,
+    /** Accessibility label read by TalkBack, e.g. "Mark as complete: Buy milk". */
+    contentDesc: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val color = priorityColor(priority)
@@ -28,6 +34,10 @@ fun TaskCheckbox(
     Box(
         modifier = modifier
             .size(40.dp)
+            .semantics {
+                role = Role.Checkbox
+                if (contentDesc != null) contentDescription = contentDesc
+            }
             .clickable { onCheckedChange(!checked) },
         contentAlignment = Alignment.Center,
     ) {

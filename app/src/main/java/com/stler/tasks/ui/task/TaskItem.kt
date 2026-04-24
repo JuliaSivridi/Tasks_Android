@@ -44,10 +44,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -125,14 +127,12 @@ fun TaskItem(
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             when (value) {
-                SwipeToDismissBoxValue.StartToEnd -> {
-                    // Swipe right → complete task (only if not already completed)
-                    if (!isCompleted) { onCheckedChange(true) }
-                    true
-                }
+                // Allow right swipe to settle (business logic runs in LaunchedEffect below
+                // with a short delay so the green flash is visible for ~500 ms).
+                SwipeToDismissBoxValue.StartToEnd -> !isCompleted
+                // Reject left swipe (state snaps back), but open deadline dialog as a side effect.
                 SwipeToDismissBoxValue.EndToStart -> {
-                    // Swipe left → open deadline dialog and snap back
-                    if (!isCompleted) { showDeadlinePicker = true }
+                    if (!isCompleted) showDeadlinePicker = true
                     false
                 }
                 else -> false
@@ -140,6 +140,18 @@ fun TaskItem(
         },
         positionalThreshold = { totalDistance -> totalDistance * 0.4f },
     )
+
+    // Fire once when the swipe-right state settles: wait for the green flash,
+    // call onCheckedChange, then reset the dismiss state so recurring tasks
+    // (which stay in the list after completion) don't remain hidden behind the background.
+    LaunchedEffect(dismissState.currentValue) {
+        if (dismissState.currentValue == SwipeToDismissBoxValue.StartToEnd) {
+            delay(500L)
+            onCheckedChange(true)
+            // snapTo(Settled) so recurring tasks reappear normally after deadline advance.
+            try { dismissState.snapTo(SwipeToDismissBoxValue.Settled) } catch (_: Exception) {}
+        }
+    }
 
     SwipeToDismissBox(
         state = dismissState,
@@ -214,6 +226,8 @@ fun TaskItem(
                     checked = isCompleted,
                     onCheckedChange = onCheckedChange,
                     priority = task.priority,
+                    contentDesc = if (isCompleted) "Mark as incomplete: ${task.title}"
+                                  else "Mark as complete: ${task.title}",
                 )
 
                 Spacer(modifier = Modifier.width(8.dp))

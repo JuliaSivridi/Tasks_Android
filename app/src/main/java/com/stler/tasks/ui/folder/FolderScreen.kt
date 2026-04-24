@@ -163,8 +163,6 @@ fun FolderScreen(
                         onAddSubtask        = { onAddSubtask(node.task) },
                         onEdit              = { onEditTask(node.task) },
                         onDelete            = { viewModel.deleteTask(task.id) },
-                        // Disable swipe gestures — conflicts with drag-to-reorder
-                        enableSwipe         = false,
                         // Reparent actions: shown in "..." menu only in FolderScreen
                         onIndent  = taskAbove?.let { above ->
                             { viewModel.reparentTask(task.id, above.task.id) }

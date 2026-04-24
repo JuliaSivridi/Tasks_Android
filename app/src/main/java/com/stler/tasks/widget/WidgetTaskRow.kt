@@ -96,11 +96,12 @@ fun WidgetTaskRow(
             ),
         verticalAlignment = Alignment.Top,
     ) {
-        // ── Chevron — 48dp touch target, 24dp visual ────────────────────
+        // ── Chevron — 28dp touch target, 11sp visual glyph ──────────────
+        // Widgets are compact UI; 28dp is a reasonable touch target here.
         if (hasChildren) {
             Box(
                 modifier = GlanceModifier
-                    .size(48.dp)
+                    .size(28.dp)
                     .clickable(
                         actionRunCallback<ToggleExpandAction>(
                             actionParametersOf(
@@ -120,17 +121,17 @@ fun WidgetTaskRow(
                 )
             }
         } else if (showExpandSpace) {
-            Spacer(GlanceModifier.width(48.dp))
+            Spacer(GlanceModifier.width(28.dp))
         }
 
         Spacer(GlanceModifier.width(6.dp))
 
-        // ── Checkbox — 48dp touch target, 20dp visual ─────────────────────
-        // Outer box: 48dp touch target with click handler.
+        // ── Checkbox — 32dp touch target, 20dp visual ─────────────────────
+        // Outer box: 32dp touch target with click handler.
         // Inner box: visual checkbox (priority border + surface fill).
         Box(
             modifier = GlanceModifier
-                .size(48.dp)
+                .size(32.dp)
                 .clickable(
                     actionRunCallback<CompleteTaskAction>(
                         actionParametersOf(taskIdKey to task.id)
