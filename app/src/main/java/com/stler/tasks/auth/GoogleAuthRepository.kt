@@ -17,6 +17,7 @@ import com.stler.tasks.data.local.dao.FolderDao
 import com.stler.tasks.data.local.dao.LabelDao
 import com.stler.tasks.data.local.dao.SyncQueueDao
 import com.stler.tasks.data.local.dao.TaskDao
+import com.stler.tasks.data.local.entity.FolderEntity
 import com.stler.tasks.data.remote.TokenProvider
 import com.stler.tasks.data.remote.dto.DriveFilesResponse
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -27,8 +28,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -143,7 +147,7 @@ class GoogleAuthRepository @Inject constructor(
 
         // Update token; user info was already saved in step 1 of signIn()
         if (authPreferences.spreadsheetId.first().isBlank()) {
-            val spreadsheetId = findSpreadsheetId(token)
+            val spreadsheetId = findOrCreateSpreadsheet(token)
             authPreferences.saveAll(
                 accessToken   = token,
                 tokenExpiry   = expiryInOneHour(),
@@ -197,7 +201,7 @@ class GoogleAuthRepository @Inject constructor(
         accessToken: String,
         credential: GoogleIdTokenCredential,
     ) {
-        val spreadsheetId = findSpreadsheetId(accessToken)
+        val spreadsheetId = findOrCreateSpreadsheet(accessToken)
         authPreferences.saveAll(
             accessToken   = accessToken,
             tokenExpiry   = expiryInOneHour(),
@@ -217,6 +221,105 @@ class GoogleAuthRepository @Inject constructor(
                 )
             )
             .build()
+
+    /**
+     * Returns the spreadsheetId of the user's `db_tasks` spreadsheet.
+     * If none exists yet, creates a new one with the correct sheet structure and seeds
+     * the Inbox folder, so new users can start immediately without any manual setup.
+     */
+    private suspend fun findOrCreateSpreadsheet(accessToken: String): String {
+        val found = findSpreadsheetId(accessToken)
+        if (found.isNotBlank()) return found
+        Log.i(TAG, "No db_tasks found — creating new spreadsheet")
+        return createSpreadsheet(accessToken)
+    }
+
+    /**
+     * Creates a new Google Spreadsheet named `db_tasks` with three sheets
+     * (tasks, folders, labels), writes header rows, and seeds the Inbox folder.
+     * Also upserts the Inbox to Room so the app is immediately usable.
+     *
+     * Uses OkHttp directly (not Retrofit) to avoid circular dependency with
+     * the Hilt-managed OkHttpClient that requires a valid TokenProvider.
+     */
+    private suspend fun createSpreadsheet(accessToken: String): String = withContext(Dispatchers.IO) {
+        runCatching {
+            val client = OkHttpClient()
+            val jsonType = "application/json".toMediaType()
+
+            // ── Step 1: create the spreadsheet with three named sheets ────────
+            val createBody = """
+                {
+                  "properties": { "title": "db_tasks" },
+                  "sheets": [
+                    { "properties": { "title": "tasks",   "index": 0 } },
+                    { "properties": { "title": "folders", "index": 1 } },
+                    { "properties": { "title": "labels",  "index": 2 } }
+                  ]
+                }
+            """.trimIndent()
+
+            val createResp = client.newCall(
+                Request.Builder()
+                    .url("https://sheets.googleapis.com/v4/spreadsheets")
+                    .header("Authorization", "Bearer $accessToken")
+                    .post(createBody.toRequestBody(jsonType))
+                    .build()
+            ).execute()
+
+            if (!createResp.isSuccessful) {
+                Log.e(TAG, "createSpreadsheet HTTP ${createResp.code}")
+                return@runCatching ""
+            }
+
+            val spreadsheetId = JSONObject(createResp.body?.string() ?: "")
+                .getString("spreadsheetId")
+            Log.i(TAG, "Created spreadsheet: $spreadsheetId")
+
+            // ── Step 2: write headers + seed Inbox folder ─────────────────────
+            val batchBody = """
+                {
+                  "valueInputOption": "RAW",
+                  "data": [
+                    {
+                      "range": "tasks!A1:Q1",
+                      "values": [["id","parent_id","folder_id","title","status","priority",
+                                  "deadline_date","deadline_time","is_recurring","recur_type",
+                                  "recur_value","labels","sort_order","created_at","updated_at",
+                                  "completed_at","is_expanded"]]
+                    },
+                    {
+                      "range": "folders!A1:D2",
+                      "values": [
+                        ["id","name","color","sort_order"],
+                        ["fld-inbox","Inbox","#6b7280","0"]
+                      ]
+                    },
+                    {
+                      "range": "labels!A1:D1",
+                      "values": [["id","name","color","sort_order"]]
+                    }
+                  ]
+                }
+            """.trimIndent()
+
+            client.newCall(
+                Request.Builder()
+                    .url("https://sheets.googleapis.com/v4/spreadsheets/$spreadsheetId/values:batchUpdate")
+                    .header("Authorization", "Bearer $accessToken")
+                    .post(batchBody.toRequestBody(jsonType))
+                    .build()
+            ).execute()
+
+            // ── Step 3: seed Inbox to Room so the app is usable immediately ───
+            folderDao.upsert(FolderEntity(id = "fld-inbox", name = "Inbox", color = "#6b7280", sortOrder = 0))
+            Log.i(TAG, "Seeded Inbox folder to Room")
+
+            spreadsheetId
+        }.onFailure { e ->
+            Log.e(TAG, "createSpreadsheet exception: ${e.message}", e)
+        }.getOrDefault("")
+    }
 
     /**
      * Finds the spreadsheetId of `db_tasks` via Drive API v3.

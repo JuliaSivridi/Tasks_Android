@@ -533,25 +533,25 @@ implementation("io.coil-kt:coil-compose:2.6.0")
 
 ## 17. Verification Checklist
 
-- [ ] Sign in → `db_tasks` found → main screen with sidebar
-- [ ] Add task in PWA → sync in Android → task appears
-- [ ] Add task in Android → appears in PWA
-- [ ] Default folder in Create Task = current folder screen or Inbox
-- [ ] @FolderName and #LabelName smart parsing in title field
-- [ ] Inline label creation in task modal
-- [ ] Priority color on checkbox border
-- [ ] Deadline color coding on task metadata row
-- [ ] Task action buttons (all 6) visible on all pending-task screens
-- [ ] Mobile: Clock + MoreHorizontal → full action menu
-- [ ] Completed screen: RotateCcw + Trash2 only
-- [ ] Recurring task: completion advances deadline, does not mark done
-- [ ] Subtask count "X/Y" badge shown on tasks with children
-- [ ] Folder view: drag-and-drop vertical (reorder) + horizontal (reparent)
-- [ ] Folder view: is_expanded state persists across app restarts
-- [ ] Widget Folder: is_expanded shared with app
-- [ ] Widget checkbox: marks task complete → changes in Sheets
-- [ ] Widget task tap: opens app on task edit screen
-- [ ] Widget "+" tap: opens app on create screen
-- [ ] Dark mode correct on all screens and widgets
-- [ ] Collapse state of sidebar sections syncs with PWA
-- [ ] APK installs and runs without Play Store
+- [x] Sign in → `db_tasks` found → main screen with sidebar
+- [x] Add task in PWA → sync in Android → task appears
+- [x] Add task in Android → appears in PWA
+- [x] Default folder in Create Task = current folder screen or Inbox
+- [x] @FolderName and #LabelName smart parsing in title field
+- [x] Inline label creation in task modal
+- [x] Priority color on checkbox border
+- [x] Deadline color coding on task metadata row
+- [x] Task action buttons (all 6) visible on all pending-task screens
+- [x] Mobile: Clock + MoreHorizontal → full action menu
+- [x] Completed screen: RotateCcw + Trash2 only
+- [x] Recurring task: completion advances deadline, does not mark done
+- [x] Subtask count "X/Y" badge shown on tasks with children
+- [x] Folder view: drag-and-drop vertical (reorder) + horizontal (reparent)
+- [x] Folder view: is_expanded state persists across app restarts
+- [x] Widget Folder: is_expanded shared with app
+- [x] Widget checkbox: marks task complete → changes in Sheets
+- [x] Widget task tap: opens app on task edit screen
+- [x] Widget "+" tap: opens app on create screen
+- [x] Dark mode correct on all screens and widgets
+- [x] Collapse state of sidebar sections syncs with PWA
+- [x] APK installs and runs without Play Store
