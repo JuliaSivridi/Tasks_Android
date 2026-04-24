@@ -7,4 +7,13 @@
     <color name="widget_on_surface_variant">#949494</color>
     <color name="widget_divider">#4A4A4A</color>
     <color name="widget_error">#CC5252</color>
+    <!-- Widget priority colors (same in light and dark) -->
+    <color name="widget_priority_urgent">#F87171</color>
+    <color name="widget_priority_important">#FB923C</color>
+    <color name="widget_priority_normal">#9CA3AF</color>
+    <!-- Widget deadline colors (same in light and dark) -->
+    <color name="widget_deadline_overdue">#F87171</color>
+    <color name="widget_deadline_today">#16A34A</color>
+    <color name="widget_deadline_tomorrow">#FB923C</color>
+    <color name="widget_deadline_this_week">#A78BFA</color>
 </resources>

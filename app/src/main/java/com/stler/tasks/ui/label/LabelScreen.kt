@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -15,7 +17,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.stler.tasks.ui.alltasks.FilterBar
 import com.stler.tasks.ui.task.TaskItem
+import com.stler.tasks.ui.util.EmptyState
 import com.stler.tasks.ui.util.ErrorSnackbarEffect
+import com.stler.tasks.ui.util.ShimmerTaskList
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,9 +28,10 @@ fun LabelScreen(
     onAddSubtask : (com.stler.tasks.domain.model.Task) -> Unit = {},
     viewModel    : LabelViewModel = hiltViewModel(),
 ) {
-    val filteredTasks by viewModel.filteredTasks.collectAsStateWithLifecycle()
-    val labels by viewModel.labels.collectAsStateWithLifecycle()
-    val folders by viewModel.folders.collectAsStateWithLifecycle()
+    val filteredTasks  by viewModel.filteredTasks.collectAsStateWithLifecycle()
+    val isLoading      by viewModel.isLoading.collectAsStateWithLifecycle()
+    val labels         by viewModel.labels.collectAsStateWithLifecycle()
+    val folders        by viewModel.folders.collectAsStateWithLifecycle()
     val priorityFilter by viewModel.priorityFilter.collectAsStateWithLifecycle()
 
     ErrorSnackbarEffect(viewModel)
@@ -41,28 +46,36 @@ fun LabelScreen(
             onClearAll      = { viewModel.clearAllFilters() },
             showLabelFilter = false,   // label is implicit (we're already inside a label view)
         )
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(filteredTasks, key = { it.id }) { task ->
-                TaskItem(
-                    task = task,
-                    labels = labels,
-                    showFolder = true,
-                    showLabels = false,   // label is implicit (we're already inside a label view)
-                    folderName = folders.find { it.id == task.folderId }?.name,
-                    folderColor = folders.find { it.id == task.folderId }?.color,
-                    onCheckedChange = { checked -> if (checked) viewModel.completeTask(task.id) },
-                    onExpand = {},
-                    onDeadlineChange = { d, t, isRec, rType, rVal -> viewModel.updateDeadline(task.id, d, t, isRec, rType, rVal) },
-                    onPriorityChange = { p -> viewModel.updatePriority(task.id, p) },
-                    onLabelChange = { l -> viewModel.updateLabels(task.id, l) },
-                    onAddSubtask = { onAddSubtask(task) },
-                    onEdit = { onEditTask(task) },
-                    onDelete = { viewModel.deleteTask(task.id) },
-                )
-                HorizontalDivider(
-                    thickness = 0.5.dp,
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                )
+        when {
+            isLoading -> ShimmerTaskList(modifier = Modifier.fillMaxSize())
+            filteredTasks.isEmpty() -> EmptyState(
+                icon     = Icons.Outlined.Label,
+                message  = "No tasks",
+                subtitle = "Tasks with this label will appear here",
+            )
+            else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(filteredTasks, key = { it.id }) { task ->
+                    TaskItem(
+                        task = task,
+                        labels = labels,
+                        showFolder = true,
+                        showLabels = false,   // label is implicit (we're already inside a label view)
+                        folderName = folders.find { it.id == task.folderId }?.name,
+                        folderColor = folders.find { it.id == task.folderId }?.color,
+                        onCheckedChange = { checked -> if (checked) viewModel.completeTask(task.id) },
+                        onExpand = {},
+                        onDeadlineChange = { d, t, isRec, rType, rVal -> viewModel.updateDeadline(task.id, d, t, isRec, rType, rVal) },
+                        onPriorityChange = { p -> viewModel.updatePriority(task.id, p) },
+                        onLabelChange = { l -> viewModel.updateLabels(task.id, l) },
+                        onAddSubtask = { onAddSubtask(task) },
+                        onEdit = { onEditTask(task) },
+                        onDelete = { viewModel.deleteTask(task.id) },
+                    )
+                    HorizontalDivider(
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                    )
+                }
             }
         }
     }

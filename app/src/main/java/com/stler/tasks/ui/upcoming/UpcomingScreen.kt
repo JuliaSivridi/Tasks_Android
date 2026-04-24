@@ -45,6 +45,7 @@ import com.stler.tasks.ui.alltasks.FilterBar
 import com.stler.tasks.ui.task.TaskItem
 import com.stler.tasks.ui.theme.Border
 import com.stler.tasks.ui.util.ErrorSnackbarEffect
+import com.stler.tasks.ui.util.ShimmerTaskList
 import com.stler.tasks.ui.theme.DeadlineToday
 import com.stler.tasks.ui.theme.OnChipSelected
 import kotlinx.coroutines.flow.debounce
@@ -65,6 +66,7 @@ fun UpcomingScreen(
     viewModel    : UpcomingViewModel = hiltViewModel(),
 ) {
     val allGroupedTasks by viewModel.allGroupedTasks.collectAsStateWithLifecycle()
+    val isLoading       by viewModel.isLoading.collectAsStateWithLifecycle()
     val weekDays        by viewModel.weekDays.collectAsStateWithLifecycle()
     val weekOffset      by viewModel.weekOffset.collectAsStateWithLifecycle()
     val labels          by viewModel.labels.collectAsStateWithLifecycle()
@@ -221,7 +223,9 @@ fun UpcomingScreen(
         )
 
         // ── Task list — all dates, scrollable ─────────────────────────────
-        if (orderedDates.isEmpty()) {
+        if (isLoading) {
+            ShimmerTaskList(modifier = Modifier.weight(1f).fillMaxWidth())
+        } else if (orderedDates.isEmpty()) {
             Box(
                 modifier = Modifier
                     .weight(1f)

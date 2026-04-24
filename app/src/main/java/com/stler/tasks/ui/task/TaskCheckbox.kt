@@ -27,7 +27,7 @@ fun TaskCheckbox(
 
     Box(
         modifier = modifier
-            .size(32.dp)
+            .size(40.dp)
             .clickable { onCheckedChange(!checked) },
         contentAlignment = Alignment.Center,
     ) {

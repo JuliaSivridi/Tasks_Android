@@ -96,6 +96,11 @@ class UpcomingViewModel @Inject constructor(
             }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
+    /** True until the first emission from [allGroupedTasks], then false. */
+    val isLoading: StateFlow<Boolean> = allGroupedTasks
+        .map { false }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     // ── Week strip navigation ─────────────────────────────────────────────
 
     fun shiftWeek(delta: Int) {

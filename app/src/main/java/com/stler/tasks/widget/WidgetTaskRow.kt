@@ -65,18 +65,18 @@ fun WidgetTaskRow(
     timeOnly: Boolean = false,
 ) {
     val priorityColor = when (task.priority) {
-        Priority.URGENT    -> ColorProvider(Color(0xFFf87171))
-        Priority.IMPORTANT -> ColorProvider(Color(0xFFfb923c))
-        Priority.NORMAL    -> ColorProvider(Color(0xFF9ca3af))
+        Priority.URGENT    -> WPriorityUrgent
+        Priority.IMPORTANT -> WPriorityImportant
+        Priority.NORMAL    -> WPriorityNormal
     }
 
     val dlStatus = deadlineStatus(task.deadlineDate)
     val dlLabel  = deadlineLabel(task.deadlineDate, task.deadlineTime, includeDate = !timeOnly)
     val dlColor  = when (dlStatus) {
-        DeadlineStatus.OVERDUE   -> ColorProvider(Color(0xFFf87171))
-        DeadlineStatus.TODAY     -> ColorProvider(Color(0xFF16a34a))
-        DeadlineStatus.TOMORROW  -> ColorProvider(Color(0xFFfb923c))
-        DeadlineStatus.THIS_WEEK -> ColorProvider(Color(0xFFa78bfa))
+        DeadlineStatus.OVERDUE   -> WDeadlineOverdue
+        DeadlineStatus.TODAY     -> WDeadlineToday
+        DeadlineStatus.TOMORROW  -> WDeadlineTomorrow
+        DeadlineStatus.THIS_WEEK -> WDeadlineThisWeek
         else                     -> WOnSurfaceVariant
     }
 
@@ -96,11 +96,11 @@ fun WidgetTaskRow(
             ),
         verticalAlignment = Alignment.Top,
     ) {
-        // ── Chevron ───────────────────────────────────────────────────────
+        // ── Chevron — 48dp touch target, 24dp visual ────────────────────
         if (hasChildren) {
             Box(
                 modifier = GlanceModifier
-                    .size(24.dp)
+                    .size(48.dp)
                     .clickable(
                         actionRunCallback<ToggleExpandAction>(
                             actionParametersOf(
@@ -120,18 +120,17 @@ fun WidgetTaskRow(
                 )
             }
         } else if (showExpandSpace) {
-            Spacer(GlanceModifier.width(24.dp))
+            Spacer(GlanceModifier.width(48.dp))
         }
 
         Spacer(GlanceModifier.width(6.dp))
 
-        // ── Checkbox — hollow square (priority border + surface fill) ──────
-        // Outer 20dp, inner 17dp → ~1.5dp border on each side
+        // ── Checkbox — 48dp touch target, 20dp visual ─────────────────────
+        // Outer box: 48dp touch target with click handler.
+        // Inner box: visual checkbox (priority border + surface fill).
         Box(
             modifier = GlanceModifier
-                .size(20.dp)
-                .cornerRadius(3.dp)
-                .background(priorityColor)
+                .size(48.dp)
                 .clickable(
                     actionRunCallback<CompleteTaskAction>(
                         actionParametersOf(taskIdKey to task.id)
@@ -141,10 +140,18 @@ fun WidgetTaskRow(
         ) {
             Box(
                 modifier = GlanceModifier
-                    .size(17.dp)
-                    .cornerRadius(2.dp)
-                    .background(WSurface),
-            ) {}
+                    .size(20.dp)
+                    .cornerRadius(3.dp)
+                    .background(priorityColor),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = GlanceModifier
+                        .size(17.dp)
+                        .cornerRadius(2.dp)
+                        .background(WSurface),
+                ) {}
+            }
         }
 
         Spacer(GlanceModifier.width(8.dp))

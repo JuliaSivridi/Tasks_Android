@@ -247,6 +247,15 @@ _Identified by static codebase analysis after Stage 9b._
 - [ ] 10.5 Build debug APK: `./gradlew assembleDebug`
 - [ ] 10.6 Run verification checklist from spec §17
 
+## Stage 11 — UX Improvements
+
+- [x] 11.1 Touch targets 48dp — widget chevron (24dp→48dp container), widget checkbox (20dp→48dp container), TaskCheckbox Box (32dp→40dp), TaskItem action IconButtons (removed `.size(32dp)` — default 48dp), expand/collapse Box (28dp→40dp), SidebarMenu section header + folder/label MoreVert IconButtons (removed `.size(24dp)`).
+- [x] 11.2 Named widget color constants — added `WPriority*` and `WDeadline*` providers to `WidgetColors.kt` (backed by XML resources in `values/` and `values-night/`); `WidgetTaskRow.kt` updated to use them (removed all `ColorProvider(Color(0xFF...))` inline hardcodes).
+- [x] 11.3 Tap task title → open edit dialog — added `.clickable { onEdit() }` to title `Text` in `TaskItem`.
+- [x] 11.4 Swipe right → complete task; swipe left → open deadline dialog (snap back) — `SwipeToDismissBox` wraps task content in `TaskItem`; `enableSwipe = false` passed in `FolderScreen` (drag conflict) and `CompletedScreen`.
+- [x] 11.5 Empty states — `EmptyState.kt` utility composable (icon + message + subtitle); added to `AllTasksScreen`, `CompletedScreen`, `PriorityScreen`, `LabelScreen`; `UpcomingScreen` already had its own empty state.
+- [x] 11.6 Shimmer loading — `ShimmerTaskList.kt` composable (pulsing skeleton rows); `isLoading: StateFlow<Boolean>` added to `AllTasksViewModel`, `CompletedViewModel`, `PriorityViewModel`, `LabelViewModel`, `UpcomingViewModel`; shimmer shown on all 5 screens until first data emission.
+
 ---
 
 *To continue in a new session: read this file and `docs/architecture-spec.md`, find the first `[~]` or first `[ ]` item and continue from there.*

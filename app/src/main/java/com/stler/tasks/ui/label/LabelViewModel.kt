@@ -49,6 +49,11 @@ class LabelViewModel @Inject constructor(
         if (pf.isEmpty()) list else list.filter { it.priority in pf }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** True until the first emission from [filteredTasks], then false. */
+    val isLoading: StateFlow<Boolean> = filteredTasks
+        .map { false }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     fun togglePriorityFilter(p: Priority) {
         _priorityFilter.update { if (p in it) it - p else it + p }
     }

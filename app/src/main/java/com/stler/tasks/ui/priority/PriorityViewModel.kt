@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
@@ -45,6 +46,11 @@ class PriorityViewModel @Inject constructor(
                 )
             )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** True until the first emission from [filteredTasks], then false. */
+    val isLoading: StateFlow<Boolean> = filteredTasks
+        .map { false }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     fun selectPriority(p: Priority) {
         _selectedPriority.value = p

@@ -265,8 +265,8 @@ private fun FolderNavItem(
         onClick = onClick,
         colors = sidebarItemColors(),
         badge = {
-            IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Outlined.MoreVert, contentDescription = "Options", modifier = Modifier.size(16.dp))
+            IconButton(onClick = { showMenu = true }) {
+                Icon(Icons.Outlined.MoreVert, contentDescription = "Options", modifier = Modifier.size(20.dp))
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(
@@ -305,8 +305,8 @@ private fun LabelNavItem(
         onClick = onClick,
         colors = sidebarItemColors(),
         badge = {
-            IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Outlined.MoreVert, contentDescription = "Options", modifier = Modifier.size(16.dp))
+            IconButton(onClick = { showMenu = true }) {
+                Icon(Icons.Outlined.MoreVert, contentDescription = "Options", modifier = Modifier.size(20.dp))
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(
@@ -340,14 +340,13 @@ private fun SectionHeader(
             .padding(horizontal = 16.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onToggle, modifier = Modifier.size(24.dp)) {
+        IconButton(onClick = onToggle) {
             Icon(
                 imageVector = if (isOpen) Icons.Outlined.ExpandMore else Icons.Outlined.ChevronRight,
                 contentDescription = if (isOpen) "Collapse" else "Expand",
                 modifier = Modifier.size(18.dp),
             )
         }
-        Spacer(Modifier.width(4.dp))
         Text(
             text = title,
             style = MaterialTheme.typography.bodyMedium,
@@ -355,7 +354,7 @@ private fun SectionHeader(
             modifier = Modifier.weight(1f),
         )
         if (onAdd != null) {
-            IconButton(onClick = onAdd, modifier = Modifier.size(24.dp)) {
+            IconButton(onClick = onAdd) {
                 Icon(Icons.Outlined.Add, contentDescription = "Add", modifier = Modifier.size(18.dp))
             }
         }

@@ -1,11 +1,14 @@
 package com.stler.tasks.ui.task
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,9 +37,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -52,6 +59,7 @@ import com.stler.tasks.domain.model.Priority
 import com.stler.tasks.domain.model.RecurType
 import com.stler.tasks.domain.model.Task
 import com.stler.tasks.domain.model.TaskStatus
+import com.stler.tasks.ui.theme.DeadlineToday
 import com.stler.tasks.util.toComposeColor
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -80,6 +88,13 @@ fun TaskItem(
     onIndent: (() -> Unit)? = null,
     /** Non-null only in FolderScreen when task has a parent → shown as "Move up a level". */
     onOutdent: (() -> Unit)? = null,
+    /**
+     * Enable swipe gestures:
+     *   swipe right → complete task
+     *   swipe left  → open deadline dialog (snaps back)
+     * Pass false in FolderScreen (conflicts with drag-to-reorder) and CompletedScreen.
+     */
+    enableSwipe: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val isCompleted = task.status == TaskStatus.COMPLETED
@@ -106,199 +121,245 @@ fun TaskItem(
             || task.isRecurring
             || totalChildCount > 0
 
-    Column(modifier = modifier) {
-        // ── Row 1: main task row ──────────────────────────────────────────────
-        Row(
-            modifier = Modifier.padding(
-                start = (depth * 20).dp,
-                end = 4.dp,
-                top = 4.dp,
-                bottom = 2.dp,
-            ),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Expand/collapse icon or empty placeholder.
-            // Box = 28dp tap target; Icon = 24dp so the ChevronRight/ExpandMore glyph
-            // (which only fills ~60 % of the icon canvas) renders at a visible size.
+    // ── Swipe-to-dismiss state ────────────────────────────────────────────────
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    // Swipe right → complete task (only if not already completed)
+                    if (!isCompleted) { onCheckedChange(true) }
+                    true
+                }
+                SwipeToDismissBoxValue.EndToStart -> {
+                    // Swipe left → open deadline dialog and snap back
+                    if (!isCompleted) { showDeadlinePicker = true }
+                    false
+                }
+                else -> false
+            }
+        },
+        positionalThreshold = { totalDistance -> totalDistance * 0.4f },
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        backgroundContent = {
+            val swipeDir = dismissState.targetValue
+            val bgColor by animateColorAsState(
+                targetValue = when (swipeDir) {
+                    SwipeToDismissBoxValue.StartToEnd -> DeadlineToday.copy(alpha = 0.85f)
+                    SwipeToDismissBoxValue.EndToStart -> MaterialTheme.colorScheme.primary.copy(alpha = 0.85f)
+                    else                             -> Color.Transparent
+                },
+                label = "swipeBg",
+            )
             Box(
-                modifier = if (hasChildren)
-                    Modifier.size(28.dp).clickable { onExpand() }
-                else
-                    Modifier.size(28.dp),
-                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(bgColor)
+                    .padding(horizontal = 20.dp),
+                contentAlignment = when (swipeDir) {
+                    SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
+                    else                             -> Alignment.CenterEnd
+                },
             ) {
-                if (hasChildren) {
+                if (swipeDir != SwipeToDismissBoxValue.Settled) {
                     Icon(
-                        imageVector = if (task.isExpanded) Icons.Outlined.ExpandMore
-                        else Icons.Outlined.ChevronRight,
-                        contentDescription = if (task.isExpanded) "Collapse" else "Expand",
+                        imageVector = if (swipeDir == SwipeToDismissBoxValue.StartToEnd)
+                            Icons.Outlined.Check else Icons.Outlined.Schedule,
+                        contentDescription = null,
+                        tint = Color.White,
                         modifier = Modifier.size(24.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.width(6.dp))
-
-            TaskCheckbox(
-                checked = isCompleted,
-                onCheckedChange = onCheckedChange,
-                priority = task.priority,
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Text(
-                text = task.title,
-                modifier = Modifier.weight(1f),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    textDecoration = if (isCompleted) TextDecoration.LineThrough else TextDecoration.None,
-                ),
-                color = MaterialTheme.colorScheme.onSurface.copy(
-                    alpha = if (isCompleted) 0.7f else 1f,
-                ),
-            )
-
-            Spacer(modifier = Modifier.width(4.dp))
-
-            // Action buttons
-            if (isCompleted) {
-                IconButton(
-                    onClick = { onCheckedChange(false) },
-                    modifier = Modifier.size(32.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Replay,
-                        contentDescription = "Restore",
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                IconButton(
-                    onClick = { showDeleteConfirm = true },
-                    modifier = Modifier.size(32.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Delete,
-                        contentDescription = "Delete",
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.error,
-                    )
-                }
-            } else {
-                // Deadline button
-                val deadlineTint = if (task.deadlineDate.isNotBlank()) {
-                    deadlineColor(dlStatus)
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-                IconButton(
-                    onClick = { showDeadlinePicker = true },
-                    modifier = Modifier.size(32.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Schedule,
-                        contentDescription = "Set deadline",
-                        modifier = Modifier.size(15.dp),
-                        tint = deadlineTint,
-                    )
-                }
-                // More options
-                IconButton(
-                    onClick = { showMobileMenu = true },
-                    modifier = Modifier.size(32.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.MoreHoriz,
-                        contentDescription = "More options",
-                        modifier = Modifier.size(15.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        }
-
-        // ── Row 2: metadata chips ─────────────────────────────────────────────
-        if (hasMetadata) {
+        },
+        modifier = modifier,
+        enableDismissFromStartToEnd = enableSwipe && !isCompleted,
+        enableDismissFromEndToStart = enableSwipe && !isCompleted,
+    ) {
+        Column {
+            // ── Row 1: main task row ──────────────────────────────────────────
             Row(
                 modifier = Modifier.padding(
-                    start = (depth * 20 + 52).dp,
-                    end = 8.dp,
-                    bottom = 4.dp,
+                    start = (depth * 20).dp,
+                    end = 4.dp,
+                    top = 4.dp,
+                    bottom = 2.dp,
                 ),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (task.isRecurring) {
-                    Icon(
-                        imageVector = Icons.Outlined.Autorenew,
-                        contentDescription = "Recurring",
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                    )
+                // Expand/collapse — 40dp touch target, 24dp visual icon.
+                Box(
+                    modifier = if (hasChildren)
+                        Modifier.size(40.dp).clickable { onExpand() }
+                    else
+                        Modifier.size(40.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (hasChildren) {
+                        Icon(
+                            imageVector = if (task.isExpanded) Icons.Outlined.ExpandMore
+                            else Icons.Outlined.ChevronRight,
+                            contentDescription = if (task.isExpanded) "Collapse" else "Expand",
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
 
-                if (dlLabel != null) {
-                    Text(
-                        text = dlLabel,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = deadlineColor(dlStatus),
-                    )
-                }
+                Spacer(modifier = Modifier.width(6.dp))
 
-                if (showLabels) {
-                    for (label in taskLabels) {
+                TaskCheckbox(
+                    checked = isCompleted,
+                    onCheckedChange = onCheckedChange,
+                    priority = task.priority,
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Text(
+                    text = task.title,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onEdit() },
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        textDecoration = if (isCompleted) TextDecoration.LineThrough else TextDecoration.None,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface.copy(
+                        alpha = if (isCompleted) 0.7f else 1f,
+                    ),
+                )
+
+                Spacer(modifier = Modifier.width(4.dp))
+
+                // Action buttons — default IconButton size (48dp touch target, 40dp visual)
+                if (isCompleted) {
+                    IconButton(onClick = { onCheckedChange(false) }) {
+                        Icon(
+                            imageVector = Icons.Outlined.Replay,
+                            contentDescription = "Restore",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    IconButton(onClick = { showDeleteConfirm = true }) {
+                        Icon(
+                            imageVector = Icons.Outlined.Delete,
+                            contentDescription = "Delete",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                } else {
+                    // Deadline button
+                    val deadlineTint = if (task.deadlineDate.isNotBlank()) {
+                        deadlineColor(dlStatus)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    IconButton(onClick = { showDeadlinePicker = true }) {
+                        Icon(
+                            imageVector = Icons.Outlined.Schedule,
+                            contentDescription = "Set deadline",
+                            modifier = Modifier.size(18.dp),
+                            tint = deadlineTint,
+                        )
+                    }
+                    // More options
+                    IconButton(onClick = { showMobileMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Outlined.MoreHoriz,
+                            contentDescription = "More options",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
+            // ── Row 2: metadata chips ─────────────────────────────────────────
+            if (hasMetadata) {
+                Row(
+                    modifier = Modifier.padding(
+                        start = (depth * 20 + 54).dp,
+                        end = 8.dp,
+                        bottom = 4.dp,
+                    ),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (task.isRecurring) {
+                        Icon(
+                            imageVector = Icons.Outlined.Autorenew,
+                            contentDescription = "Recurring",
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        )
+                    }
+
+                    if (dlLabel != null) {
+                        Text(
+                            text = dlLabel,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = deadlineColor(dlStatus),
+                        )
+                    }
+
+                    if (showLabels) {
+                        for (label in taskLabels) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Label,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp),
+                                    tint = label.color.toComposeColor(),
+                                )
+                                Text(
+                                    text = label.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = label.color.toComposeColor(),
+                                )
+                            }
+                        }
+                    }
+
+                    if (showFolder && folderName != null) {
+                        val fColor = if (folderColor != null) folderColor.toComposeColor()
+                                     else MaterialTheme.colorScheme.onSurfaceVariant
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.Label,
+                                imageVector = Icons.Outlined.Folder,
                                 contentDescription = null,
                                 modifier = Modifier.size(14.dp),
-                                tint = label.color.toComposeColor(),
+                                tint = fColor,
                             )
                             Text(
-                                text = label.name,
+                                text = folderName,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = label.color.toComposeColor(),
+                                color = fColor,
                             )
                         }
                     }
-                }
 
-                if (showFolder && folderName != null) {
-                    val fColor = if (folderColor != null) folderColor.toComposeColor()
-                                 else MaterialTheme.colorScheme.onSurfaceVariant
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Folder,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = fColor,
-                        )
-                        Text(
-                            text = folderName,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = fColor,
-                        )
-                    }
-                }
-
-                if (totalChildCount > 0) {
-                    val remaining = totalChildCount - completedChildCount
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        SubtaskStat(Icons.Outlined.Check, completedChildCount)
-                        SubtaskStat(Icons.Outlined.RadioButtonUnchecked, remaining)
-                        SubtaskStat(Icons.Outlined.FormatListBulleted, totalChildCount)
+                    if (totalChildCount > 0) {
+                        val remaining = totalChildCount - completedChildCount
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            SubtaskStat(Icons.Outlined.Check, completedChildCount)
+                            SubtaskStat(Icons.Outlined.RadioButtonUnchecked, remaining)
+                            SubtaskStat(Icons.Outlined.FormatListBulleted, totalChildCount)
+                        }
                     }
                 }
             }
