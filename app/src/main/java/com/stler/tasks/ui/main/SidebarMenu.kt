@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.Button
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -265,22 +266,24 @@ private fun FolderNavItem(
         onClick = onClick,
         colors = sidebarItemColors(),
         badge = {
-            IconButton(onClick = { showMenu = true }) {
-                Icon(Icons.Outlined.MoreVert, contentDescription = "Options", modifier = Modifier.size(20.dp))
-            }
-            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                DropdownMenuItem(
-                    text = { Text("Edit") },
-                    onClick = { showMenu = false; onEdit() },
-                    leadingIcon = { Icon(Icons.Outlined.Edit, null) },
-                )
-                DropdownMenuItem(
-                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                    onClick = { showMenu = false; onDelete() },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Delete, null, tint = MaterialTheme.colorScheme.error)
-                    },
-                )
+            Box {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(Icons.Outlined.MoreVert, contentDescription = "Options", modifier = Modifier.size(20.dp))
+                }
+                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Edit") },
+                        onClick = { showMenu = false; onEdit() },
+                        leadingIcon = { Icon(Icons.Outlined.Edit, null) },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                        onClick = { showMenu = false; onDelete() },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Delete, null, tint = MaterialTheme.colorScheme.error)
+                        },
+                    )
+                }
             }
         },
         modifier = Modifier.padding(horizontal = 12.dp),
@@ -305,22 +308,24 @@ private fun LabelNavItem(
         onClick = onClick,
         colors = sidebarItemColors(),
         badge = {
-            IconButton(onClick = { showMenu = true }) {
-                Icon(Icons.Outlined.MoreVert, contentDescription = "Options", modifier = Modifier.size(20.dp))
-            }
-            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                DropdownMenuItem(
-                    text = { Text("Edit") },
-                    onClick = { showMenu = false; onEdit() },
-                    leadingIcon = { Icon(Icons.Outlined.Edit, null) },
-                )
-                DropdownMenuItem(
-                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                    onClick = { showMenu = false; onDelete() },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Delete, null, tint = MaterialTheme.colorScheme.error)
-                    },
-                )
+            Box {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(Icons.Outlined.MoreVert, contentDescription = "Options", modifier = Modifier.size(20.dp))
+                }
+                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Edit") },
+                        onClick = { showMenu = false; onEdit() },
+                        leadingIcon = { Icon(Icons.Outlined.Edit, null) },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                        onClick = { showMenu = false; onDelete() },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Delete, null, tint = MaterialTheme.colorScheme.error)
+                        },
+                    )
+                }
             }
         },
         modifier = Modifier.padding(horizontal = 12.dp),

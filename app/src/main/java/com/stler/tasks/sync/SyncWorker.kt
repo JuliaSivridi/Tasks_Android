@@ -20,6 +20,7 @@ import com.stler.tasks.data.remote.dto.ValuesBody
 import com.stler.tasks.data.repository.TaskRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 
 /**
@@ -58,7 +59,14 @@ class SyncWorker @AssistedInject constructor(
         }
 
         return try {
+            val hadPendingChanges = syncQueueDao.getAll().isNotEmpty()
             push(spreadsheetId)
+            // If we just wrote data to Sheets, wait briefly before reading back.
+            // The Sheets API can sometimes serve a cached (pre-write) response if a
+            // batchGet arrives immediately after a batchUpdate, causing the fresh local
+            // deadline to be overwritten with stale data.  A short pause makes this
+            // race condition negligible in practice.
+            if (hadPendingChanges) delay(1_000L)
             taskRepository.fetchAllAndSave(spreadsheetId)
             // TODO Stage 9: GlanceAppWidgetManager.getInstance(applicationContext).updateAll()
             Log.d(TAG, "Sync complete")

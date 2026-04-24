@@ -46,6 +46,7 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -123,7 +124,19 @@ fun TaskItem(
             || task.isRecurring
             || totalChildCount > 0
 
-    // ── Swipe-to-dismiss state ────────────────────────────────────────────────
+    // ── Swipe-to-dismiss ─────────────────────────────────────────────────────
+    // key(task.id, task.deadlineDate) forces Compose to rebuild ALL inner state
+    // (including rememberSaveable inside rememberSwipeToDismissBoxState) whenever
+    // the task ID or deadline changes.  This serves two purposes:
+    //
+    //  1. After completing a recurring task the deadline advances → key changes →
+    //     dismiss state resets to Settled automatically, so swipe works again
+    //     without needing snapTo().
+    //
+    //  2. Prevents the saved StartToEnd state from being restored when the user
+    //     navigates back to a screen (rememberSaveable would otherwise re-trigger
+    //     the completion LaunchedEffect, auto-completing the task again).
+    key(task.id, task.deadlineDate) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             when (value) {
@@ -141,15 +154,13 @@ fun TaskItem(
         positionalThreshold = { totalDistance -> totalDistance * 0.4f },
     )
 
-    // Fire once when the swipe-right state settles: wait for the green flash,
-    // call onCheckedChange, then reset the dismiss state so recurring tasks
-    // (which stay in the list after completion) don't remain hidden behind the background.
+    // Fire once when the swipe-right state settles: wait for the green flash, then
+    // call onCheckedChange.  No snapTo needed — for recurring tasks the deadline
+    // change causes key() above to rebuild the dismiss state fresh (Settled).
     LaunchedEffect(dismissState.currentValue) {
         if (dismissState.currentValue == SwipeToDismissBoxValue.StartToEnd) {
             delay(500L)
             onCheckedChange(true)
-            // snapTo(Settled) so recurring tasks reappear normally after deadline advance.
-            try { dismissState.snapTo(SwipeToDismissBoxValue.Settled) } catch (_: Exception) {}
         }
     }
 
@@ -379,6 +390,7 @@ fun TaskItem(
             }
         }
     }
+    } // end key(task.id, task.deadlineDate)
 
     // ── Sheets and dialogs ────────────────────────────────────────────────────
 
