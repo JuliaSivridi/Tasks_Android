@@ -3,6 +3,7 @@ package com.stler.tasks.auth
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -33,7 +34,8 @@ class AuthPreferences @Inject constructor(
         private val SPREADSHEET_NAME  = stringPreferencesKey("spreadsheet_name")
         private val USER_EMAIL        = stringPreferencesKey("user_email")
         private val USER_NAME         = stringPreferencesKey("user_name")
-        private val USER_AVATAR_URL   = stringPreferencesKey("user_avatar_url")
+        private val USER_AVATAR_URL        = stringPreferencesKey("user_avatar_url")
+        private val SELECTED_CALENDAR_IDS  = stringSetPreferencesKey("selected_calendar_ids")
     }
 
     val accessToken: Flow<String>      = context.authDataStore.data.map { it[ACCESS_TOKEN]     ?: "" }
@@ -42,7 +44,8 @@ class AuthPreferences @Inject constructor(
     val spreadsheetName: Flow<String>  = context.authDataStore.data.map { it[SPREADSHEET_NAME] ?: "" }
     val userEmail: Flow<String>        = context.authDataStore.data.map { it[USER_EMAIL]       ?: "" }
     val userName: Flow<String>         = context.authDataStore.data.map { it[USER_NAME]        ?: "" }
-    val userAvatarUrl: Flow<String>    = context.authDataStore.data.map { it[USER_AVATAR_URL]  ?: "" }
+    val userAvatarUrl: Flow<String>       = context.authDataStore.data.map { it[USER_AVATAR_URL]       ?: "" }
+    val selectedCalendarIds: Flow<Set<String>> = context.authDataStore.data.map { it[SELECTED_CALENDAR_IDS] ?: emptySet() }
 
     suspend fun saveAll(
         accessToken: String,
@@ -77,6 +80,10 @@ class AuthPreferences @Inject constructor(
             prefs[ACCESS_TOKEN] = accessToken
             prefs[TOKEN_EXPIRY] = tokenExpiry
         }
+    }
+
+    suspend fun saveSelectedCalendarIds(ids: Set<String>) {
+        context.authDataStore.edit { it[SELECTED_CALENDAR_IDS] = ids }
     }
 
     suspend fun saveSpreadsheetId(spreadsheetId: String) {
