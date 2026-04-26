@@ -41,6 +41,7 @@ import com.stler.tasks.ui.priority.PriorityScreen
 import com.stler.tasks.ui.task.TaskFormResult
 import com.stler.tasks.ui.task.TaskFormSheet
 import com.stler.tasks.ui.task.TaskFormViewModel
+import com.stler.tasks.ui.settings.SettingsScreen
 import com.stler.tasks.ui.upcoming.UpcomingScreen
 import com.stler.tasks.ui.util.LocalSnackbarHostState
 import kotlinx.coroutines.flow.first
@@ -64,6 +65,13 @@ fun MainScreen(
     viewModel: MainViewModel = hiltViewModel(),
     formViewModel: TaskFormViewModel = hiltViewModel(),
 ) {
+    // ── Settings overlay — shown instead of the main content when true ───────
+    var showSettings by remember { mutableStateOf(false) }
+    if (showSettings) {
+        SettingsScreen(onNavigateBack = { showSettings = false })
+        return
+    }
+
     val navController     = rememberNavController()
     val drawerState       = rememberDrawerState(DrawerValue.Closed)
     val scope             = rememberCoroutineScope()
@@ -231,14 +239,15 @@ fun MainScreen(
         Scaffold(
             topBar = {
                 TasksTopAppBar(
-                    title         = screenTitle,
-                    syncState     = syncState,
-                    userName      = authData.userName,
-                    userEmail     = authData.userEmail,
-                    userAvatarUrl = authData.userAvatarUrl,
-                    onMenuClick   = { scope.launch { drawerState.open() } },
-                    onSyncClick   = viewModel::triggerSync,
-                    onSignOut     = onSignOut,
+                    title                = screenTitle,
+                    syncState            = syncState,
+                    userName             = authData.userName,
+                    userEmail            = authData.userEmail,
+                    userAvatarUrl        = authData.userAvatarUrl,
+                    onMenuClick          = { scope.launch { drawerState.open() } },
+                    onSyncClick          = viewModel::triggerSync,
+                    onSignOut            = onSignOut,
+                    onNavigateToSettings = { showSettings = true },
                 )
             },
             floatingActionButton = {

@@ -27,20 +27,22 @@ class AuthPreferences @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
     companion object {
-        private val ACCESS_TOKEN    = stringPreferencesKey("access_token")
-        private val TOKEN_EXPIRY    = stringPreferencesKey("token_expiry")
-        private val SPREADSHEET_ID  = stringPreferencesKey("spreadsheet_id")
-        private val USER_EMAIL      = stringPreferencesKey("user_email")
-        private val USER_NAME       = stringPreferencesKey("user_name")
-        private val USER_AVATAR_URL = stringPreferencesKey("user_avatar_url")
+        private val ACCESS_TOKEN      = stringPreferencesKey("access_token")
+        private val TOKEN_EXPIRY      = stringPreferencesKey("token_expiry")
+        private val SPREADSHEET_ID    = stringPreferencesKey("spreadsheet_id")
+        private val SPREADSHEET_NAME  = stringPreferencesKey("spreadsheet_name")
+        private val USER_EMAIL        = stringPreferencesKey("user_email")
+        private val USER_NAME         = stringPreferencesKey("user_name")
+        private val USER_AVATAR_URL   = stringPreferencesKey("user_avatar_url")
     }
 
-    val accessToken: Flow<String>    = context.authDataStore.data.map { it[ACCESS_TOKEN]    ?: "" }
-    val tokenExpiry: Flow<String>    = context.authDataStore.data.map { it[TOKEN_EXPIRY]    ?: "" }
-    val spreadsheetId: Flow<String>  = context.authDataStore.data.map { it[SPREADSHEET_ID]  ?: "" }
-    val userEmail: Flow<String>      = context.authDataStore.data.map { it[USER_EMAIL]      ?: "" }
-    val userName: Flow<String>       = context.authDataStore.data.map { it[USER_NAME]       ?: "" }
-    val userAvatarUrl: Flow<String>  = context.authDataStore.data.map { it[USER_AVATAR_URL] ?: "" }
+    val accessToken: Flow<String>      = context.authDataStore.data.map { it[ACCESS_TOKEN]     ?: "" }
+    val tokenExpiry: Flow<String>      = context.authDataStore.data.map { it[TOKEN_EXPIRY]     ?: "" }
+    val spreadsheetId: Flow<String>    = context.authDataStore.data.map { it[SPREADSHEET_ID]   ?: "" }
+    val spreadsheetName: Flow<String>  = context.authDataStore.data.map { it[SPREADSHEET_NAME] ?: "" }
+    val userEmail: Flow<String>        = context.authDataStore.data.map { it[USER_EMAIL]       ?: "" }
+    val userName: Flow<String>         = context.authDataStore.data.map { it[USER_NAME]        ?: "" }
+    val userAvatarUrl: Flow<String>    = context.authDataStore.data.map { it[USER_AVATAR_URL]  ?: "" }
 
     suspend fun saveAll(
         accessToken: String,
@@ -49,14 +51,24 @@ class AuthPreferences @Inject constructor(
         userEmail: String,
         userName: String,
         userAvatarUrl: String,
+        spreadsheetName: String = "db_tasks",
     ) {
         context.authDataStore.edit { prefs ->
-            prefs[ACCESS_TOKEN]    = accessToken
-            prefs[TOKEN_EXPIRY]    = tokenExpiry
-            prefs[SPREADSHEET_ID]  = spreadsheetId
-            prefs[USER_EMAIL]      = userEmail
-            prefs[USER_NAME]       = userName
-            prefs[USER_AVATAR_URL] = userAvatarUrl
+            prefs[ACCESS_TOKEN]     = accessToken
+            prefs[TOKEN_EXPIRY]     = tokenExpiry
+            prefs[SPREADSHEET_ID]   = spreadsheetId
+            prefs[SPREADSHEET_NAME] = spreadsheetName
+            prefs[USER_EMAIL]       = userEmail
+            prefs[USER_NAME]        = userName
+            prefs[USER_AVATAR_URL]  = userAvatarUrl
+        }
+    }
+
+    /** Switches active spreadsheet — called from SettingsViewModel. */
+    suspend fun setSpreadsheet(id: String, name: String) {
+        context.authDataStore.edit { prefs ->
+            prefs[SPREADSHEET_ID]   = id
+            prefs[SPREADSHEET_NAME] = name
         }
     }
 

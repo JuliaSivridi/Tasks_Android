@@ -19,6 +19,7 @@ import com.stler.tasks.data.local.dao.SyncQueueDao
 import com.stler.tasks.data.local.dao.TaskDao
 import com.stler.tasks.data.local.entity.FolderEntity
 import com.stler.tasks.data.remote.TokenProvider
+import com.stler.tasks.data.remote.dto.DriveFile
 import com.stler.tasks.data.remote.dto.DriveFilesResponse
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -122,6 +123,15 @@ class GoogleAuthRepository @Inject constructor(
             .await()
 
         if (authResult.hasResolution()) {
+            // Save user info now so finalizeAuth() can read it later
+            authPreferences.saveAll(
+                accessToken     = "",
+                tokenExpiry     = "",
+                spreadsheetId   = "",
+                userEmail       = googleCredential.id,
+                userName        = googleCredential.displayName ?: "",
+                userAvatarUrl   = googleCredential.profilePictureUri?.toString() ?: "",
+            )
             val intent = authResult.pendingIntent
                 ?: throw IllegalStateException("hasResolution() is true but pendingIntent is null")
             return@runCatching SignInStep.NeedsAuthorization(intent)
@@ -147,14 +157,15 @@ class GoogleAuthRepository @Inject constructor(
 
         // Update token; user info was already saved in step 1 of signIn()
         if (authPreferences.spreadsheetId.first().isBlank()) {
-            val spreadsheetId = findOrCreateSpreadsheet(token)
+            val (spreadsheetId, spreadsheetName) = findOrCreateSpreadsheetWithName(token)
             authPreferences.saveAll(
-                accessToken   = token,
-                tokenExpiry   = expiryInOneHour(),
-                spreadsheetId = spreadsheetId,
-                userEmail     = authPreferences.userEmail.first(),
-                userName      = authPreferences.userName.first(),
-                userAvatarUrl = authPreferences.userAvatarUrl.first(),
+                accessToken     = token,
+                tokenExpiry     = expiryInOneHour(),
+                spreadsheetId   = spreadsheetId,
+                spreadsheetName = spreadsheetName,
+                userEmail       = authPreferences.userEmail.first(),
+                userName        = authPreferences.userName.first(),
+                userAvatarUrl   = authPreferences.userAvatarUrl.first(),
             )
         } else {
             authPreferences.saveToken(token, expiryInOneHour())
@@ -177,12 +188,35 @@ class GoogleAuthRepository @Inject constructor(
         }
         val id = findSpreadsheetId(token)
         if (id.isNotBlank()) {
-            authPreferences.saveSpreadsheetId(id)
+            authPreferences.setSpreadsheet(id, "db_tasks")
             Log.i(TAG, "findAndSaveSpreadsheetId: saved spreadsheetId=$id")
         } else {
             Log.w(TAG, "findAndSaveSpreadsheetId: Drive search returned empty result")
         }
         return id
+    }
+
+    // ── Drive helpers ─────────────────────────────────────────────────────
+
+    /**
+     * Lists all Google Spreadsheets in the user's Drive, ordered by most recently modified.
+     * Used by SettingsScreen to let the user switch active spreadsheets.
+     */
+    suspend fun listUserSheets(): List<DriveFile> = withContext(Dispatchers.IO) {
+        runCatching {
+            val token = getAccessToken()
+            if (token.isBlank()) return@runCatching emptyList()
+            val query = Uri.encode("mimeType='application/vnd.google-apps.spreadsheet' and trashed=false")
+            val url = "https://www.googleapis.com/drive/v3/files?q=$query&fields=files(id,name)&orderBy=modifiedTime+desc"
+            val response = OkHttpClient().newCall(
+                Request.Builder().url(url).header("Authorization", "Bearer $token").build()
+            ).execute()
+            if (!response.isSuccessful) return@runCatching emptyList()
+            val body = response.body?.string() ?: return@runCatching emptyList()
+            Gson().fromJson(body, DriveFilesResponse::class.java).files
+        }.onFailure { e ->
+            Log.e(TAG, "listUserSheets exception: ${e.message}", e)
+        }.getOrDefault(emptyList())
     }
 
     // ── Sign-out ──────────────────────────────────────────────────────────
@@ -201,14 +235,15 @@ class GoogleAuthRepository @Inject constructor(
         accessToken: String,
         credential: GoogleIdTokenCredential,
     ) {
-        val spreadsheetId = findOrCreateSpreadsheet(accessToken)
+        val (spreadsheetId, spreadsheetName) = findOrCreateSpreadsheetWithName(accessToken)
         authPreferences.saveAll(
-            accessToken   = accessToken,
-            tokenExpiry   = expiryInOneHour(),
-            spreadsheetId = spreadsheetId,
-            userEmail     = credential.id,
-            userName      = credential.displayName ?: "",
-            userAvatarUrl = credential.profilePictureUri?.toString() ?: "",
+            accessToken      = accessToken,
+            tokenExpiry      = expiryInOneHour(),
+            spreadsheetId    = spreadsheetId,
+            spreadsheetName  = spreadsheetName,
+            userEmail        = credential.id,
+            userName         = credential.displayName ?: "",
+            userAvatarUrl    = credential.profilePictureUri?.toString() ?: "",
         )
     }
 
@@ -223,16 +258,21 @@ class GoogleAuthRepository @Inject constructor(
             .build()
 
     /**
-     * Returns the spreadsheetId of the user's `db_tasks` spreadsheet.
-     * If none exists yet, creates a new one with the correct sheet structure and seeds
+     * Returns (spreadsheetId, spreadsheetName).
+     * If no `db_tasks` exists yet, creates one with the correct sheet structure and seeds
      * the Inbox folder, so new users can start immediately without any manual setup.
      */
-    private suspend fun findOrCreateSpreadsheet(accessToken: String): String {
+    private suspend fun findOrCreateSpreadsheetWithName(accessToken: String): Pair<String, String> {
         val found = findSpreadsheetId(accessToken)
-        if (found.isNotBlank()) return found
+        if (found.isNotBlank()) return found to "db_tasks"
         Log.i(TAG, "No db_tasks found — creating new spreadsheet")
-        return createSpreadsheet(accessToken)
+        val created = createSpreadsheet(accessToken)
+        return created to "db_tasks"
     }
+
+    // Keep for backward-compat with findAndSaveSpreadsheetId
+    private suspend fun findOrCreateSpreadsheet(accessToken: String): String =
+        findOrCreateSpreadsheetWithName(accessToken).first
 
     /**
      * Creates a new Google Spreadsheet named `db_tasks` with three sheets
