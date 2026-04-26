@@ -19,7 +19,6 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -73,11 +72,17 @@ class MainViewModel @Inject constructor(
 
     init {
         syncManager.triggerSync()
-        // Load calendar metadata for the sidebar if the user has selected any calendars
+        // Reactively keep the sidebar calendar list up-to-date.
+        // Whenever the selected-IDs set changes (e.g. user toggles a calendar in Settings
+        // while the app is running), re-fetch if our cache doesn't cover the new IDs.
         viewModelScope.launch {
-            val ids = calendarRepository.getSelectedCalendarIds().first()
-            if (ids.isNotEmpty()) {
-                _allCalendars.value = calendarRepository.fetchCalendarsAndSave()
+            calendarRepository.getSelectedCalendarIds().collect { ids ->
+                if (ids.isNotEmpty()) {
+                    val cachedIds = _allCalendars.value.map { it.id }.toSet()
+                    if (!cachedIds.containsAll(ids)) {
+                        _allCalendars.value = calendarRepository.fetchCalendarsAndSave()
+                    }
+                }
             }
         }
     }

@@ -311,3 +311,11 @@ _Spec: `docs/architecture-cal-spec.md`_
 - [ ] 12.6.1 Design review: duration dropdown + "Add to Calendar" switch + calendar picker UX
 - [ ] 12.6.2 `TaskFormSheet.kt` — add Duration / Add to Calendar / Calendar fields (visible only when deadlineDate set)
 - [ ] 12.6.3 `TaskFormViewModel.kt` — call `calendarRepository.createEvent()` after task save if switch is on; surface failure via uiError
+
+### 12.7 Bug fixes (post-alpha.1)
+- [x] 12.7.1 Don't show past calendar events — `from = LocalDate.now()` in Upcoming/AllTasks/CalendarViewModel
+- [x] 12.7.2 `CalendarEventItem` — left padding + leading CalendarMonth icon (18 dp, calendar color) in checkbox position; matches TaskItem layout
+- [x] 12.7.3 AllTasks — events sorted chronologically together with tasks; tasks without deadlines go last
+- [x] 12.7.4 Upcoming — "All day" text suppressed in grouped-by-date view (date header is sufficient)
+- [x] 12.7.5 `MainViewModel` — reactive sidebar: `collect` on selectedCalendarIds instead of one-shot `first`; re-fetches calendar metadata when new IDs are added while app is running
+- [x] 12.7.6 `Screen.calendarRoute()` — URL-encode calendar ID via `Uri.encode()` so IDs with `#` / `@` (holiday calendars) route correctly to CalendarScreen

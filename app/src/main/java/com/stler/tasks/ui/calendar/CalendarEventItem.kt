@@ -1,11 +1,14 @@
 package com.stler.tasks.ui.calendar
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material3.Icon
@@ -26,10 +29,13 @@ import java.util.Locale
 
 /**
  * A compact read-only row for a [CalendarEvent].
- * Used in Upcoming, AllTasks, and CalendarScreen.
+ * Matches the visual layout of TaskItem:
+ *   - 40 dp expand placeholder (left)
+ *   - 40 dp box with CalendarMonth icon (in "checkbox" position, tinted with calendar color)
+ *   - Column: title / time + calendar name
  *
- * Line 1: event title
- * Line 2: date/time (color from deadline-status logic) · calendar icon (colored) · calendar name
+ * [showDate] = false in date-grouped lists (Upcoming, CalendarScreen) — hides date and
+ * suppresses "All day" text (the section header already conveys the date).
  */
 @Composable
 fun CalendarEventItem(
@@ -42,23 +48,44 @@ fun CalendarEventItem(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(start = 0.dp, end = 4.dp, top = 4.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // ── Expand placeholder — keeps left alignment identical to TaskItem ──
+        Box(modifier = Modifier.size(40.dp))
+
+        Spacer(modifier = Modifier.width(6.dp))
+
+        // ── Calendar icon in the "checkbox" position ──────────────────────
+        Box(
+            modifier = Modifier.size(40.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.CalendarMonth,
+                contentDescription = null,
+                tint = event.calendarColor.toComposeColor(),
+                modifier = Modifier.size(18.dp),
+            )
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // ── Content ───────────────────────────────────────────────────────
         Column(modifier = Modifier.weight(1f)) {
             // Line 1 — title
             Text(
                 text = event.title,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 maxLines = 2,
             )
 
-            // Line 2 — time + calendar
+            // Line 2 — time + calendar name
+            val timeLabel = formatEventTime(event, today, showDate)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                val timeLabel = formatEventTime(event, today, showDate)
                 if (timeLabel.isNotBlank()) {
                     Text(
                         text = timeLabel,
@@ -66,14 +93,12 @@ fun CalendarEventItem(
                         color = deadlineColor(deadlineStatus(event.startDate)),
                     )
                 }
-
                 Icon(
                     imageVector = Icons.Outlined.CalendarMonth,
                     contentDescription = null,
                     tint = event.calendarColor.toComposeColor(),
                     modifier = Modifier.size(12.dp),
                 )
-
                 Text(
                     text = event.calendarName,
                     style = MaterialTheme.typography.bodySmall,
@@ -87,11 +112,18 @@ fun CalendarEventItem(
 
 /**
  * Formats the event date/time for display.
- * If [showDate] = false (e.g. inside a date-grouped list), shows only the time.
+ *
+ * [showDate] = false (grouped-by-date list, e.g. Upcoming / CalendarScreen):
+ *   - Timed events → "HH:MM"
+ *   - All-day events → "" (the day header already conveys the date)
+ *
+ * [showDate] = true (flat list, e.g. AllTasks):
+ *   - Timed events → "d MMM · HH:MM"
+ *   - All-day events → "d MMM" / "Today" / "Tomorrow"
  */
 private fun formatEventTime(event: CalendarEvent, today: LocalDate, showDate: Boolean): String {
     return if (event.isAllDay) {
-        if (showDate) formatDate(event.startDate, today) else "All day"
+        if (showDate) formatDate(event.startDate, today) else ""
     } else {
         if (showDate) {
             val datePart = formatDate(event.startDate, today)

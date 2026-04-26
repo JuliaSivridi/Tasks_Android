@@ -33,7 +33,7 @@ class UpcomingViewModel @Inject constructor(
     private val calendarRepository: CalendarRepository,
 ) : BaseViewModel() {
 
-    private val from: LocalDate = LocalDate.now().minusDays(1)
+    private val from: LocalDate = LocalDate.now()
     private val to:   LocalDate = LocalDate.now().plusDays(60)
 
     private val tasksWithDeadline: StateFlow<List<Task>> =

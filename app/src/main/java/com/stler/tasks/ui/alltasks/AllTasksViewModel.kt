@@ -31,7 +31,7 @@ class AllTasksViewModel @Inject constructor(
     private val calendarRepository: CalendarRepository,
 ) : BaseViewModel() {
 
-    private val from: LocalDate = LocalDate.now().minusDays(1)
+    private val from: LocalDate = LocalDate.now()
     private val to:   LocalDate = LocalDate.now().plusDays(60)
 
     val tasks: StateFlow<List<Task>> = repository.observeAllPendingTasks()
@@ -60,27 +60,49 @@ class AllTasksViewModel @Inject constructor(
             else calendarRepository.getEventsForCalendars(ids, from, to)
         }
 
-    /** Filtered tasks + calendar events as a unified flat list. */
+    /**
+     * Filtered tasks + calendar events sorted together by date/time.
+     * Tasks with deadlines and events are interleaved chronologically.
+     * Tasks without deadlines appear after all dated items, in their natural order.
+     */
     val filteredItems: StateFlow<List<ListItem>> = combine(
         combine(tasks, eventsFlow) { t, e -> Pair(t, e) },
         _priorityFilter,
         _labelFilter,
         _folderFilter,
     ) { (taskList, events), pf, lf, ff ->
-        val taskItems = taskList
-            .filter { task ->
-                (pf.isEmpty() || task.priority in pf) &&
-                    (lf.isEmpty() || task.labels.any { it in lf }) &&
-                    (ff.isEmpty() || task.folderId in ff)
-            }
-            .map { ListItem.TaskItem(it) }
+        val filtered = taskList.filter { task ->
+            (pf.isEmpty() || task.priority in pf) &&
+                (lf.isEmpty() || task.labels.any { it in lf }) &&
+                (ff.isEmpty() || task.folderId in ff)
+        }
 
-        // Events are always shown regardless of task filters; sorted by date then time
-        val eventItems = events
-            .sortedWith(compareBy({ it.startDate }, { it.startTime }))
-            .map { ListItem.EventItem(it) }
+        val (datedTasks, undatedTasks) = filtered.partition { task ->
+            task.deadlineDate.isNotBlank() &&
+                runCatching { LocalDate.parse(task.deadlineDate) }.isSuccess
+        }
 
-        taskItems + eventItems
+        val datedItems: List<ListItem> =
+            (datedTasks.map { ListItem.TaskItem(it) } + events.map { ListItem.EventItem(it) })
+                .sortedWith(compareBy(
+                    // Primary: date string (ISO format sorts correctly)
+                    { when (it) {
+                        is ListItem.TaskItem  -> it.task.deadlineDate
+                        is ListItem.EventItem -> it.event.startDate
+                    }},
+                    // Timed items (0) before all-day (1) within the same date
+                    { when (it) {
+                        is ListItem.TaskItem  -> if (it.task.deadlineTime.isBlank()) 1 else 0
+                        is ListItem.EventItem -> if (it.event.startTime.isBlank()) 1 else 0
+                    }},
+                    // Secondary: time string
+                    { when (it) {
+                        is ListItem.TaskItem  -> it.task.deadlineTime
+                        is ListItem.EventItem -> it.event.startTime
+                    }},
+                ))
+
+        datedItems + undatedTasks.map { ListItem.TaskItem(it) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /** True until the first emission from [filteredItems], then false. */
