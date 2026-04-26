@@ -268,44 +268,44 @@ _Branch: `feature/google-calendar`. Base: `main` (v2.0, Settings screen present)
 _Spec: `docs/architecture-cal-spec.md`_
 
 ### 12.0 Preparation (manual)
-- [ ] 12.0.1 Google Cloud Console → enable Google Calendar API
-- [ ] 12.0.2 Add `https://www.googleapis.com/auth/calendar` scope to consent screen
-- [ ] 12.0.3 Add Calendar scope to `GoogleAuthRepository.buildAuthRequest()`
+- [x] 12.0.1 Google Cloud Console → enable Google Calendar API
+- [x] 12.0.2 Add `https://www.googleapis.com/auth/calendar` scope to consent screen
+- [x] 12.0.3 Add Calendar scope to `GoogleAuthRepository.buildAuthRequest()`
 
 ### 12.1 Domain models & data layer (foundation)
-- [ ] 12.1.1 `CalendarItem.kt`, `CalendarEvent.kt` domain models
-- [ ] 12.1.2 `ListItem.kt` sealed class (TaskItem / EventItem)
-- [ ] 12.1.3 `CalendarEventEntity.kt` + `CalendarEventDao.kt`
-- [ ] 12.1.4 `TaskDatabase.kt` — version 4 → 5; `MIGRATION_4_5` SQL; `addMigrations()`
-- [ ] 12.1.5 `AuthPreferences.kt` — add `selected_calendar_ids` (stringSetPreferencesKey) + `selectedCalendarIds` Flow + `saveSelectedCalendarIds()`; extend `clearAll()`
-- [ ] 12.1.6 `CalendarDtos.kt` — all Calendar API DTOs
-- [ ] 12.1.7 `CalendarApi.kt` — Retrofit interface (`listCalendars`, `listEvents`, `createEvent`)
-- [ ] 12.1.8 `CalendarMapper.kt` — DTO → domain/entity conversions; RFC3339 parse helpers
-- [ ] 12.1.9 `CalendarRepository.kt` interface + `CalendarRepositoryImpl.kt`
-- [ ] 12.1.10 `CalendarModule.kt` — Hilt module; Calendar Retrofit instance (base `https://www.googleapis.com/`); expose OkHttpClient from NetworkModule
-- [ ] 12.1.11 Inject `CalendarRepository` into `SyncWorker` — fetch events for selected calendars after pull phase (today−1d … today+60d)
+- [x] 12.1.1 `CalendarItem.kt`, `CalendarEvent.kt` domain models
+- [x] 12.1.2 `ListItem.kt` sealed class (TaskItem / EventItem)
+- [x] 12.1.3 `CalendarEventEntity.kt` + `CalendarEventDao.kt`
+- [x] 12.1.4 `TaskDatabase.kt` — version 4 → 5; `MIGRATION_4_5` SQL; `addMigrations()`
+- [x] 12.1.5 `AuthPreferences.kt` — add `selected_calendar_ids` (stringSetPreferencesKey) + `selectedCalendarIds` Flow + `saveSelectedCalendarIds()`; extend `clearAll()`
+- [x] 12.1.6 `CalendarDtos.kt` — all Calendar API DTOs
+- [x] 12.1.7 `CalendarApi.kt` — Retrofit interface (`listCalendars`, `listEvents`, `createEvent`)
+- [x] 12.1.8 `CalendarMapper.kt` — DTO → domain/entity conversions; RFC3339 parse helpers
+- [x] 12.1.9 `CalendarRepository.kt` interface + `CalendarRepositoryImpl.kt`
+- [x] 12.1.10 `CalendarModule.kt` — Hilt module; Calendar Retrofit instance (base `https://www.googleapis.com/`); expose OkHttpClient from NetworkModule
+- [x] 12.1.11 Inject `CalendarRepository` into `SyncWorker` — fetch events for selected calendars after pull phase (today−1d … today+60d)
 
 ### 12.2 Settings — Calendar Selection
-- [ ] 12.2.1 `SettingsViewModel.kt` — add `loadCalendars()`, `toggleCalendar()`, `calendars` / `calendarsLoading` StateFlows
-- [ ] 12.2.2 `SettingsScreen.kt` — add "CALENDARS" section: calendar icon (tinted with calendar color) + name + Checkbox per calendar; CircularProgressIndicator while loading
+- [x] 12.2.1 `SettingsViewModel.kt` — add `loadCalendars()`, `toggleCalendar()`, `calendars` / `calendarsLoading` StateFlows
+- [x] 12.2.2 `SettingsScreen.kt` — add "CALENDARS" section: calendar icon (tinted with calendar color) + name + Checkbox per calendar; CircularProgressIndicator while loading
 
 ### 12.3 Sidebar & Navigation
-- [ ] 12.3.1 `Screen.kt` — add `CALENDAR = "calendar/{calendarId}"` + `calendarRoute()` helper
-- [ ] 12.3.2 `SidebarPreferences.kt` / `SidebarState` — add `calendarsOpen: Boolean`
-- [ ] 12.3.3 `SidebarMenu.kt` — add collapsible "Calendars" section (selected calendars only, calendar icon tinted with calendar color + name)
-- [ ] 12.3.4 `MainViewModel.kt` — expose `selectedCalendars: StateFlow<List<CalendarItem>>`
-- [ ] 12.3.5 `MainScreen.kt` — add `composable(Screen.CALENDAR)` → CalendarScreen; pass `selectedCalendars` and `currentCalendarId` to SidebarMenu
+- [x] 12.3.1 `Screen.kt` — add `CALENDAR = "calendar/{calendarId}"` + `calendarRoute()` helper
+- [x] 12.3.2 `SidebarPreferences.kt` / `SidebarState` — add `calendarsOpen: Boolean`
+- [x] 12.3.3 `SidebarMenu.kt` — add collapsible "Calendars" section (selected calendars only, calendar icon tinted with calendar color + name)
+- [x] 12.3.4 `MainViewModel.kt` — expose `selectedCalendars: StateFlow<List<CalendarItem>>`
+- [x] 12.3.5 `MainScreen.kt` — add `composable(Screen.CALENDAR)` → CalendarScreen; pass `selectedCalendars` and `currentCalendarId` to SidebarMenu
 
 ### 12.4 CalendarScreen
-- [ ] 12.4.1 `CalendarEventItem.kt` — standalone composable (title row + date/time + calendar icon tinted with calendar color + name; no checkbox)
-- [ ] 12.4.2 `CalendarViewModel.kt` — groups events by date (Overdue/Today/Tomorrow/This Week/Later); isLoading StateFlow
-- [ ] 12.4.3 `CalendarScreen.kt` — ShimmerTaskList / EmptyState / LazyColumn with date headers; reuse existing DateHeader
+- [x] 12.4.1 `CalendarEventItem.kt` — standalone composable (title row + date/time + calendar icon tinted with calendar color + name; no checkbox)
+- [x] 12.4.2 `CalendarViewModel.kt` — groups events by date (Overdue/Today/Tomorrow/This Week/Later); isLoading StateFlow
+- [x] 12.4.3 `CalendarScreen.kt` — ShimmerTaskList / EmptyState / LazyColumn with date headers; reuse existing DateHeader
 
 ### 12.5 Upcoming & AllTasks — events in list
-- [ ] 12.5.1 `UpcomingViewModel.kt` — inject CalendarRepository; merge tasks + events into `Map<LocalDate, List<ListItem>>`
-- [ ] 12.5.2 `UpcomingScreen.kt` — render `ListItem.EventItem` → `CalendarEventItem`
-- [ ] 12.5.3 `AllTasksViewModel.kt` — same merge
-- [ ] 12.5.4 `AllTasksScreen.kt` — render `ListItem.EventItem` → `CalendarEventItem`
+- [x] 12.5.1 `UpcomingViewModel.kt` — inject CalendarRepository; merge tasks + events into `Map<LocalDate, List<ListItem>>`
+- [x] 12.5.2 `UpcomingScreen.kt` — render `ListItem.EventItem` → `CalendarEventItem`
+- [x] 12.5.3 `AllTasksViewModel.kt` — same merge
+- [x] 12.5.4 `AllTasksScreen.kt` — render `ListItem.EventItem` → `CalendarEventItem`
 
 ### 12.6 TaskFormSheet — event creation (discuss UX before implementing)
 - [ ] 12.6.1 Design review: duration dropdown + "Add to Calendar" switch + calendar picker UX

@@ -40,7 +40,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
+import com.stler.tasks.domain.model.ListItem
 import com.stler.tasks.domain.model.Priority
+import com.stler.tasks.ui.calendar.CalendarEventItem
 import com.stler.tasks.ui.theme.Border
 import com.stler.tasks.ui.theme.OnChipSelected
 import com.stler.tasks.ui.task.TaskItem
@@ -57,7 +59,7 @@ fun AllTasksScreen(
     onAddSubtask : (com.stler.tasks.domain.model.Task) -> Unit = {},
     viewModel    : AllTasksViewModel = hiltViewModel(),
 ) {
-    val filteredTasks  by viewModel.filteredTasks.collectAsStateWithLifecycle()
+    val filteredItems  by viewModel.filteredItems.collectAsStateWithLifecycle()
     val isLoading      by viewModel.isLoading.collectAsStateWithLifecycle()
     val labels         by viewModel.labels.collectAsStateWithLifecycle()
     val folders        by viewModel.folders.collectAsStateWithLifecycle()
@@ -81,28 +83,42 @@ fun AllTasksScreen(
         )
         when {
             isLoading -> ShimmerTaskList(modifier = Modifier.fillMaxSize())
-            filteredTasks.isEmpty() -> EmptyState(
+            filteredItems.isEmpty() -> EmptyState(
                 icon     = Icons.Outlined.FormatListBulleted,
                 message  = "No tasks",
                 subtitle = "Add a task to get started",
             )
             else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(filteredTasks, key = { it.id }) { task ->
-                    TaskItem(
-                        task = task,
-                        labels = labels,
-                        showFolder = true,
-                        folderName = folders.find { it.id == task.folderId }?.name,
-                        folderColor = folders.find { it.id == task.folderId }?.color,
-                        onCheckedChange = { checked -> if (checked) viewModel.completeTask(task.id) },
-                        onExpand = {},
-                        onDeadlineChange = { d, t, isRec, rType, rVal -> viewModel.updateDeadline(task.id, d, t, isRec, rType, rVal) },
-                        onPriorityChange = { p -> viewModel.updatePriority(task.id, p) },
-                        onLabelChange = { l -> viewModel.updateLabels(task.id, l) },
-                        onAddSubtask = { onAddSubtask(task) },
-                        onEdit = { onEditTask(task) },
-                        onDelete = { viewModel.deleteTask(task.id) },
-                    )
+                items(
+                    items = filteredItems,
+                    key = { item -> when (item) {
+                        is ListItem.TaskItem  -> "task_${item.task.id}"
+                        is ListItem.EventItem -> "event_${item.event.id}"
+                    }},
+                ) { item ->
+                    when (item) {
+                        is ListItem.TaskItem -> {
+                            val task = item.task
+                            TaskItem(
+                                task = task,
+                                labels = labels,
+                                showFolder = true,
+                                folderName = folders.find { it.id == task.folderId }?.name,
+                                folderColor = folders.find { it.id == task.folderId }?.color,
+                                onCheckedChange = { checked -> if (checked) viewModel.completeTask(task.id) },
+                                onExpand = {},
+                                onDeadlineChange = { d, t, isRec, rType, rVal -> viewModel.updateDeadline(task.id, d, t, isRec, rType, rVal) },
+                                onPriorityChange = { p -> viewModel.updatePriority(task.id, p) },
+                                onLabelChange = { l -> viewModel.updateLabels(task.id, l) },
+                                onAddSubtask = { onAddSubtask(task) },
+                                onEdit = { onEditTask(task) },
+                                onDelete = { viewModel.deleteTask(task.id) },
+                            )
+                        }
+                        is ListItem.EventItem -> {
+                            CalendarEventItem(event = item.event, showDate = true)
+                        }
+                    }
                     HorizontalDivider(
                         thickness = 0.5.dp,
                         color = MaterialTheme.colorScheme.outlineVariant,

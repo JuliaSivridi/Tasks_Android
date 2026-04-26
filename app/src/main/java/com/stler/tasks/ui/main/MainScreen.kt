@@ -33,6 +33,7 @@ import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.Task
 import com.stler.tasks.ui.alltasks.AllTasksScreen
+import com.stler.tasks.ui.calendar.CalendarScreen
 import com.stler.tasks.ui.completed.CompletedScreen
 import com.stler.tasks.ui.folder.FolderScreen
 import com.stler.tasks.ui.label.LabelScreen
@@ -77,17 +78,19 @@ fun MainScreen(
     val scope             = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val folders      by viewModel.folders.collectAsStateWithLifecycle()
-    val labels       by viewModel.labels.collectAsStateWithLifecycle()
-    val syncState    by viewModel.syncState.collectAsStateWithLifecycle()
-    val authData     by viewModel.authData.collectAsStateWithLifecycle()
-    val sidebarState by viewModel.sidebarState.collectAsStateWithLifecycle()
+    val folders           by viewModel.folders.collectAsStateWithLifecycle()
+    val labels            by viewModel.labels.collectAsStateWithLifecycle()
+    val syncState         by viewModel.syncState.collectAsStateWithLifecycle()
+    val authData          by viewModel.authData.collectAsStateWithLifecycle()
+    val sidebarState      by viewModel.sidebarState.collectAsStateWithLifecycle()
+    val selectedCalendars by viewModel.selectedCalendars.collectAsStateWithLifecycle()
 
-    val backStackEntry  by navController.currentBackStackEntryAsState()
-    val currentRoute    = backStackEntry?.destination?.route
-    val currentFolderId = backStackEntry?.arguments?.getString("folderId")
-    val currentLabelId  = backStackEntry?.arguments?.getString("labelId")
-    val currentPriority = backStackEntry?.arguments?.getString("priority")
+    val backStackEntry   by navController.currentBackStackEntryAsState()
+    val currentRoute     = backStackEntry?.destination?.route
+    val currentFolderId  = backStackEntry?.arguments?.getString("folderId")
+    val currentLabelId   = backStackEntry?.arguments?.getString("labelId")
+    val currentPriority  = backStackEntry?.arguments?.getString("priority")
+    val currentCalendarId = backStackEntry?.arguments?.getString("calendarId")
 
     val screenTitle = when {
         currentRoute == Screen.UPCOMING  -> "Upcoming"
@@ -98,6 +101,7 @@ fun MainScreen(
         currentRoute == Screen.PRIORITY  -> when (currentPriority) {
             "urgent" -> "Urgent"; "important" -> "Important"; else -> "Normal"
         }
+        currentRoute == Screen.CALENDAR  -> selectedCalendars.find { it.id == currentCalendarId }?.summary ?: "Calendar"
         else -> "Stler Tasks"
     }
 
@@ -216,14 +220,16 @@ fun MainScreen(
         drawerState = drawerState,
         drawerContent = {
             SidebarMenu(
-                currentRoute    = currentRoute,
-                currentFolderId = currentFolderId,
-                currentLabelId  = currentLabelId,
-                currentPriority = currentPriority,
-                folders         = folders,
-                labels          = labels,
-                syncState       = syncState,
-                sidebarState    = sidebarState,
+                currentRoute      = currentRoute,
+                currentFolderId   = currentFolderId,
+                currentLabelId    = currentLabelId,
+                currentPriority   = currentPriority,
+                currentCalendarId = currentCalendarId,
+                folders           = folders,
+                labels            = labels,
+                selectedCalendars = selectedCalendars,
+                syncState         = syncState,
+                sidebarState      = sidebarState,
                 onNavigate      = ::navigateTo,
                 onToggleSection = viewModel::toggleSection,
                 onAddTask       = { openCreate(sidebarFolderContext); scope.launch { drawerState.close() } },
@@ -306,6 +312,13 @@ fun MainScreen(
                         onEditTask   = { openEdit(it) },
                         onAddSubtask = { openAddSubtask(it) },
                     )
+                }
+                composable(
+                    route     = Screen.CALENDAR,
+                    arguments = listOf(navArgument("calendarId") { type = NavType.StringType }),
+                ) { entry ->
+                    val calendarId = entry.arguments?.getString("calendarId") ?: return@composable
+                    CalendarScreen(calendarId = calendarId)
                 }
             }
         }

@@ -253,6 +253,7 @@ class GoogleAuthRepository @Inject constructor(
                 listOf(
                     Scope("https://www.googleapis.com/auth/spreadsheets"),
                     Scope("https://www.googleapis.com/auth/drive.metadata.readonly"),
+                    Scope("https://www.googleapis.com/auth/calendar"),
                 )
             )
             .build()

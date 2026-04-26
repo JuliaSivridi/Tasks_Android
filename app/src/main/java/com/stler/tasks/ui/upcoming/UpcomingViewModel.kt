@@ -1,18 +1,24 @@
 package com.stler.tasks.ui.upcoming
 
 import androidx.lifecycle.viewModelScope
+import com.stler.tasks.data.repository.CalendarRepository
 import com.stler.tasks.data.repository.TaskRepository
-import com.stler.tasks.ui.BaseViewModel
+import com.stler.tasks.domain.model.CalendarEvent
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
+import com.stler.tasks.domain.model.ListItem
 import com.stler.tasks.domain.model.Priority
 import com.stler.tasks.domain.model.Task
+import com.stler.tasks.ui.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -24,11 +30,23 @@ import javax.inject.Inject
 @HiltViewModel
 class UpcomingViewModel @Inject constructor(
     private val repository: TaskRepository,
+    private val calendarRepository: CalendarRepository,
 ) : BaseViewModel() {
+
+    private val from: LocalDate = LocalDate.now().minusDays(1)
+    private val to:   LocalDate = LocalDate.now().plusDays(60)
 
     private val tasksWithDeadline: StateFlow<List<Task>> =
         repository.observeAllPendingTasksWithDeadline()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Live events for all selected calendars — switches when selected IDs change. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val eventsFlow: Flow<List<CalendarEvent>> =
+        calendarRepository.getSelectedCalendarIds().flatMapLatest { ids ->
+            if (ids.isEmpty()) flowOf(emptyList())
+            else calendarRepository.getEventsForCalendars(ids, from, to)
+        }
 
     val labels: StateFlow<List<Label>> = repository.observeLabels()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -57,41 +75,57 @@ class UpcomingViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /**
-     * ALL pending tasks with deadlines, filtered, grouped by date and sorted.
-     * Errors inside the combine lambda are caught per-invocation so the Flow
-     * never terminates — future filter changes still re-trigger the block.
+     * ALL pending tasks with deadlines + calendar events, filtered, grouped by date and sorted.
+     * Tasks are subject to priority/label/folder filters; events always appear.
      */
-    val allGroupedTasks: StateFlow<Map<LocalDate, List<Task>>> = combine(
-        tasksWithDeadline,
+    val allGroupedTasks: StateFlow<Map<LocalDate, List<ListItem>>> = combine(
+        combine(tasksWithDeadline, eventsFlow) { t, e -> Pair(t, e) },
         _priorityFilter,
         _labelFilter,
         _folderFilter,
-    ) { tasks, pf, lf, ff ->
+    ) { (tasks, events), pf, lf, ff ->
         val today = LocalDate.now()
-        tasks
+
+        val taskItems: List<ListItem> = tasks
             .filter { task ->
                 (pf.isEmpty() || task.priority in pf) &&
                     (lf.isEmpty() || task.labels.any { it in lf }) &&
                     (ff.isEmpty() || task.folderId in ff) &&
                     task.deadlineDate.isNotBlank() &&
-                    // Skip individual tasks with malformed dates — don't clear the whole list
                     runCatching { LocalDate.parse(task.deadlineDate) }.isSuccess
             }
-            // All overdue dates (< today) collapse into LocalDate.MIN so they appear
-            // under a single "Overdue" header — same behaviour as the PWA.
-            // deadlineDate is guaranteed parseable by the filter above.
-            .groupBy { task ->
-                val date = LocalDate.parse(task.deadlineDate)
+            .map { ListItem.TaskItem(it) }
+
+        val eventItems: List<ListItem> = events
+            .filter { runCatching { LocalDate.parse(it.startDate) }.isSuccess }
+            .map { ListItem.EventItem(it) }
+
+        (taskItems + eventItems)
+            .groupBy { item ->
+                val date = when (item) {
+                    is ListItem.TaskItem  -> LocalDate.parse(item.task.deadlineDate)
+                    is ListItem.EventItem -> LocalDate.parse(item.event.startDate)
+                }
                 if (date < today) LocalDate.MIN else date
             }
             .toSortedMap()
             .mapValues { (key, list) ->
                 list.sortedWith(compareBy(
-                    // Within the overdue group, sort by actual deadline date first
-                    { if (key == LocalDate.MIN) it.deadlineDate else "" },
-                    { if (it.deadlineTime.isBlank()) 1 else 0 },
-                    { it.deadlineTime },
-                    { it.createdAt },
+                    // Within overdue: secondary sort by actual date
+                    { when (it) {
+                        is ListItem.TaskItem  -> if (key == LocalDate.MIN) it.task.deadlineDate else ""
+                        is ListItem.EventItem -> if (key == LocalDate.MIN) it.event.startDate   else ""
+                    }},
+                    // Timed items (0) before all-day (1)
+                    { when (it) {
+                        is ListItem.TaskItem  -> if (it.task.deadlineTime.isBlank()) 1 else 0
+                        is ListItem.EventItem -> if (it.event.startTime.isBlank())  1 else 0
+                    }},
+                    // Sort by time string within each group
+                    { when (it) {
+                        is ListItem.TaskItem  -> it.task.deadlineTime
+                        is ListItem.EventItem -> it.event.startTime
+                    }},
                 ))
             }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
@@ -111,11 +145,6 @@ class UpcomingViewModel @Inject constructor(
         _weekOffset.value = 0
     }
 
-    /**
-     * Called by the screen when the topmost visible date section changes while scrolling.
-     * Updates the week strip to show the week containing [date].
-     * No-op if the new week offset is the same as current (prevents recomposition churn).
-     */
     fun onVisibleDateChanged(date: LocalDate) {
         val todayMonday = LocalDate.now().with(DayOfWeek.MONDAY)
         val dateMonday  = date.with(DayOfWeek.MONDAY)
