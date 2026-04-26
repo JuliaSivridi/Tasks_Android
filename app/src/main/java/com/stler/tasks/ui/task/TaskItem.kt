@@ -1,6 +1,7 @@
 package com.stler.tasks.ui.task
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -118,6 +119,16 @@ fun TaskItem(
     var showLabelPicker by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
+    // Checkbox tap animation — brief green flash before task disappears
+    var pendingComplete by remember { mutableStateOf(false) }
+    LaunchedEffect(pendingComplete) {
+        if (pendingComplete) {
+            delay(400L)
+            pendingComplete = false
+            onCheckedChange(true)
+        }
+    }
+
     val hasMetadata = dlLabel != null
             || (showLabels && taskLabels.isNotEmpty())
             || (showFolder && folderName != null)
@@ -164,6 +175,13 @@ fun TaskItem(
         }
     }
 
+    // Green flash when checkbox is tapped to complete
+    val completeBgColor by animateColorAsState(
+        targetValue = if (pendingComplete) DeadlineToday.copy(alpha = 0.7f) else Color.Transparent,
+        animationSpec = tween(durationMillis = 200),
+        label = "completeBg",
+    )
+
     SwipeToDismissBox(
         state = dismissState,
         backgroundContent = {
@@ -201,6 +219,7 @@ fun TaskItem(
         enableDismissFromStartToEnd = enableSwipe && !isCompleted,
         enableDismissFromEndToStart = enableSwipe && !isCompleted,
     ) {
+        Box(modifier = Modifier.background(completeBgColor)) {
         Column {
             // ── Row 1: main task row ──────────────────────────────────────────
             Row(
@@ -234,8 +253,15 @@ fun TaskItem(
                 Spacer(modifier = Modifier.width(6.dp))
 
                 TaskCheckbox(
-                    checked = isCompleted,
-                    onCheckedChange = onCheckedChange,
+                    checked = isCompleted || pendingComplete,
+                    onCheckedChange = { newChecked ->
+                        if (newChecked && !isCompleted) {
+                            // Animate before completing: green flash → actual completion
+                            pendingComplete = true
+                        } else {
+                            onCheckedChange(newChecked)
+                        }
+                    },
                     priority = task.priority,
                     contentDesc = if (isCompleted) "Mark as incomplete: ${task.title}"
                                   else "Mark as complete: ${task.title}",
@@ -389,6 +415,7 @@ fun TaskItem(
                 }
             }
         }
+        } // end Box(completeBgColor)
     }
     } // end key(task.id, task.deadlineDate)
 

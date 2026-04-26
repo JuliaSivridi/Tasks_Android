@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -46,6 +47,7 @@ fun TasksTopAppBar(
     onMenuClick: () -> Unit,
     onSyncClick: () -> Unit,
     onSignOut: () -> Unit,
+    onNavigateToSettings: () -> Unit = {},
 ) {
     var showUserMenu by remember { mutableStateOf(false) }
 
@@ -110,6 +112,13 @@ fun TasksTopAppBar(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Settings") },
+                        onClick = { showUserMenu = false; onNavigateToSettings() },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Settings, contentDescription = null)
+                        },
                     )
                     DropdownMenuItem(
                         text = { Text("Sign out", color = MaterialTheme.colorScheme.error) },
