@@ -1,7 +1,7 @@
 # Stler Tasks Android — Task Decomposition
 
-**Updated:** 2026-04-21
-**Spec:** `docs/architecture-spec.md`
+**Updated:** 2026-04-26
+**Spec:** `docs/architecture-spec.md` · `docs/architecture-cal-spec.md`
 **Source reference:** PWA at `D:\Projects\Tasks` (scanned for full UI parity)
 
 **Status keys:** `[ ]` not started · `[~]` in progress · `[x]` done
@@ -244,8 +244,8 @@ _Identified by static codebase analysis after Stage 9b._
 - [x] 10.2 Priority and deadline colors: confirmed correct (Urgent #F87171, Important #FB923C, Normal #9CA3AF; Overdue #F87171, Today #16A34A, Tomorrow #FB923C, ThisWeek #A78BFA). Eliminated duplicate definitions — `TaskColors.kt` now imports from `Color.kt` (single source of truth). SidebarMenu and WidgetTaskRow hardcodes replaced with named constants. ✅ Done (session 7).
 - [x] 10.3 All icons: audit confirmed every icon uses `Icons.Outlined.*`. No `Icons.Filled.*` found anywhere. ✅ Done (session 7).
 - [x] 10.4 Error handling: `BaseViewModel.safeLaunch` now forwards exceptions to a `Channel<String>` (`uiError` flow). `LocalSnackbarHostState` CompositionLocal + `ErrorSnackbarEffect` helper wired to all 6 task screens; single `SnackbarHost` in `MainScreen` Scaffold surfaces messages to the user. ✅ Done (session 7).
-- [ ] 10.5 Build debug APK: `./gradlew assembleDebug`
-- [ ] 10.6 Run verification checklist from spec §17
+- [x] 10.5 Build debug APK: `./gradlew assembleDebug`
+- [x] 10.6 Run verification checklist from spec §17
 
 ## Stage 11 — UX Improvements
 
@@ -258,4 +258,56 @@ _Identified by static codebase analysis after Stage 9b._
 
 ---
 
-*To continue in a new session: read this file and `docs/architecture-spec.md`, find the first `[~]` or first `[ ]` item and continue from there.*
+*To continue in a new session: read this file and `docs/architecture-spec.md` / `docs/architecture-cal-spec.md`, find the first `[~]` or first `[ ]` item and continue from there.*
+
+---
+
+## Stage 12 — Google Calendar Integration
+
+_Branch: `feature/google-calendar`. Base: `main` (v2.0, Settings screen present)._
+_Spec: `docs/architecture-cal-spec.md`_
+
+### 12.0 Preparation (manual)
+- [ ] 12.0.1 Google Cloud Console → enable Google Calendar API
+- [ ] 12.0.2 Add `https://www.googleapis.com/auth/calendar` scope to consent screen
+- [ ] 12.0.3 Add Calendar scope to `GoogleAuthRepository.buildAuthRequest()`
+
+### 12.1 Domain models & data layer (foundation)
+- [ ] 12.1.1 `CalendarItem.kt`, `CalendarEvent.kt` domain models
+- [ ] 12.1.2 `ListItem.kt` sealed class (TaskItem / EventItem)
+- [ ] 12.1.3 `CalendarEventEntity.kt` + `CalendarEventDao.kt`
+- [ ] 12.1.4 `TaskDatabase.kt` — version 4 → 5; `MIGRATION_4_5` SQL; `addMigrations()`
+- [ ] 12.1.5 `AuthPreferences.kt` — add `selected_calendar_ids` (stringSetPreferencesKey) + `selectedCalendarIds` Flow + `saveSelectedCalendarIds()`; extend `clearAll()`
+- [ ] 12.1.6 `CalendarDtos.kt` — all Calendar API DTOs
+- [ ] 12.1.7 `CalendarApi.kt` — Retrofit interface (`listCalendars`, `listEvents`, `createEvent`)
+- [ ] 12.1.8 `CalendarMapper.kt` — DTO → domain/entity conversions; RFC3339 parse helpers
+- [ ] 12.1.9 `CalendarRepository.kt` interface + `CalendarRepositoryImpl.kt`
+- [ ] 12.1.10 `CalendarModule.kt` — Hilt module; Calendar Retrofit instance (base `https://www.googleapis.com/`); expose OkHttpClient from NetworkModule
+- [ ] 12.1.11 Inject `CalendarRepository` into `SyncWorker` — fetch events for selected calendars after pull phase (today−1d … today+60d)
+
+### 12.2 Settings — Calendar Selection
+- [ ] 12.2.1 `SettingsViewModel.kt` — add `loadCalendars()`, `toggleCalendar()`, `calendars` / `calendarsLoading` StateFlows
+- [ ] 12.2.2 `SettingsScreen.kt` — add "CALENDARS" section: calendar icon (tinted with calendar color) + name + Checkbox per calendar; CircularProgressIndicator while loading
+
+### 12.3 Sidebar & Navigation
+- [ ] 12.3.1 `Screen.kt` — add `CALENDAR = "calendar/{calendarId}"` + `calendarRoute()` helper
+- [ ] 12.3.2 `SidebarPreferences.kt` / `SidebarState` — add `calendarsOpen: Boolean`
+- [ ] 12.3.3 `SidebarMenu.kt` — add collapsible "Calendars" section (selected calendars only, calendar icon tinted with calendar color + name)
+- [ ] 12.3.4 `MainViewModel.kt` — expose `selectedCalendars: StateFlow<List<CalendarItem>>`
+- [ ] 12.3.5 `MainScreen.kt` — add `composable(Screen.CALENDAR)` → CalendarScreen; pass `selectedCalendars` and `currentCalendarId` to SidebarMenu
+
+### 12.4 CalendarScreen
+- [ ] 12.4.1 `CalendarEventItem.kt` — standalone composable (title row + date/time + calendar icon tinted with calendar color + name; no checkbox)
+- [ ] 12.4.2 `CalendarViewModel.kt` — groups events by date (Overdue/Today/Tomorrow/This Week/Later); isLoading StateFlow
+- [ ] 12.4.3 `CalendarScreen.kt` — ShimmerTaskList / EmptyState / LazyColumn with date headers; reuse existing DateHeader
+
+### 12.5 Upcoming & AllTasks — events in list
+- [ ] 12.5.1 `UpcomingViewModel.kt` — inject CalendarRepository; merge tasks + events into `Map<LocalDate, List<ListItem>>`
+- [ ] 12.5.2 `UpcomingScreen.kt` — render `ListItem.EventItem` → `CalendarEventItem`
+- [ ] 12.5.3 `AllTasksViewModel.kt` — same merge
+- [ ] 12.5.4 `AllTasksScreen.kt` — render `ListItem.EventItem` → `CalendarEventItem`
+
+### 12.6 TaskFormSheet — event creation (discuss UX before implementing)
+- [ ] 12.6.1 Design review: duration dropdown + "Add to Calendar" switch + calendar picker UX
+- [ ] 12.6.2 `TaskFormSheet.kt` — add Duration / Add to Calendar / Calendar fields (visible only when deadlineDate set)
+- [ ] 12.6.3 `TaskFormViewModel.kt` — call `calendarRepository.createEvent()` after task save if switch is on; surface failure via uiError
