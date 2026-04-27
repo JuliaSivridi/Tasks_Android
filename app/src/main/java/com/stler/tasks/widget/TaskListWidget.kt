@@ -3,6 +3,7 @@ package com.stler.tasks.widget
 import android.content.Context
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.datastore.preferences.core.Preferences
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
@@ -13,8 +14,10 @@ import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
+import androidx.glance.currentState
 import androidx.glance.layout.Column
 import androidx.glance.layout.fillMaxSize
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.Task
@@ -22,6 +25,8 @@ import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.Flow
 
 class TaskListWidget : GlanceAppWidget() {
+
+    override val stateDefinition = PreferencesGlanceStateDefinition
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val appWidgetId    = GlanceAppWidgetManager(context).getAppWidgetId(id)
@@ -48,6 +53,9 @@ class TaskListWidget : GlanceAppWidget() {
             val allTasks   by tasksFlow.collectAsState(initial = emptyList())
             val allLabels  by labelsFlow.collectAsState(initial = emptyList())
             val allFolders by foldersFlow.collectAsState(initial = emptyList())
+
+            val prefs             = currentState<Preferences>()
+            val pendingCompleteId = prefs[pendingCompleteKey]
 
             val tasks = allTasks
                 .let { list -> if (filterFolder   != null) list.filter { it.folderId == filterFolder } else list }
@@ -101,11 +109,12 @@ class TaskListWidget : GlanceAppWidget() {
                     LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
                         items(rows, itemId = { it.task.id.hashCode().toLong() }) { row ->
                             WidgetTaskRow(
-                                task            = row.task,
-                                labelItems      = row.labelItems,
-                                folderName      = row.folderName,
-                                folderHexColor  = row.folderHexColor,
-                                showExpandSpace = false,
+                                task              = row.task,
+                                labelItems        = row.labelItems,
+                                folderName        = row.folderName,
+                                folderHexColor    = row.folderHexColor,
+                                showExpandSpace   = false,
+                                pendingCompleteId = pendingCompleteId,
                             )
                         }
                     }

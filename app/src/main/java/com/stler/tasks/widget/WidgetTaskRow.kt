@@ -5,8 +5,11 @@ import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
+import androidx.glance.Image
+import androidx.glance.ImageProvider
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.action.actionRunCallback
@@ -28,6 +31,7 @@ import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import com.stler.tasks.R
 import com.stler.tasks.domain.model.Priority
 import com.stler.tasks.domain.model.Task
 import com.stler.tasks.ui.task.DeadlineStatus
@@ -63,9 +67,21 @@ fun WidgetTaskRow(
     /** When true only the time portion of the deadline is shown in row 2 (date is
      *  already visible in the section header, e.g. UpcomingWidget). */
     timeOnly: Boolean = false,
-    /** Pending child task count (FolderWidget only). Shown in row 2 when > 0. */
-    pendingChildCount: Int = 0,
+    /** Pending (remaining) child task count. */
+    pendingChildCount  : Int = 0,
+    /** Completed child task count. */
+    completedChildCount: Int = 0,
+    /** Total child task count (pending + completed). Shown in row 2 when > 0. */
+    totalChildCount    : Int = 0,
+    /**
+     * If non-null and equal to [task].id, the checkbox renders as checked (filled with a
+     * white checkmark) even though the task isn't completed in Room yet.  This gives
+     * immediate visual feedback between the tap and the next widget refresh.
+     * Set by [CompleteTaskAction] via [pendingCompleteKey] in the widget's Glance state.
+     */
+    pendingCompleteId  : String? = null,
 ) {
+    val showCheckmark = (task.id == pendingCompleteId)
     val priorityColor = when (task.priority) {
         Priority.URGENT    -> WPriorityUrgent
         Priority.IMPORTANT -> WPriorityImportant
@@ -83,7 +99,7 @@ fun WidgetTaskRow(
     }
 
     val hasRow2 = dlLabel != null || labelItems.isNotEmpty() || folderName.isNotBlank()
-        || task.isRecurring || pendingChildCount > 0
+        || task.isRecurring || totalChildCount > 0
 
     // Wrap in Column so we can add a thin bottom divider (matches app's HorizontalDivider).
     // Semi-transparent gray works on both light and dark widget backgrounds.
@@ -130,8 +146,10 @@ fun WidgetTaskRow(
         Spacer(GlanceModifier.width(6.dp))
 
         // ── Checkbox — 32dp touch target, 20dp visual ─────────────────────
-        // Outer box: 32dp touch target with click handler.
-        // Inner box: visual checkbox (priority border + surface fill).
+        // Normal (unchecked): hollow border — outer priority-color box + inner surface box.
+        // Pending-complete:   filled — priority-color box with white checkmark inside.
+        //                     Shown between the tap and the next widget refresh so the user
+        //                     gets immediate visual feedback without waiting for Room.
         Box(
             modifier = GlanceModifier
                 .size(32.dp)
@@ -149,12 +167,23 @@ fun WidgetTaskRow(
                     .background(priorityColor),
                 contentAlignment = Alignment.Center,
             ) {
-                Box(
-                    modifier = GlanceModifier
-                        .size(17.dp)
-                        .cornerRadius(2.dp)
-                        .background(WSurface),
-                ) {}
+                if (showCheckmark) {
+                    // Filled: show white checkmark icon (task tap acknowledged)
+                    Image(
+                        provider           = ImageProvider(R.drawable.ic_check_mark),
+                        contentDescription = "Completing…",
+                        modifier           = GlanceModifier.size(14.dp),
+                        colorFilter        = ColorFilter.tint(WCheckmark),
+                    )
+                } else {
+                    // Hollow: surface-colored inner box creates the border effect
+                    Box(
+                        modifier = GlanceModifier
+                            .size(17.dp)
+                            .cornerRadius(2.dp)
+                            .background(WSurface),
+                    ) {}
+                }
             }
         }
 
@@ -187,23 +216,29 @@ fun WidgetTaskRow(
                 ),
             )
 
-            // Row 2: ↻ · deadline · #label(s) · folder · child count
+            // Row 2: ↻ deadline · #label(s) · folder · child count
+            // ↻ and the deadline are a logical unit — no separator between them.
             if (hasRow2) {
                 Row(modifier = GlanceModifier.fillMaxWidth()) {
                     var hasContent = false
 
-                    // Recurring indicator
+                    // Recurring indicator — no separator; shares a logical slot with deadline
                     if (task.isRecurring) {
                         Text(
                             text  = "↻",
                             style = TextStyle(color = WOnSurfaceVariant, fontSize = 14.sp),
                         )
-                        hasContent = true
+                        // hasContent stays false: deadline follows without " · "
+                        if (dlLabel == null) hasContent = true
                     }
 
-                    // Deadline (already has its status color)
+                    // Deadline — space after ↻ (if recurring), separator otherwise
                     if (dlLabel != null) {
-                        val sep = if (hasContent) " · " else ""
+                        val sep = when {
+                            task.isRecurring -> " "     // tight grouping: "↻ HH:MM"
+                            hasContent       -> " · "   // separator from prior content
+                            else             -> ""
+                        }
                         Text(
                             text  = "$sep$dlLabel",
                             style = TextStyle(color = dlColor, fontSize = 14.sp),
@@ -239,11 +274,11 @@ fun WidgetTaskRow(
                         hasContent = true
                     }
 
-                    // Pending child count (FolderWidget parent tasks)
-                    if (pendingChildCount > 0) {
+                    // Child task stats: ✓completed ○remaining ≡total (FolderWidget parent tasks)
+                    if (totalChildCount > 0) {
                         val sep = if (hasContent) "  " else ""
                         Text(
-                            text  = "${sep}○ $pendingChildCount",
+                            text  = "${sep}✓$completedChildCount ○$pendingChildCount ≡$totalChildCount",
                             style = TextStyle(color = WOnSurfaceVariant, fontSize = 14.sp),
                         )
                     }

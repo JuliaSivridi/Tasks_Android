@@ -164,6 +164,17 @@ fun TaskItem(
         }
     }
 
+    // Checkbox tap: show checkmark immediately, complete after 400 ms.
+    // Only the green background was removed — the checkmark and delay must remain.
+    var pendingComplete by remember { mutableStateOf(false) }
+    LaunchedEffect(pendingComplete) {
+        if (pendingComplete) {
+            delay(400L)
+            pendingComplete = false
+            onCheckedChange(true)
+        }
+    }
+
     SwipeToDismissBox(
         state = dismissState,
         backgroundContent = {
@@ -234,10 +245,13 @@ fun TaskItem(
                 Spacer(modifier = Modifier.width(6.dp))
 
                 TaskCheckbox(
-                    checked = isCompleted,
+                    checked = isCompleted || pendingComplete,
                     onCheckedChange = { newChecked ->
-                        if (newChecked && !isCompleted) onCheckedChange(true)
-                        else onCheckedChange(newChecked)
+                        if (newChecked && !isCompleted) {
+                            pendingComplete = true   // show checkmark, delay, then complete
+                        } else {
+                            onCheckedChange(newChecked)
+                        }
                     },
                     priority = task.priority,
                     contentDesc = if (isCompleted) "Mark as incomplete: ${task.title}"

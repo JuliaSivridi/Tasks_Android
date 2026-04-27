@@ -6,6 +6,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.datastore.preferences.core.Preferences
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
@@ -15,10 +16,12 @@ import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
+import androidx.glance.currentState
 import androidx.glance.layout.Column
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
@@ -53,6 +56,10 @@ private sealed class UpcomingRow {
 
 class UpcomingWidget : GlanceAppWidget() {
 
+    // Per-widget-instance Glance state: stores the pending-complete task ID between
+    // the checkbox tap and the Room confirmation, driving the transient checkmark visual.
+    override val stateDefinition = PreferencesGlanceStateDefinition
+
     @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val ep = EntryPointAccessors
@@ -82,6 +89,10 @@ class UpcomingWidget : GlanceAppWidget() {
             val allLabels  by labelsFlow.collectAsState(initial = emptyList())
             val allFolders by foldersFlow.collectAsState(initial = emptyList())
             val allEvents  by eventsFlow.collectAsState(initial = emptyList())
+
+            // Read transient pending-complete state (set by CompleteTaskAction before Room commits)
+            val prefs             = currentState<Preferences>()
+            val pendingCompleteId = prefs[pendingCompleteKey]
 
             val today = LocalDate.now()
 
@@ -178,12 +189,13 @@ class UpcomingWidget : GlanceAppWidget() {
                             when (row) {
                                 is UpcomingRow.Header -> DateHeader(row.text, row.isOverdue)
                                 is UpcomingRow.Item   -> WidgetTaskRow(
-                                    task            = row.task,
-                                    labelItems      = row.labelItems,
-                                    folderName      = row.folderName,
-                                    folderHexColor  = row.folderHexColor,
-                                    showExpandSpace = false,
-                                    timeOnly        = true,
+                                    task              = row.task,
+                                    labelItems        = row.labelItems,
+                                    folderName        = row.folderName,
+                                    folderHexColor    = row.folderHexColor,
+                                    showExpandSpace   = false,
+                                    timeOnly          = true,
+                                    pendingCompleteId = pendingCompleteId,
                                 )
                                 is UpcomingRow.Event  -> WidgetEventRow(
                                     event           = row.event,

@@ -338,8 +338,8 @@ _Spec: `docs/architecture-cal-spec.md`_
 _Branch: `feature/widget-calendar`. Base: `main` after Stage 12 merge._
 
 ### 13.1 Widget checkbox checkmark
-- [ ] 13.1.1 Research Glance state mechanism to show transient "checked" visual between tap and widget refresh
-- [ ] 13.1.2 `WidgetTaskRow.kt` — show checkmark inside checkbox box when task ID matches a "pending complete" Glance state key; clear state after widget refreshes
+- [x] 13.1.1 Research Glance state mechanism to show transient "checked" visual between tap and widget refresh
+- [x] 13.1.2 `WidgetTaskRow.kt` — show checkmark inside checkbox box when task ID matches a "pending complete" Glance state key; clear state after widget refreshes
 
 ### 13.2 Calendar events on Upcoming widget
 - [x] 13.2.1 `WidgetEntryPoint.kt` — add `calendarRepository(): CalendarRepository` accessor

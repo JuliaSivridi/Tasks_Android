@@ -3,10 +3,13 @@ package com.stler.tasks.widget
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.updateAll
 import androidx.glance.appwidget.action.ActionCallback
+import androidx.glance.appwidget.state.updateAppWidgetState
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,6 +18,14 @@ val taskIdKey    = ActionParameters.Key<String>("taskId")
 val folderIdKey  = ActionParameters.Key<String>("folderId")
 val expandKey    = ActionParameters.Key<Boolean>("expand")
 val screenUriKey = ActionParameters.Key<String>("screenUri")
+
+/**
+ * Glance Preferences key that stores the ID of the task whose checkbox was just tapped
+ * but whose completion hasn't been committed to Room yet.  Each widget instance maintains
+ * its own copy via [PreferencesGlanceStateDefinition], so only the widget that received
+ * the tap shows the transient checkmark.
+ */
+val pendingCompleteKey = stringPreferencesKey("pending_complete_id")
 
 /**
  * Marks a task complete via the repository, then refreshes all widget instances.
@@ -33,8 +44,27 @@ val screenUriKey = ActionParameters.Key<String>("screenUri")
 class CompleteTaskAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val taskId = parameters[taskIdKey] ?: return
+
+        // ── Step 1: show checkmark immediately ───────────────────────────────
+        // Write the pending task ID into this widget instance's Glance state
+        // and trigger a re-render — the checkbox in WidgetTaskRow will show a
+        // filled checkmark before Room has confirmed the completion.
+        updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
+            prefs.toMutablePreferences().also { it[pendingCompleteKey] = taskId }
+        }
+        refreshAll(context)   // re-render: checkmark now visible
+
+        // ── Step 2: commit to Room ───────────────────────────────────────────
         withContext(Dispatchers.IO) { repo(context).completeTask(taskId) }
-        refreshAll(context)
+
+        // ── Step 3: clear pending state ──────────────────────────────────────
+        // Room's flow will already have re-rendered the widget (task gone or
+        // deadline advanced for recurring).  Clearing the key here ensures
+        // recurring tasks don't keep showing a stale checkmark.
+        updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
+            prefs.toMutablePreferences().also { it.remove(pendingCompleteKey) }
+        }
+        refreshAll(context)   // MIUI safety + clears checkmark for recurring tasks
     }
 }
 

@@ -32,6 +32,9 @@ internal val WDeadlineToday     = ColorProvider(R.color.widget_deadline_today)
 internal val WDeadlineTomorrow  = ColorProvider(R.color.widget_deadline_tomorrow)
 internal val WDeadlineThisWeek  = ColorProvider(R.color.widget_deadline_this_week)
 
+/** White fill for the checkmark drawn inside a completed/pending-complete checkbox. */
+internal val WCheckmark = ColorProvider(Color.White)
+
 /**
  * Parses a hex color string (e.g. "#3b82f6") into a Glance [ColorProvider], or null on failure.
  * Shared by [WidgetTaskRow] and [WidgetEventRow].

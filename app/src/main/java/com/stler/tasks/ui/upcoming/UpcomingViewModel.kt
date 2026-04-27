@@ -12,7 +12,6 @@ import com.stler.tasks.domain.model.Priority
 import com.stler.tasks.domain.model.Task
 import com.stler.tasks.ui.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,13 +40,14 @@ class UpcomingViewModel @Inject constructor(
         repository.observeAllPendingTasksWithDeadline()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    /** Live events for all selected calendars — switches when selected IDs change. */
+    /** Live events for all selected calendars — hot StateFlow for immediate reactivity. */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    private val eventsFlow: Flow<List<CalendarEvent>> =
+    private val eventsFlow: StateFlow<List<CalendarEvent>> =
         calendarRepository.getSelectedCalendarIds().flatMapLatest { ids ->
             if (ids.isEmpty()) flowOf(emptyList())
             else calendarRepository.getEventsForCalendars(ids, from, to)
         }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val labels: StateFlow<List<Label>> = repository.observeLabels()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -105,24 +105,37 @@ class UpcomingViewModel @Inject constructor(
     ) { (tasks, events, cf), pf, lf, ff ->
         val today = LocalDate.now()
 
-        val taskItems: List<ListItem> = tasks
-            .filter { task ->
-                (pf.isEmpty() || task.priority in pf) &&
-                    (lf.isEmpty() || task.labels.any { it in lf }) &&
-                    (ff.isEmpty() || task.folderId in ff) &&
-                    task.deadlineDate.isNotBlank() &&
-                    runCatching { LocalDate.parse(task.deadlineDate) }.isSuccess
-            }
-            .map { ListItem.TaskItem(it) }
+        // Filter matrix:
+        //   only calendar filter → no tasks shown, only filtered events
+        //   only task filters    → filtered tasks, no events
+        //   both                 → filtered tasks + filtered events
+        //   neither              → all tasks + all events
+        val taskFiltersActive = pf.isNotEmpty() || lf.isNotEmpty() || ff.isNotEmpty()
+        val calFiltersActive  = cf.isNotEmpty()
 
-        // Events are only interleaved when no task-specific filter is active
-        val eventItems: List<ListItem> = if (pf.isEmpty() && lf.isEmpty() && ff.isEmpty()) {
-            events
-                .filter { runCatching { LocalDate.parse(it.startDate) }.isSuccess }
-                .filter { cf.isEmpty() || it.calendarId in cf }
-                .map { ListItem.EventItem(it) }
-        } else {
+        val taskItems: List<ListItem> = if (calFiltersActive && !taskFiltersActive) {
             emptyList()
+        } else {
+            tasks
+                .filter { task ->
+                    (pf.isEmpty() || task.priority in pf) &&
+                        (lf.isEmpty() || task.labels.any { it in lf }) &&
+                        (ff.isEmpty() || task.folderId in ff) &&
+                        task.deadlineDate.isNotBlank() &&
+                        runCatching { LocalDate.parse(task.deadlineDate) }.isSuccess
+                }
+                .map { ListItem.TaskItem(it) }
+        }
+
+        val eventItems: List<ListItem> = when {
+            calFiltersActive  -> events
+                .filter { runCatching { LocalDate.parse(it.startDate) }.isSuccess }
+                .filter { it.calendarId in cf }
+                .map { ListItem.EventItem(it) }
+            taskFiltersActive -> emptyList()
+            else              -> events
+                .filter { runCatching { LocalDate.parse(it.startDate) }.isSuccess }
+                .map { ListItem.EventItem(it) }
         }
 
         (taskItems + eventItems)

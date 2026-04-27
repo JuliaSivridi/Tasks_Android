@@ -12,7 +12,6 @@ import com.stler.tasks.domain.model.Priority
 import com.stler.tasks.domain.model.Task
 import com.stler.tasks.ui.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -56,13 +55,14 @@ class AllTasksViewModel @Inject constructor(
     private val _calendarFilter = MutableStateFlow<Set<String>>(emptySet())
     val calendarFilter: StateFlow<Set<String>> = _calendarFilter.asStateFlow()
 
-    /** Live events for all selected calendars — switches when selected IDs change. */
+    /** Live events for all selected calendars — hot StateFlow for immediate reactivity. */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    private val eventsFlow: Flow<List<CalendarEvent>> =
+    private val eventsFlow: StateFlow<List<CalendarEvent>> =
         calendarRepository.getSelectedCalendarIds().flatMapLatest { ids ->
             if (ids.isEmpty()) flowOf(emptyList())
             else calendarRepository.getEventsForCalendars(ids, from, to)
         }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /** Distinct calendars derived from loaded events — used for the calendar filter chip. */
     val calendarsInEvents: StateFlow<List<CalendarItem>> = eventsFlow
@@ -91,10 +91,23 @@ class AllTasksViewModel @Inject constructor(
         _labelFilter,
         _folderFilter,
     ) { (taskList, events, cf), pf, lf, ff ->
-        val filtered = taskList.filter { task ->
-            (pf.isEmpty() || task.priority in pf) &&
-                (lf.isEmpty() || task.labels.any { it in lf }) &&
-                (ff.isEmpty() || task.folderId in ff)
+        // Filter matrix:
+        //   only calendar filter → no tasks shown, only filtered events
+        //   only task filters    → filtered tasks, no events
+        //   both                 → filtered tasks + filtered events
+        //   neither              → all tasks + all events
+        val taskFiltersActive = pf.isNotEmpty() || lf.isNotEmpty() || ff.isNotEmpty()
+        val calFiltersActive  = cf.isNotEmpty()
+
+        // When only the calendar filter is active, tasks are hidden entirely
+        val filtered = if (calFiltersActive && !taskFiltersActive) {
+            emptyList()
+        } else {
+            taskList.filter { task ->
+                (pf.isEmpty() || task.priority in pf) &&
+                    (lf.isEmpty() || task.labels.any { it in lf }) &&
+                    (ff.isEmpty() || task.folderId in ff)
+            }
         }
 
         val (datedTasks, undatedTasks) = filtered.partition { task ->
@@ -102,13 +115,10 @@ class AllTasksViewModel @Inject constructor(
                 runCatching { LocalDate.parse(task.deadlineDate) }.isSuccess
         }
 
-        // Events are only interleaved when no task-specific filter is active
-        val eventItems: List<ListItem> = if (pf.isEmpty() && lf.isEmpty() && ff.isEmpty()) {
-            events
-                .filter { cf.isEmpty() || it.calendarId in cf }
-                .map { ListItem.EventItem(it) }
-        } else {
-            emptyList()
+        val eventItems: List<ListItem> = when {
+            calFiltersActive  -> events.filter { it.calendarId in cf }.map { ListItem.EventItem(it) }
+            taskFiltersActive -> emptyList()
+            else              -> events.map { ListItem.EventItem(it) }
         }
 
         val datedItems: List<ListItem> =
