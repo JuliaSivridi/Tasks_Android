@@ -342,11 +342,11 @@ _Branch: `feature/widget-calendar`. Base: `main` after Stage 12 merge._
 - [ ] 13.1.2 `WidgetTaskRow.kt` — show checkmark inside checkbox box when task ID matches a "pending complete" Glance state key; clear state after widget refreshes
 
 ### 13.2 Calendar events on Upcoming widget
-- [ ] 13.2.1 `WidgetEntryPoint.kt` — add `calendarRepository(): CalendarRepository` accessor
-- [ ] 13.2.2 `UpcomingWidget.kt` — collect `calendarRepository.getSelectedCalendarIds()` + `getEventsForCalendars()` reactively inside `provideContent`; merge with tasks, sort by date+time, group into `UpcomingRow.Event` entries
-- [ ] 13.2.3 Add `UpcomingRow.Event(event: CalendarEvent)` to the sealed class
-- [ ] 13.2.4 `WidgetEventRow.kt` (new) — mirrors `WidgetTaskRow` layout; CalendarMonth icon (calendar color) in checkbox position; title in row 1; date/time + calendar name in row 2; same font sizes and separators as `WidgetTaskRow`
-- [ ] 13.2.5 Render `UpcomingRow.Event` → `WidgetEventRow` in the `LazyColumn`
+- [x] 13.2.1 `WidgetEntryPoint.kt` — add `calendarRepository(): CalendarRepository` accessor
+- [x] 13.2.2 `UpcomingWidget.kt` — collect `calendarRepository.getSelectedCalendarIds()` + `getEventsForCalendars()` reactively inside `provideGlance`; merge with tasks via unified `TimelineEntry` list; sort by (date, timed-first, time)
+- [x] 13.2.3 Add `UpcomingRow.Event(event: CalendarEvent)` to the sealed class
+- [x] 13.2.4 `WidgetEventRow.kt` (new) — mirrors `WidgetTaskRow` layout; `ic_calendar_month` drawable (tinted with calendar color via `ColorFilter.tint`) in checkbox position; title in row 1; time · calendar name in row 2; identical font sizes (14sp) and divider; `hexToColorProvider` moved to `WidgetColors.kt` as `internal`
+- [x] 13.2.5 Render `UpcomingRow.Event` → `WidgetEventRow(timeOnly=true)` in the `LazyColumn`
 
 ### 13.3 Calendar events on List (TaskList) widget
 - [ ] 13.3.1 `TaskListWidget.kt` — collect calendar events (same as 13.2.2); merge with tasks; sort by date+time (dated tasks + events interleaved, undated tasks last)

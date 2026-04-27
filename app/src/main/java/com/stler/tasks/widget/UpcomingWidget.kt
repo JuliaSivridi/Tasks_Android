@@ -22,15 +22,21 @@ import androidx.glance.layout.padding
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import com.stler.tasks.domain.model.CalendarEvent
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.Task
 import dagger.hilt.android.EntryPointAccessors
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle as JTextStyle
 import java.util.Locale
+
+// ── Row model ────────────────────────────────────────────────────────────────
 
 private sealed class UpcomingRow {
     data class Header(val text: String, val isOverdue: Boolean = false) : UpcomingRow()
@@ -40,49 +46,46 @@ private sealed class UpcomingRow {
         val folderName    : String,
         val folderHexColor: String,
     ) : UpcomingRow()
+    data class Event(val event: CalendarEvent) : UpcomingRow()
 }
+
+// ── Widget ───────────────────────────────────────────────────────────────────
 
 class UpcomingWidget : GlanceAppWidget() {
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val repo = EntryPointAccessors
+        val ep = EntryPointAccessors
             .fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
-            .taskRepository()
+
+        val repo         = ep.taskRepository()
+        val calendarRepo = ep.calendarRepository()
 
         // ── Obtain flows once — collected reactively inside provideContent ────
-        // This makes the widget auto-update whenever the DB changes (e.g. task
-        // completed) without needing an explicit updateAll() call.
-        val tasksFlow   : Flow<List<Task>>   = repo.observeAllPendingTasks()
-        val labelsFlow  : Flow<List<Label>>  = repo.observeLabels()
-        val foldersFlow : Flow<List<Folder>> = repo.observeFolders()
+        // DB or DataStore changes cause recomposition and widget refresh automatically.
+        val tasksFlow  : Flow<List<Task>>   = repo.observeAllPendingTasks()
+        val labelsFlow : Flow<List<Label>>  = repo.observeLabels()
+        val foldersFlow: Flow<List<Folder>> = repo.observeFolders()
+
+        val from = LocalDate.now()
+        val to   = LocalDate.now().plusDays(366)
+
+        // Switches to a new Room query whenever the selected calendar IDs change.
+        val eventsFlow: Flow<List<CalendarEvent>> =
+            calendarRepo.getSelectedCalendarIds().flatMapLatest { ids ->
+                if (ids.isEmpty()) flowOf(emptyList())
+                else calendarRepo.getEventsForCalendars(ids, from, to)
+            }
 
         provideContent {
-            // collectAsState subscribes inside the Glance composition; any DB
-            // change causes a recomposition and re-renders the widget with fresh data.
             val allTasks   by tasksFlow.collectAsState(initial = emptyList())
             val allLabels  by labelsFlow.collectAsState(initial = emptyList())
             val allFolders by foldersFlow.collectAsState(initial = emptyList())
+            val allEvents  by eventsFlow.collectAsState(initial = emptyList())
 
             val today = LocalDate.now()
 
-            val tasks = allTasks
-                .filter { it.deadlineDate.isNotBlank() }
-                .sortedWith(
-                    compareBy(
-                        { it.deadlineDate },
-                        { if (it.deadlineTime.isBlank()) 1 else 0 },
-                        { it.deadlineTime },
-                        { it.sortOrder },
-                    )
-                )
-
-            val overdueTasks = tasks.filter {
-                runCatching { LocalDate.parse(it.deadlineDate) < today }.getOrDefault(false)
-            }
-            val upcomingTasks = tasks.filter {
-                runCatching { LocalDate.parse(it.deadlineDate) >= today }.getOrDefault(true)
-            }
-
+            // ── Helper: task → display row ────────────────────────────────
             fun taskToItem(task: Task): UpcomingRow.Item {
                 val folder = allFolders.find { it.id == task.folderId }
                 return UpcomingRow.Item(
@@ -95,27 +98,65 @@ class UpcomingWidget : GlanceAppWidget() {
                 )
             }
 
-            val rows = buildList<UpcomingRow> {
-                if (overdueTasks.isNotEmpty()) {
-                    add(UpcomingRow.Header("Overdue", isOverdue = true))
-                    overdueTasks
-                        .sortedWith(compareBy(
-                            { it.deadlineDate },
-                            { if (it.deadlineTime.isBlank()) 1 else 0 },
-                            { it.deadlineTime },
+            // ── Unified timeline: sort tasks + events together ────────────
+            // Each entry carries the info needed for date-grouping and sorting.
+            data class TimelineEntry(
+                val date   : LocalDate,
+                val hasTime: Boolean,   // false = all-day; goes after timed items in same day
+                val time   : String,    // "HH:MM" or "" — used as secondary sort key
+                val row    : UpcomingRow,
+            )
+
+            val allEntries: List<TimelineEntry> = buildList {
+                allTasks
+                    .filter { it.deadlineDate.isNotBlank() }
+                    .forEach { task ->
+                        val date = runCatching { LocalDate.parse(task.deadlineDate) }.getOrNull()
+                            ?: return@forEach
+                        add(TimelineEntry(
+                            date    = date,
+                            hasTime = task.deadlineTime.isNotBlank(),
+                            time    = task.deadlineTime,
+                            row     = taskToItem(task),
                         ))
-                        .forEach { add(taskToItem(it)) }
+                    }
+                allEvents.forEach { event ->
+                    val date = runCatching { LocalDate.parse(event.startDate) }.getOrNull()
+                        ?: return@forEach
+                    add(TimelineEntry(
+                        date    = date,
+                        hasTime = event.startTime.isNotBlank(),
+                        time    = event.startTime,
+                        row     = UpcomingRow.Event(event),
+                    ))
                 }
-                upcomingTasks
-                    .groupBy { it.deadlineDate }
-                    .entries
-                    .sortedBy { it.key }
-                    .forEach { (dateStr, group) ->
-                        add(UpcomingRow.Header(formatDateHeader(dateStr, today)))
-                        group.forEach { add(taskToItem(it)) }
+            }
+
+            // Primary: date. Secondary: timed (0) before all-day (1). Tertiary: time string.
+            val sorted = allEntries.sortedWith(
+                compareBy({ it.date }, { if (it.hasTime) 0 else 1 }, { it.time })
+            )
+
+            // ── Build header-per-date row list ────────────────────────────
+            val rows = buildList<UpcomingRow> {
+                val overdueEntries  = sorted.filter { it.date < today }
+                val upcomingEntries = sorted.filter { it.date >= today }
+
+                if (overdueEntries.isNotEmpty()) {
+                    add(UpcomingRow.Header("Overdue", isOverdue = true))
+                    overdueEntries.forEach { add(it.row) }
+                }
+
+                // groupBy preserves insertion order; entries are already date-sorted.
+                upcomingEntries
+                    .groupBy { it.date }
+                    .forEach { (date, entries) ->
+                        add(UpcomingRow.Header(formatDateHeader(date, today)))
+                        entries.forEach { add(it.row) }
                     }
             }
 
+            // ── Render ────────────────────────────────────────────────────
             GlanceTheme {
                 Column(
                     modifier = GlanceModifier
@@ -130,7 +171,8 @@ class UpcomingWidget : GlanceAppWidget() {
                         items(rows, itemId = { row ->
                             when (row) {
                                 is UpcomingRow.Header -> "h_${row.text}".hashCode().toLong()
-                                is UpcomingRow.Item   -> row.task.id.hashCode().toLong()
+                                is UpcomingRow.Item   -> "t_${row.task.id}".hashCode().toLong()
+                                is UpcomingRow.Event  -> "e_${row.event.id}".hashCode().toLong()
                             }
                         }) { row ->
                             when (row) {
@@ -143,6 +185,11 @@ class UpcomingWidget : GlanceAppWidget() {
                                     showExpandSpace = false,
                                     timeOnly        = true,
                                 )
+                                is UpcomingRow.Event  -> WidgetEventRow(
+                                    event           = row.event,
+                                    showExpandSpace = false,
+                                    timeOnly        = true,
+                                )
                             }
                         }
                     }
@@ -151,6 +198,8 @@ class UpcomingWidget : GlanceAppWidget() {
         }
     }
 }
+
+// ── Section header ────────────────────────────────────────────────────────────
 
 @Composable
 private fun DateHeader(text: String, isOverdue: Boolean = false) {
@@ -167,11 +216,12 @@ private fun DateHeader(text: String, isOverdue: Boolean = false) {
     )
 }
 
-private fun formatDateHeader(dateStr: String, today: LocalDate): String {
+// ── Date header text ──────────────────────────────────────────────────────────
+
+private fun formatDateHeader(date: LocalDate, today: LocalDate): String {
     return try {
-        val date       = LocalDate.parse(dateStr)
-        val datePart   = date.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
-        val weekday    = date.dayOfWeek
+        val datePart = date.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
+        val weekday  = date.dayOfWeek
             .getDisplayName(JTextStyle.FULL, Locale.getDefault())
             .replaceFirstChar { it.uppercase() }
         val special = when {
@@ -186,8 +236,10 @@ private fun formatDateHeader(dateStr: String, today: LocalDate): String {
             append(weekday)
             if (special != null) { append(" · "); append(special) }
         }
-    } catch (_: Exception) { dateStr }
+    } catch (_: Exception) { date.toString() }
 }
+
+// ── Receiver ──────────────────────────────────────────────────────────────────
 
 class UpcomingWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = UpcomingWidget()

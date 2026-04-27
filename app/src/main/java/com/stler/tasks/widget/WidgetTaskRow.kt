@@ -3,7 +3,6 @@ package com.stler.tasks.widget
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceModifier
@@ -262,12 +261,3 @@ fun WidgetTaskRow(
     } // end Column
 }
 
-/** Parses a hex color string (e.g. "#3b82f6") into a Glance [ColorProvider], or null on failure. */
-private fun hexToColorProvider(hex: String): ColorProvider? {
-    if (hex.isBlank()) return null
-    return try {
-        ColorProvider(Color(android.graphics.Color.parseColor(hex)))
-    } catch (_: Exception) {
-        null
-    }
-}

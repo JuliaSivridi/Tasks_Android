@@ -1,5 +1,6 @@
 package com.stler.tasks.widget
 
+import androidx.compose.ui.graphics.Color
 import androidx.glance.unit.ColorProvider
 import com.stler.tasks.R
 
@@ -30,3 +31,16 @@ internal val WDeadlineOverdue   = ColorProvider(R.color.widget_deadline_overdue)
 internal val WDeadlineToday     = ColorProvider(R.color.widget_deadline_today)
 internal val WDeadlineTomorrow  = ColorProvider(R.color.widget_deadline_tomorrow)
 internal val WDeadlineThisWeek  = ColorProvider(R.color.widget_deadline_this_week)
+
+/**
+ * Parses a hex color string (e.g. "#3b82f6") into a Glance [ColorProvider], or null on failure.
+ * Shared by [WidgetTaskRow] and [WidgetEventRow].
+ */
+internal fun hexToColorProvider(hex: String): ColorProvider? {
+    if (hex.isBlank()) return null
+    return try {
+        ColorProvider(Color(android.graphics.Color.parseColor(hex)))
+    } catch (_: Exception) {
+        null
+    }
+}
