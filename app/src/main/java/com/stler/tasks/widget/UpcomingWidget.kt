@@ -74,8 +74,8 @@ class UpcomingWidget : GlanceAppWidget() {
         val labelsFlow : Flow<List<Label>>  = repo.observeLabels()
         val foldersFlow: Flow<List<Folder>> = repo.observeFolders()
 
-        val from = LocalDate.now()
-        val to   = LocalDate.now().plusDays(366)
+        val from = LocalDate.now().minusDays(1)  // include yesterday's overdue events
+        val to   = LocalDate.now().plusDays(7)   // cap event query at 7 days
 
         // Switches to a new Room query whenever the selected calendar IDs change.
         val eventsFlow: Flow<List<CalendarEvent>> =
@@ -95,9 +95,10 @@ class UpcomingWidget : GlanceAppWidget() {
             val rawPendingId      = prefs[pendingCompleteKey]
             val pendingTs         = prefs[pendingCompleteTimestamp] ?: 0L
             val pendingCompleteId = rawPendingId
-                ?.takeIf { System.currentTimeMillis() - pendingTs < 10_000L }
+                ?.takeIf { System.currentTimeMillis() - pendingTs < 4_000L }
 
-            val today = LocalDate.now()
+            val today  = LocalDate.now()
+            val cutoff = today.plusDays(6)  // widget shows today + 6 more days (7 total)
 
             // ── Helper: task → display row ────────────────────────────────
             fun taskToItem(task: Task): UpcomingRow.Item {
@@ -127,6 +128,7 @@ class UpcomingWidget : GlanceAppWidget() {
                     .forEach { task ->
                         val date = runCatching { LocalDate.parse(task.deadlineDate) }.getOrNull()
                             ?: return@forEach
+                        if (date > cutoff) return@forEach   // skip anything beyond 7 days
                         add(TimelineEntry(
                             date    = date,
                             hasTime = task.deadlineTime.isNotBlank(),
@@ -137,6 +139,7 @@ class UpcomingWidget : GlanceAppWidget() {
                 allEvents.forEach { event ->
                     val date = runCatching { LocalDate.parse(event.startDate) }.getOrNull()
                         ?: return@forEach
+                    if (date > cutoff) return@forEach       // skip anything beyond 7 days
                     add(TimelineEntry(
                         date    = date,
                         hasTime = event.startTime.isNotBlank(),
@@ -182,7 +185,7 @@ class UpcomingWidget : GlanceAppWidget() {
                         screenUri = "stlertasks://upcoming",
                     )
                     LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                        items(rows.take(30), itemId = { row ->
+                        items(rows, itemId = { row ->
                             when (row) {
                                 is UpcomingRow.Header -> "h_${row.text}".hashCode().toLong()
                                 is UpcomingRow.Item   -> "t_${row.task.id}".hashCode().toLong()

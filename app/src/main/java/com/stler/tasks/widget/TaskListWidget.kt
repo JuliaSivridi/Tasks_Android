@@ -58,7 +58,7 @@ class TaskListWidget : GlanceAppWidget() {
             val rawPendingId      = prefs[pendingCompleteKey]
             val pendingTs         = prefs[pendingCompleteTimestamp] ?: 0L
             val pendingCompleteId = rawPendingId
-                ?.takeIf { System.currentTimeMillis() - pendingTs < 10_000L }
+                ?.takeIf { System.currentTimeMillis() - pendingTs < 4_000L }
 
             val tasks = allTasks
                 .let { list -> if (filterFolder   != null) list.filter { it.folderId == filterFolder } else list }

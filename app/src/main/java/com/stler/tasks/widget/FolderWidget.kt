@@ -65,7 +65,7 @@ class FolderWidget : GlanceAppWidget() {
             val rawPendingId      = prefs[pendingCompleteKey]
             val pendingTs         = prefs[pendingCompleteTimestamp] ?: 0L
             val pendingCompleteId = rawPendingId
-                ?.takeIf { System.currentTimeMillis() - pendingTs < 10_000L }
+                ?.takeIf { System.currentTimeMillis() - pendingTs < 4_000L }
 
             val folderName  = folders.find { it.id == folderId }?.name ?: "Inbox"
             val displayList = buildList<FolderRow> {
