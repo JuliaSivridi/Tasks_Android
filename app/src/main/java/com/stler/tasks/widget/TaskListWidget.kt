@@ -55,7 +55,10 @@ class TaskListWidget : GlanceAppWidget() {
             val allFolders by foldersFlow.collectAsState(initial = emptyList())
 
             val prefs             = currentState<Preferences>()
-            val pendingCompleteId = prefs[pendingCompleteKey]
+            val rawPendingId      = prefs[pendingCompleteKey]
+            val pendingTs         = prefs[pendingCompleteTimestamp] ?: 0L
+            val pendingCompleteId = rawPendingId
+                ?.takeIf { System.currentTimeMillis() - pendingTs < 10_000L }
 
             val tasks = allTasks
                 .let { list -> if (filterFolder   != null) list.filter { it.folderId == filterFolder } else list }
@@ -107,7 +110,7 @@ class TaskListWidget : GlanceAppWidget() {
                 ) {
                     WidgetHeader(title = title, screenUri = "stlertasks://all_tasks")
                     LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                        items(rows, itemId = { it.task.id.hashCode().toLong() }) { row ->
+                        items(rows.take(20), itemId = { it.task.id.hashCode().toLong() }) { row ->
                             WidgetTaskRow(
                                 task              = row.task,
                                 labelItems        = row.labelItems,

@@ -274,12 +274,46 @@ fun WidgetTaskRow(
                         hasContent = true
                     }
 
-                    // Child task stats: ✓completed ○remaining ≡total (FolderWidget parent tasks)
+                    // Child task stats: icon+count triples (FolderWidget parent tasks)
                     if (totalChildCount > 0) {
-                        val sep = if (hasContent) "  " else ""
+                        if (hasContent) Spacer(GlanceModifier.width(6.dp))
+                        // Completed count
+                        Image(
+                            provider           = ImageProvider(R.drawable.ic_check_mark),
+                            contentDescription = null,
+                            modifier           = GlanceModifier.size(11.dp),
+                            colorFilter        = ColorFilter.tint(WOnSurfaceVariant),
+                        )
+                        Spacer(GlanceModifier.width(2.dp))
                         Text(
-                            text  = "${sep}✓$completedChildCount ○$pendingChildCount ≡$totalChildCount",
-                            style = TextStyle(color = WOnSurfaceVariant, fontSize = 14.sp),
+                            text  = "$completedChildCount",
+                            style = TextStyle(color = WOnSurfaceVariant, fontSize = 12.sp),
+                        )
+                        Spacer(GlanceModifier.width(4.dp))
+                        // Pending count
+                        Image(
+                            provider           = ImageProvider(R.drawable.ic_radio_button_unchecked),
+                            contentDescription = null,
+                            modifier           = GlanceModifier.size(11.dp),
+                            colorFilter        = ColorFilter.tint(WOnSurfaceVariant),
+                        )
+                        Spacer(GlanceModifier.width(2.dp))
+                        Text(
+                            text  = "$pendingChildCount",
+                            style = TextStyle(color = WOnSurfaceVariant, fontSize = 12.sp),
+                        )
+                        Spacer(GlanceModifier.width(4.dp))
+                        // Total count
+                        Image(
+                            provider           = ImageProvider(R.drawable.ic_format_list_bulleted),
+                            contentDescription = null,
+                            modifier           = GlanceModifier.size(11.dp),
+                            colorFilter        = ColorFilter.tint(WOnSurfaceVariant),
+                        )
+                        Spacer(GlanceModifier.width(2.dp))
+                        Text(
+                            text  = "$totalChildCount",
+                            style = TextStyle(color = WOnSurfaceVariant, fontSize = 12.sp),
                         )
                     }
                 }

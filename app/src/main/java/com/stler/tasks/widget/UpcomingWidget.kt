@@ -92,7 +92,10 @@ class UpcomingWidget : GlanceAppWidget() {
 
             // Read transient pending-complete state (set by CompleteTaskAction before Room commits)
             val prefs             = currentState<Preferences>()
-            val pendingCompleteId = prefs[pendingCompleteKey]
+            val rawPendingId      = prefs[pendingCompleteKey]
+            val pendingTs         = prefs[pendingCompleteTimestamp] ?: 0L
+            val pendingCompleteId = rawPendingId
+                ?.takeIf { System.currentTimeMillis() - pendingTs < 10_000L }
 
             val today = LocalDate.now()
 
@@ -179,7 +182,7 @@ class UpcomingWidget : GlanceAppWidget() {
                         screenUri = "stlertasks://upcoming",
                     )
                     LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                        items(rows, itemId = { row ->
+                        items(rows.take(30), itemId = { row ->
                             when (row) {
                                 is UpcomingRow.Header -> "h_${row.text}".hashCode().toLong()
                                 is UpcomingRow.Item   -> "t_${row.task.id}".hashCode().toLong()

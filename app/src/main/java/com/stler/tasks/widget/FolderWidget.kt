@@ -62,7 +62,10 @@ class FolderWidget : GlanceAppWidget() {
             val completedCounts by completedCountsFlow.collectAsState(initial = emptyMap())
 
             val prefs             = currentState<Preferences>()
-            val pendingCompleteId = prefs[pendingCompleteKey]
+            val rawPendingId      = prefs[pendingCompleteKey]
+            val pendingTs         = prefs[pendingCompleteTimestamp] ?: 0L
+            val pendingCompleteId = rawPendingId
+                ?.takeIf { System.currentTimeMillis() - pendingTs < 10_000L }
 
             val folderName  = folders.find { it.id == folderId }?.name ?: "Inbox"
             val displayList = buildList<FolderRow> {
@@ -81,7 +84,7 @@ class FolderWidget : GlanceAppWidget() {
                         screenUri = "stlertasks://folder/$folderId",
                     )
                     LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                        items(displayList, itemId = { it.task.id.hashCode().toLong() }) { row ->
+                        items(displayList.take(20), itemId = { it.task.id.hashCode().toLong() }) { row ->
                             WidgetTaskRow(
                                 task                = row.task,
                                 indentLevel         = row.depth,

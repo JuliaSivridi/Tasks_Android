@@ -3,6 +3,7 @@ package com.stler.tasks.widget
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
@@ -25,7 +26,14 @@ val screenUriKey = ActionParameters.Key<String>("screenUri")
  * its own copy via [PreferencesGlanceStateDefinition], so only the widget that received
  * the tap shows the transient checkmark.
  */
-val pendingCompleteKey = stringPreferencesKey("pending_complete_id")
+val pendingCompleteKey       = stringPreferencesKey("pending_complete_id")
+
+/**
+ * Timestamp (epoch ms) when [pendingCompleteKey] was last written.
+ * The widget treats the pending state as valid only for 10 seconds after this timestamp,
+ * so recurring tasks never get a permanently-stuck checkmark even without explicit clearing.
+ */
+val pendingCompleteTimestamp = longPreferencesKey("pending_complete_ts")
 
 /**
  * Marks a task complete via the repository, then refreshes all widget instances.
@@ -46,25 +54,26 @@ class CompleteTaskAction : ActionCallback {
         val taskId = parameters[taskIdKey] ?: return
 
         // ── Step 1: show checkmark immediately ───────────────────────────────
-        // Write the pending task ID into this widget instance's Glance state
-        // and trigger a re-render — the checkbox in WidgetTaskRow will show a
-        // filled checkmark before Room has confirmed the completion.
+        // Write the pending task ID + a timestamp into this widget's Glance state.
+        // The widget reads the timestamp and only shows the checkmark while it is
+        // < 10 seconds old — no explicit clearing needed, so there is no race with
+        // WorkManager's KEEP policy (which would have caused clearing to happen
+        // before the queued SessionWorker even started).
         updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
-            prefs.toMutablePreferences().also { it[pendingCompleteKey] = taskId }
+            prefs.toMutablePreferences().also {
+                it[pendingCompleteKey]       = taskId
+                it[pendingCompleteTimestamp] = System.currentTimeMillis()
+            }
         }
         refreshAll(context)   // re-render: checkmark now visible
 
         // ── Step 2: commit to Room ───────────────────────────────────────────
+        // Room's flow emission will re-render the widget (task disappears or
+        // deadline advances for recurring tasks).  The 10-second timestamp window
+        // ensures the checkmark auto-clears even if the Room flow fires late.
         withContext(Dispatchers.IO) { repo(context).completeTask(taskId) }
 
-        // ── Step 3: clear pending state ──────────────────────────────────────
-        // Room's flow will already have re-rendered the widget (task gone or
-        // deadline advanced for recurring).  Clearing the key here ensures
-        // recurring tasks don't keep showing a stale checkmark.
-        updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
-            prefs.toMutablePreferences().also { it.remove(pendingCompleteKey) }
-        }
-        refreshAll(context)   // MIUI safety + clears checkmark for recurring tasks
+        refreshAll(context)   // MIUI safety: explicit refresh after Room commit
     }
 }
 
