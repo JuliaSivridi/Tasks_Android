@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Folder
@@ -38,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.stler.tasks.domain.model.CalendarItem
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.ListItem
@@ -59,13 +61,15 @@ fun AllTasksScreen(
     onAddSubtask : (com.stler.tasks.domain.model.Task) -> Unit = {},
     viewModel    : AllTasksViewModel = hiltViewModel(),
 ) {
-    val filteredItems  by viewModel.filteredItems.collectAsStateWithLifecycle()
-    val isLoading      by viewModel.isLoading.collectAsStateWithLifecycle()
-    val labels         by viewModel.labels.collectAsStateWithLifecycle()
-    val folders        by viewModel.folders.collectAsStateWithLifecycle()
-    val priorityFilter by viewModel.priorityFilter.collectAsStateWithLifecycle()
-    val labelFilter    by viewModel.labelFilter.collectAsStateWithLifecycle()
-    val folderFilter   by viewModel.folderFilter.collectAsStateWithLifecycle()
+    val filteredItems      by viewModel.filteredItems.collectAsStateWithLifecycle()
+    val isLoading          by viewModel.isLoading.collectAsStateWithLifecycle()
+    val labels             by viewModel.labels.collectAsStateWithLifecycle()
+    val folders            by viewModel.folders.collectAsStateWithLifecycle()
+    val priorityFilter     by viewModel.priorityFilter.collectAsStateWithLifecycle()
+    val labelFilter        by viewModel.labelFilter.collectAsStateWithLifecycle()
+    val folderFilter       by viewModel.folderFilter.collectAsStateWithLifecycle()
+    val calendarFilter     by viewModel.calendarFilter.collectAsStateWithLifecycle()
+    val calendarsInEvents  by viewModel.calendarsInEvents.collectAsStateWithLifecycle()
 
     ErrorSnackbarEffect(viewModel)
 
@@ -76,9 +80,12 @@ fun AllTasksScreen(
             priorityFilter   = priorityFilter,
             labelFilter      = labelFilter,
             folderFilter     = folderFilter,
+            calendars        = calendarsInEvents,
+            calendarFilter   = calendarFilter,
             onTogglePriority = { viewModel.togglePriorityFilter(it) },
             onToggleLabel    = { viewModel.toggleLabelFilter(it) },
             onToggleFolder   = { viewModel.toggleFolderFilter(it) },
+            onToggleCalendar = { viewModel.toggleCalendarFilter(it) },
             onClearAll       = { viewModel.clearAllFilters() },
         )
         when {
@@ -158,18 +165,23 @@ fun FilterBar(
     priorityFilter  : Set<Priority>,
     labelFilter     : Set<String>,
     folderFilter    : Set<String> = emptySet(),
+    calendars       : List<CalendarItem> = emptyList(),
+    calendarFilter  : Set<String> = emptySet(),
     onTogglePriority: (Priority) -> Unit,
     onToggleLabel   : (String) -> Unit,
     onToggleFolder  : (String) -> Unit = {},
+    onToggleCalendar: (String) -> Unit = {},
     onClearAll      : () -> Unit = {},
     showLabelFilter : Boolean = true,
     showFolderFilter: Boolean = true,
 ) {
-    val hasFilters = priorityFilter.isNotEmpty() || labelFilter.isNotEmpty() || folderFilter.isNotEmpty()
+    val hasFilters = priorityFilter.isNotEmpty() || labelFilter.isNotEmpty() ||
+        folderFilter.isNotEmpty() || calendarFilter.isNotEmpty()
 
-    var priorityExpanded by remember { mutableStateOf(false) }
-    var labelsExpanded   by remember { mutableStateOf(false) }
-    var foldersExpanded  by remember { mutableStateOf(false) }
+    var priorityExpanded  by remember { mutableStateOf(false) }
+    var labelsExpanded    by remember { mutableStateOf(false) }
+    var foldersExpanded   by remember { mutableStateOf(false) }
+    var calendarsExpanded by remember { mutableStateOf(false) }
 
     Row(
         modifier              = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -283,6 +295,42 @@ fun FilterBar(
                             leadingIcon  = {
                                 Icon(Icons.Outlined.Folder, null,
                                     tint = fld.color.toComposeColor(), modifier = Modifier.size(16.dp))
+                            },
+                            trailingIcon = if (active) ({
+                                Icon(Icons.Outlined.Check, null, modifier = Modifier.size(16.dp))
+                            }) else null,
+                        )
+                    }
+                }
+            }
+        }
+
+        // ── Calendars chip — only visible when events are present ─────────
+        if (calendars.isNotEmpty()) {
+            Box {
+                FilterChip(
+                    selected    = calendarFilter.isNotEmpty(),
+                    onClick     = { calendarsExpanded = true },
+                    leadingIcon = { Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(16.dp)) },
+                    label       = {
+                        if (calendarFilter.isNotEmpty())
+                            Text(calendarFilter.size.toString(), style = MaterialTheme.typography.labelSmall)
+                    },
+                    colors = neutralChipColors(),
+                )
+                DropdownMenu(
+                    expanded         = calendarsExpanded,
+                    onDismissRequest = { calendarsExpanded = false },
+                ) {
+                    calendars.forEach { cal ->
+                        val active = cal.id in calendarFilter
+                        val calColor = cal.color.toComposeColor()
+                        DropdownMenuItem(
+                            text         = { Text(cal.summary, color = calColor) },
+                            onClick      = { onToggleCalendar(cal.id) },
+                            leadingIcon  = {
+                                Icon(Icons.Outlined.CalendarMonth, null,
+                                    tint = calColor, modifier = Modifier.size(16.dp))
                             },
                             trailingIcon = if (active) ({
                                 Icon(Icons.Outlined.Check, null, modifier = Modifier.size(16.dp))

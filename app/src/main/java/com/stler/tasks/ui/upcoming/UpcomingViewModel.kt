@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import com.stler.tasks.data.repository.CalendarRepository
 import com.stler.tasks.data.repository.TaskRepository
 import com.stler.tasks.domain.model.CalendarEvent
+import com.stler.tasks.domain.model.CalendarItem
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.ListItem
@@ -66,6 +67,23 @@ class UpcomingViewModel @Inject constructor(
     private val _folderFilter = MutableStateFlow<Set<String>>(emptySet())
     val folderFilter: StateFlow<Set<String>> = _folderFilter.asStateFlow()
 
+    private val _calendarFilter = MutableStateFlow<Set<String>>(emptySet())
+    val calendarFilter: StateFlow<Set<String>> = _calendarFilter.asStateFlow()
+
+    /** Distinct calendars derived from loaded events — used for the calendar filter chip. */
+    val calendarsInEvents: StateFlow<List<CalendarItem>> = eventsFlow
+        .map { events ->
+            events.distinctBy { it.calendarId }.map { e ->
+                CalendarItem(
+                    id         = e.calendarId,
+                    summary    = e.calendarName,
+                    color      = e.calendarColor,
+                    isSelected = true,
+                )
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     /** Mon–Sun of the currently focused week (drives the week strip). */
     val weekDays: StateFlow<List<LocalDate>> = _weekOffset.map { offset ->
         val monday = LocalDate.now()
@@ -76,14 +94,15 @@ class UpcomingViewModel @Inject constructor(
 
     /**
      * ALL pending tasks with deadlines + calendar events, filtered, grouped by date and sorted.
-     * Tasks are subject to priority/label/folder filters; events always appear.
+     * Calendar events are only shown when NO task filter (priority/label/folder) is active.
+     * When a calendar filter is active, only events from the selected calendars are shown.
      */
     val allGroupedTasks: StateFlow<Map<LocalDate, List<ListItem>>> = combine(
-        combine(tasksWithDeadline, eventsFlow) { t, e -> Pair(t, e) },
+        combine(tasksWithDeadline, eventsFlow, _calendarFilter) { t, e, cf -> Triple(t, e, cf) },
         _priorityFilter,
         _labelFilter,
         _folderFilter,
-    ) { (tasks, events), pf, lf, ff ->
+    ) { (tasks, events, cf), pf, lf, ff ->
         val today = LocalDate.now()
 
         val taskItems: List<ListItem> = tasks
@@ -96,9 +115,15 @@ class UpcomingViewModel @Inject constructor(
             }
             .map { ListItem.TaskItem(it) }
 
-        val eventItems: List<ListItem> = events
-            .filter { runCatching { LocalDate.parse(it.startDate) }.isSuccess }
-            .map { ListItem.EventItem(it) }
+        // Events are only interleaved when no task-specific filter is active
+        val eventItems: List<ListItem> = if (pf.isEmpty() && lf.isEmpty() && ff.isEmpty()) {
+            events
+                .filter { runCatching { LocalDate.parse(it.startDate) }.isSuccess }
+                .filter { cf.isEmpty() || it.calendarId in cf }
+                .map { ListItem.EventItem(it) }
+        } else {
+            emptyList()
+        }
 
         (taskItems + eventItems)
             .groupBy { item ->
@@ -168,10 +193,15 @@ class UpcomingViewModel @Inject constructor(
         _folderFilter.update { if (id in it) it - id else it + id }
     }
 
+    fun toggleCalendarFilter(id: String) {
+        _calendarFilter.update { if (id in it) it - id else it + id }
+    }
+
     fun clearAllFilters() {
-        _priorityFilter.value = emptySet()
-        _labelFilter.value    = emptySet()
-        _folderFilter.value   = emptySet()
+        _priorityFilter.value  = emptySet()
+        _labelFilter.value     = emptySet()
+        _folderFilter.value    = emptySet()
+        _calendarFilter.value  = emptySet()
     }
 
     // ── Task mutations ────────────────────────────────────────────────────

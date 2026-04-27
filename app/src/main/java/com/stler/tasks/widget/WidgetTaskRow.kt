@@ -48,6 +48,7 @@ import com.stler.tasks.ui.task.deadlineStatus
  *
  * @param labelItems List of (labelName, hexColor) pairs for row 2
  * @param folderHexColor Hex color string for the folder name in row 2; blank = default color
+ * @param pendingChildCount Number of pending (non-completed) child tasks; shown in row 2 when > 0
  */
 @Composable
 fun WidgetTaskRow(
@@ -63,6 +64,8 @@ fun WidgetTaskRow(
     /** When true only the time portion of the deadline is shown in row 2 (date is
      *  already visible in the section header, e.g. UpcomingWidget). */
     timeOnly: Boolean = false,
+    /** Pending child task count (FolderWidget only). Shown in row 2 when > 0. */
+    pendingChildCount: Int = 0,
 ) {
     val priorityColor = when (task.priority) {
         Priority.URGENT    -> WPriorityUrgent
@@ -81,6 +84,7 @@ fun WidgetTaskRow(
     }
 
     val hasRow2 = dlLabel != null || labelItems.isNotEmpty() || folderName.isNotBlank()
+        || task.isRecurring || pendingChildCount > 0
 
     // Wrap in Column so we can add a thin bottom divider (matches app's HorizontalDivider).
     // Semi-transparent gray works on both light and dark widget backgrounds.
@@ -184,23 +188,36 @@ fun WidgetTaskRow(
                 ),
             )
 
-            // Row 2: deadline · #label(s) · folder — each with its own color
+            // Row 2: ↻ · deadline · #label(s) · folder · child count
             if (hasRow2) {
                 Row(modifier = GlanceModifier.fillMaxWidth()) {
+                    var hasContent = false
+
+                    // Recurring indicator
+                    if (task.isRecurring) {
+                        Text(
+                            text  = "↻",
+                            style = TextStyle(color = WOnSurfaceVariant, fontSize = 14.sp),
+                        )
+                        hasContent = true
+                    }
+
                     // Deadline (already has its status color)
                     if (dlLabel != null) {
+                        val sep = if (hasContent) " · " else ""
                         Text(
-                            text  = dlLabel,
+                            text  = "$sep$dlLabel",
                             style = TextStyle(color = dlColor, fontSize = 14.sp),
                         )
+                        hasContent = true
                     }
 
                     // Labels — each with its own color
                     labelItems.forEachIndexed { i, (name, hexColor) ->
                         val prefix = when {
-                            i == 0 && dlLabel != null -> " · #"
-                            i == 0                    -> "#"
-                            else                      -> ", #"
+                            i == 0 && hasContent -> " · #"
+                            i == 0               -> "#"
+                            else                 -> ", #"
                         }
                         val lColor = hexToColorProvider(hexColor)
                             ?: WOnSurfaceVariant
@@ -208,16 +225,27 @@ fun WidgetTaskRow(
                             text  = "$prefix$name",
                             style = TextStyle(color = lColor, fontSize = 14.sp),
                         )
+                        hasContent = true
                     }
 
                     // Folder with its own color
                     if (folderName.isNotBlank()) {
-                        val sep = if (dlLabel != null || labelItems.isNotEmpty()) " · " else ""
+                        val sep = if (hasContent) " · " else ""
                         val fColor = hexToColorProvider(folderHexColor)
                             ?: WOnSurfaceVariant
                         Text(
                             text  = "$sep$folderName",
                             style = TextStyle(color = fColor, fontSize = 14.sp),
+                        )
+                        hasContent = true
+                    }
+
+                    // Pending child count (FolderWidget parent tasks)
+                    if (pendingChildCount > 0) {
+                        val sep = if (hasContent) "  " else ""
+                        Text(
+                            text  = "${sep}○ $pendingChildCount",
+                            style = TextStyle(color = WOnSurfaceVariant, fontSize = 14.sp),
                         )
                     }
                 }

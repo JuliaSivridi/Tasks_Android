@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import com.stler.tasks.data.repository.CalendarRepository
 import com.stler.tasks.data.repository.TaskRepository
 import com.stler.tasks.domain.model.CalendarEvent
+import com.stler.tasks.domain.model.CalendarItem
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.ListItem
@@ -52,6 +53,9 @@ class AllTasksViewModel @Inject constructor(
     private val _folderFilter = MutableStateFlow<Set<String>>(emptySet())
     val folderFilter: StateFlow<Set<String>> = _folderFilter.asStateFlow()
 
+    private val _calendarFilter = MutableStateFlow<Set<String>>(emptySet())
+    val calendarFilter: StateFlow<Set<String>> = _calendarFilter.asStateFlow()
+
     /** Live events for all selected calendars — switches when selected IDs change. */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     private val eventsFlow: Flow<List<CalendarEvent>> =
@@ -60,17 +64,33 @@ class AllTasksViewModel @Inject constructor(
             else calendarRepository.getEventsForCalendars(ids, from, to)
         }
 
+    /** Distinct calendars derived from loaded events — used for the calendar filter chip. */
+    val calendarsInEvents: StateFlow<List<CalendarItem>> = eventsFlow
+        .map { events ->
+            events.distinctBy { it.calendarId }.map { e ->
+                CalendarItem(
+                    id         = e.calendarId,
+                    summary    = e.calendarName,
+                    color      = e.calendarColor,
+                    isSelected = true,
+                )
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     /**
      * Filtered tasks + calendar events sorted together by date/time.
+     * Calendar events are only shown when NO task filter (priority/label/folder) is active.
+     * When a calendar filter is active, only events from the selected calendars are shown.
      * Tasks with deadlines and events are interleaved chronologically.
      * Tasks without deadlines appear after all dated items, in their natural order.
      */
     val filteredItems: StateFlow<List<ListItem>> = combine(
-        combine(tasks, eventsFlow) { t, e -> Pair(t, e) },
+        combine(tasks, eventsFlow, _calendarFilter) { t, e, cf -> Triple(t, e, cf) },
         _priorityFilter,
         _labelFilter,
         _folderFilter,
-    ) { (taskList, events), pf, lf, ff ->
+    ) { (taskList, events, cf), pf, lf, ff ->
         val filtered = taskList.filter { task ->
             (pf.isEmpty() || task.priority in pf) &&
                 (lf.isEmpty() || task.labels.any { it in lf }) &&
@@ -82,8 +102,17 @@ class AllTasksViewModel @Inject constructor(
                 runCatching { LocalDate.parse(task.deadlineDate) }.isSuccess
         }
 
+        // Events are only interleaved when no task-specific filter is active
+        val eventItems: List<ListItem> = if (pf.isEmpty() && lf.isEmpty() && ff.isEmpty()) {
+            events
+                .filter { cf.isEmpty() || it.calendarId in cf }
+                .map { ListItem.EventItem(it) }
+        } else {
+            emptyList()
+        }
+
         val datedItems: List<ListItem> =
-            (datedTasks.map { ListItem.TaskItem(it) } + events.map { ListItem.EventItem(it) })
+            (datedTasks.map { ListItem.TaskItem(it) } + eventItems)
                 .sortedWith(compareBy(
                     // Primary: date string (ISO format sorts correctly)
                     { when (it) {
@@ -122,10 +151,15 @@ class AllTasksViewModel @Inject constructor(
         _folderFilter.update { if (id in it) it - id else it + id }
     }
 
+    fun toggleCalendarFilter(id: String) {
+        _calendarFilter.update { if (id in it) it - id else it + id }
+    }
+
     fun clearAllFilters() {
-        _priorityFilter.value = emptySet()
-        _labelFilter.value    = emptySet()
-        _folderFilter.value   = emptySet()
+        _priorityFilter.value  = emptySet()
+        _labelFilter.value     = emptySet()
+        _folderFilter.value    = emptySet()
+        _calendarFilter.value  = emptySet()
     }
 
     fun completeTask(id: String) = safeLaunch { repository.completeTask(id) }

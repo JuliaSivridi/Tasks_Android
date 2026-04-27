@@ -22,10 +22,11 @@ import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.Flow
 
 private data class FolderRow(
-    val task       : Task,
-    val depth      : Int,
-    val hasChildren: Boolean,
-    val labelItems : List<Pair<String, String>>, // (name, hexColor)
+    val task             : Task,
+    val depth            : Int,
+    val hasChildren      : Boolean,
+    val labelItems       : List<Pair<String, String>>, // (name, hexColor)
+    val pendingChildCount: Int = 0,
 )
 
 class FolderWidget : GlanceAppWidget() {
@@ -70,10 +71,11 @@ class FolderWidget : GlanceAppWidget() {
                     LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
                         items(displayList, itemId = { it.task.id.hashCode().toLong() }) { row ->
                             WidgetTaskRow(
-                                task        = row.task,
-                                indentLevel = row.depth,
-                                hasChildren = row.hasChildren,
-                                labelItems  = row.labelItems,
+                                task              = row.task,
+                                indentLevel       = row.depth,
+                                hasChildren       = row.hasChildren,
+                                labelItems        = row.labelItems,
+                                pendingChildCount = row.pendingChildCount,
                             )
                         }
                     }
@@ -102,12 +104,14 @@ private fun MutableList<FolderRow>.addRecursive(
         val taskChildren = allTasks.filter { it.parentId == task.id }
         add(
             FolderRow(
-                task        = task,
-                depth       = depth,
-                hasChildren = taskChildren.isNotEmpty(),
-                labelItems  = task.labels.mapNotNull { lid ->
+                task              = task,
+                depth             = depth,
+                hasChildren       = taskChildren.isNotEmpty(),
+                labelItems        = task.labels.mapNotNull { lid ->
                     allLabels.find { it.id == lid }?.let { lbl -> lbl.name to lbl.color }
                 },
+                // Pending child count = number of visible (pending) children in the loaded list
+                pendingChildCount = taskChildren.size,
             )
         )
         if (task.isExpanded) {

@@ -1,6 +1,6 @@
 # Stler Tasks Android — Task Decomposition
 
-**Updated:** 2026-04-26
+**Updated:** 2026-04-27
 **Spec:** `docs/architecture-spec.md` · `docs/architecture-cal-spec.md`
 **Source reference:** PWA at `D:\Projects\Tasks` (scanned for full UI parity)
 
@@ -321,3 +321,46 @@ _Spec: `docs/architecture-cal-spec.md`_
 - [x] 12.7.6 `Screen.calendarRoute()` — URL-encode calendar ID via `Uri.encode()` so IDs with `#` / `@` (holiday calendars) route correctly to CalendarScreen
 - [x] 12.7.7 `CalendarEventItem` — restructure to match TaskItem exactly: Column > Row1 + Row2; icon 20 dp in 40 dp box; meta row `start=54 dp`, `bodyMedium`, icon 14 dp; no new hardcoded sizes
 - [x] 12.7.8 Calendar event fetch depth: `plusDays(60)` → `plusDays(366)` in all ViewModels and SyncWorker
+
+### 12.8 Bug fixes & improvements (post-alpha.3)
+- [x] 12.8.1 `TaskItem.kt` — remove green highlight on checkbox click; keep only swipe-right green flash (remove `pendingComplete` state, `completeBgColor` animation, and the wrapping `Box`)
+- [x] 12.8.2 `AllTasksViewModel` / `UpcomingViewModel` — calendar events are hidden when any task filter (priority / label / folder) is active; they are not subject to those filter fields
+- [x] 12.8.3 `AllTasksViewModel` / `UpcomingViewModel` — add `_calendarFilter: MutableStateFlow<Set<String>>`, `calendarsInEvents: StateFlow<List<CalendarItem>>` (derived from eventsFlow, no network call), `toggleCalendarFilter()`, cleared by `clearAllFilters()`
+- [x] 12.8.4 `FilterBar` — add calendar chip (CalendarMonth icon); shows distinct calendars from current events; hides when no events loaded; toggling a calendar entry filters events by `calendarId`; compatible with existing callers (new params have defaults)
+- [x] 12.8.5 `UpcomingScreen` / `AllTasksScreen` — pass `calendarsInEvents` and `calendarFilter` to `FilterBar`
+- [x] 12.8.6 `WidgetTaskRow` — row 2: add "↻" recurring indicator before deadline text (when `task.isRecurring`); add "○ N" pending child count after folder (when `pendingChildCount > 0`)
+- [x] 12.8.7 `FolderWidget` — pass `pendingChildCount` = pending children in loaded task list to each `FolderRow`; displayed in row 2 of parent task rows
+
+---
+
+## Stage 13 — Widget Enhancements & Calendar Widget
+
+_Branch: `feature/widget-calendar`. Base: `main` after Stage 12 merge._
+
+### 13.1 Widget checkbox checkmark
+- [ ] 13.1.1 Research Glance state mechanism to show transient "checked" visual between tap and widget refresh
+- [ ] 13.1.2 `WidgetTaskRow.kt` — show checkmark inside checkbox box when task ID matches a "pending complete" Glance state key; clear state after widget refreshes
+
+### 13.2 Calendar events on Upcoming widget
+- [ ] 13.2.1 `WidgetEntryPoint.kt` — add `calendarRepository(): CalendarRepository` accessor
+- [ ] 13.2.2 `UpcomingWidget.kt` — collect `calendarRepository.getSelectedCalendarIds()` + `getEventsForCalendars()` reactively inside `provideContent`; merge with tasks, sort by date+time, group into `UpcomingRow.Event` entries
+- [ ] 13.2.3 Add `UpcomingRow.Event(event: CalendarEvent)` to the sealed class
+- [ ] 13.2.4 `WidgetEventRow.kt` (new) — mirrors `WidgetTaskRow` layout; CalendarMonth icon (calendar color) in checkbox position; title in row 1; date/time + calendar name in row 2; same font sizes and separators as `WidgetTaskRow`
+- [ ] 13.2.5 Render `UpcomingRow.Event` → `WidgetEventRow` in the `LazyColumn`
+
+### 13.3 Calendar events on List (TaskList) widget
+- [ ] 13.3.1 `TaskListWidget.kt` — collect calendar events (same as 13.2.2); merge with tasks; sort by date+time (dated tasks + events interleaved, undated tasks last)
+- [ ] 13.3.2 Hide events when any task filter (folder / label / priority) is active — mirrors app AllTasks behavior
+- [ ] 13.3.3 Render event rows using `WidgetEventRow`
+
+### 13.4 Calendar widget (new)
+- [ ] 13.4.1 `WidgetPrefs.kt` — add `getCalendarWidgetIds(appWidgetId)` / `setCalendarWidgetIds()` storing a comma-separated set of selected calendar IDs
+- [ ] 13.4.2 `CalendarWidget.kt` — new `GlanceAppWidget`; reads selected calendar IDs from prefs; collects events reactively; groups by date; renders with `DateHeader` + `WidgetEventRow`
+- [ ] 13.4.3 `CalendarWidgetReceiver` in same file; register in `AndroidManifest.xml` + `res/xml/calendar_widget_info.xml`
+- [ ] 13.4.4 `WidgetConfigActivity.kt` — add `WidgetType.CALENDAR`; config screen shows multiselect checkboxes (not radio buttons) from `calendarRepository.fetchCalendarsAndSave()` filtered to `isSelected`; saves selected IDs via `WidgetPrefs`
+- [ ] 13.4.5 `CompleteTaskAction.kt` `refreshAll()` — add `CalendarWidget().updateAll(context)`
+
+### 13.5 List widget — multiselect filters
+- [ ] 13.5.1 `WidgetPrefs.kt` — change single `filterFolder` / `filterLabel` / `filterPriority` to comma-separated sets; add migration (old single-value prefs still readable)
+- [ ] 13.5.2 `WidgetConfigActivity.kt` `TaskListFilterContent` — replace `SimpleDropdown` with checkbox-based multiselect for folder, label, priority; "Any" = deselected
+- [ ] 13.5.3 `TaskListWidget.kt` — update filter application to use `Set<String>` instead of single nullable value

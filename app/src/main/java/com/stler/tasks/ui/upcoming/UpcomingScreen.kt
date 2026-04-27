@@ -67,15 +67,17 @@ fun UpcomingScreen(
     onAddSubtask : (com.stler.tasks.domain.model.Task) -> Unit = {},
     viewModel    : UpcomingViewModel = hiltViewModel(),
 ) {
-    val allGroupedTasks by viewModel.allGroupedTasks.collectAsStateWithLifecycle()
-    val isLoading       by viewModel.isLoading.collectAsStateWithLifecycle()
-    val weekDays        by viewModel.weekDays.collectAsStateWithLifecycle()
-    val weekOffset      by viewModel.weekOffset.collectAsStateWithLifecycle()
-    val labels          by viewModel.labels.collectAsStateWithLifecycle()
-    val folders         by viewModel.folders.collectAsStateWithLifecycle()
-    val priorityFilter  by viewModel.priorityFilter.collectAsStateWithLifecycle()
-    val labelFilter     by viewModel.labelFilter.collectAsStateWithLifecycle()
-    val folderFilter    by viewModel.folderFilter.collectAsStateWithLifecycle()
+    val allGroupedTasks    by viewModel.allGroupedTasks.collectAsStateWithLifecycle()
+    val isLoading          by viewModel.isLoading.collectAsStateWithLifecycle()
+    val weekDays           by viewModel.weekDays.collectAsStateWithLifecycle()
+    val weekOffset         by viewModel.weekOffset.collectAsStateWithLifecycle()
+    val labels             by viewModel.labels.collectAsStateWithLifecycle()
+    val folders            by viewModel.folders.collectAsStateWithLifecycle()
+    val priorityFilter     by viewModel.priorityFilter.collectAsStateWithLifecycle()
+    val labelFilter        by viewModel.labelFilter.collectAsStateWithLifecycle()
+    val folderFilter       by viewModel.folderFilter.collectAsStateWithLifecycle()
+    val calendarFilter     by viewModel.calendarFilter.collectAsStateWithLifecycle()
+    val calendarsInEvents  by viewModel.calendarsInEvents.collectAsStateWithLifecycle()
 
     ErrorSnackbarEffect(viewModel)
 
@@ -218,9 +220,12 @@ fun UpcomingScreen(
             priorityFilter   = priorityFilter,
             labelFilter      = labelFilter,
             folderFilter     = folderFilter,
+            calendars        = calendarsInEvents,
+            calendarFilter   = calendarFilter,
             onTogglePriority = { viewModel.togglePriorityFilter(it) },
             onToggleLabel    = { viewModel.toggleLabelFilter(it) },
             onToggleFolder   = { viewModel.toggleFolderFilter(it) },
+            onToggleCalendar = { viewModel.toggleCalendarFilter(it) },
             onClearAll       = { viewModel.clearAllFilters() },
         )
 
