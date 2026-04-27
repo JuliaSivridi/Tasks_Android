@@ -88,7 +88,7 @@ class SyncWorker @AssistedInject constructor(
         if (selectedIds.isEmpty()) return
         runCatching {
             val from = LocalDate.now().minusDays(1)
-            val to   = LocalDate.now().plusDays(60)
+            val to   = LocalDate.now().plusDays(366)
             calendarRepository.fetchEventsAndSave(selectedIds, from, to)
             Log.i(TAG, "Calendar sync complete for ${selectedIds.size} calendar(s)")
         }.onFailure { e ->

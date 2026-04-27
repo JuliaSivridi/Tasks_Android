@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.stler.tasks.domain.model.CalendarEvent
 import com.stler.tasks.ui.task.deadlineColor
@@ -28,14 +29,17 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * A compact read-only row for a [CalendarEvent].
- * Matches the visual layout of TaskItem:
- *   - 40 dp expand placeholder (left)
- *   - 40 dp box with CalendarMonth icon (in "checkbox" position, tinted with calendar color)
- *   - Column: title / time + calendar name
+ * Read-only row for a [CalendarEvent] — mirrors the two-row structure of TaskItem:
  *
- * [showDate] = false in date-grouped lists (Upcoming, CalendarScreen) — hides date and
- * suppresses "All day" text (the section header already conveys the date).
+ *  Row 1 [padding start=0 end=4 top=4 bottom=2]:
+ *    [40dp expand placeholder] [6dp] [40dp CalendarMonth icon at 20dp] [8dp] [title bodyMedium]
+ *
+ *  Row 2 [padding start=54 end=8 bottom=4]:
+ *    [time text bodyMedium]  [14dp CalendarMonth icon]  [calendar name bodyMedium onSurfaceVariant]
+ *
+ * [showDate] = false in date-grouped lists (Upcoming, CalendarScreen): only the
+ * time portion is shown, and "All day" is suppressed (the section header carries the date).
+ * [showDate] = true in flat lists (AllTasks): shows "d MMM · HH:MM" or "Today" etc.
  */
 @Composable
 fun CalendarEventItem(
@@ -43,67 +47,92 @@ fun CalendarEventItem(
     showDate: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
-    val today = remember { LocalDate.now() }
+    val today     = remember { LocalDate.now() }
+    val timeLabel = formatEventTime(event, today, showDate)
+    val calColor  = event.calendarColor.toComposeColor()
 
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(start = 0.dp, end = 4.dp, top = 4.dp, bottom = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        // ── Expand placeholder — keeps left alignment identical to TaskItem ──
-        Box(modifier = Modifier.size(40.dp))
+    Column(modifier = modifier.fillMaxWidth()) {
 
-        Spacer(modifier = Modifier.width(6.dp))
-
-        // ── Calendar icon in the "checkbox" position ──────────────────────
-        Box(
-            modifier = Modifier.size(40.dp),
-            contentAlignment = Alignment.Center,
+        // ── Row 1: leading icon + title ────────────────────────────────────
+        Row(
+            modifier = Modifier.padding(
+                start  = 0.dp,
+                end    = 4.dp,
+                top    = 4.dp,
+                bottom = 2.dp,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                imageVector = Icons.Outlined.CalendarMonth,
-                contentDescription = null,
-                tint = event.calendarColor.toComposeColor(),
-                modifier = Modifier.size(18.dp),
-            )
-        }
+            // Expand/collapse placeholder — keeps left alignment identical to TaskItem
+            Box(modifier = Modifier.size(40.dp))
 
-        Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
-        // ── Content ───────────────────────────────────────────────────────
-        Column(modifier = Modifier.weight(1f)) {
-            // Line 1 — title
-            Text(
-                text = event.title,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 2,
-            )
-
-            // Line 2 — time + calendar name
-            val timeLabel = formatEventTime(event, today, showDate)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            // CalendarMonth icon in the "checkbox" position.
+            // Touch-target Box is 40 dp (same as TaskCheckbox), icon visual is 20 dp
+            // (one step larger than the 18 dp checkbox canvas so it reads at the same weight).
+            Box(
+                modifier = Modifier.size(40.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                if (timeLabel.isNotBlank()) {
-                    Text(
-                        text = timeLabel,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = deadlineColor(deadlineStatus(event.startDate)),
-                    )
-                }
                 Icon(
                     imageVector = Icons.Outlined.CalendarMonth,
                     contentDescription = null,
-                    tint = event.calendarColor.toComposeColor(),
-                    modifier = Modifier.size(12.dp),
+                    tint = calColor,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Text(
+                text     = event.title,
+                modifier = Modifier.weight(1f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style    = MaterialTheme.typography.bodyMedium,
+            )
+
+            Spacer(modifier = Modifier.width(4.dp))
+        }
+
+        // ── Row 2: time + calendar name ────────────────────────────────────
+        // Always rendered (at minimum shows the calendar name).
+        // start = 54 dp = expand(40) + spacer(6) + 8 — same formula as TaskItem's
+        // metadata row at depth = 0.
+        Row(
+            modifier = Modifier.padding(
+                start  = 54.dp,
+                end    = 8.dp,
+                bottom = 4.dp,
+            ),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment     = Alignment.CenterVertically,
+        ) {
+            if (timeLabel.isNotBlank()) {
+                Text(
+                    text  = timeLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = deadlineColor(deadlineStatus(event.startDate)),
+                )
+            }
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment     = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.CalendarMonth,
+                    contentDescription = null,
+                    tint     = calColor,
+                    modifier = Modifier.size(14.dp),
                 )
                 Text(
-                    text = event.calendarName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text     = event.calendarName,
+                    style    = MaterialTheme.typography.bodyMedium,
+                    color    = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -113,13 +142,13 @@ fun CalendarEventItem(
 /**
  * Formats the event date/time for display.
  *
- * [showDate] = false (grouped-by-date list, e.g. Upcoming / CalendarScreen):
- *   - Timed events → "HH:MM"
- *   - All-day events → "" (the day header already conveys the date)
+ * [showDate] = false (grouped-by-date, e.g. Upcoming / CalendarScreen):
+ *   - All-day → "" (section header already conveys the date)
+ *   - Timed   → "HH:MM"
  *
  * [showDate] = true (flat list, e.g. AllTasks):
- *   - Timed events → "d MMM · HH:MM"
- *   - All-day events → "d MMM" / "Today" / "Tomorrow"
+ *   - All-day → "Today" / "Tomorrow" / "d MMM"
+ *   - Timed   → "d MMM · HH:MM"
  */
 private fun formatEventTime(event: CalendarEvent, today: LocalDate, showDate: Boolean): String {
     return if (event.isAllDay) {

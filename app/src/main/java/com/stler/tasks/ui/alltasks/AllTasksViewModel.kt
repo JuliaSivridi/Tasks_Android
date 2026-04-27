@@ -32,7 +32,7 @@ class AllTasksViewModel @Inject constructor(
 ) : BaseViewModel() {
 
     private val from: LocalDate = LocalDate.now()
-    private val to:   LocalDate = LocalDate.now().plusDays(60)
+    private val to:   LocalDate = LocalDate.now().plusDays(366)
 
     val tasks: StateFlow<List<Task>> = repository.observeAllPendingTasks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

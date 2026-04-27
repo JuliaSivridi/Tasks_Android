@@ -22,7 +22,7 @@ class CalendarViewModel @Inject constructor(
     private val calendarId: String = savedStateHandle.get<String>("calendarId") ?: ""
 
     private val from: LocalDate = LocalDate.now()
-    private val to:   LocalDate = LocalDate.now().plusDays(60)
+    private val to:   LocalDate = LocalDate.now().plusDays(366)
 
     val groupedEvents: StateFlow<Map<LocalDate, List<CalendarEvent>>> =
         calendarRepository.getEventsForCalendars(setOf(calendarId), from, to)

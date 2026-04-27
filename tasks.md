@@ -319,3 +319,5 @@ _Spec: `docs/architecture-cal-spec.md`_
 - [x] 12.7.4 Upcoming — "All day" text suppressed in grouped-by-date view (date header is sufficient)
 - [x] 12.7.5 `MainViewModel` — reactive sidebar: `collect` on selectedCalendarIds instead of one-shot `first`; re-fetches calendar metadata when new IDs are added while app is running
 - [x] 12.7.6 `Screen.calendarRoute()` — URL-encode calendar ID via `Uri.encode()` so IDs with `#` / `@` (holiday calendars) route correctly to CalendarScreen
+- [x] 12.7.7 `CalendarEventItem` — restructure to match TaskItem exactly: Column > Row1 + Row2; icon 20 dp in 40 dp box; meta row `start=54 dp`, `bodyMedium`, icon 14 dp; no new hardcoded sizes
+- [x] 12.7.8 Calendar event fetch depth: `plusDays(60)` → `plusDays(366)` in all ViewModels and SyncWorker

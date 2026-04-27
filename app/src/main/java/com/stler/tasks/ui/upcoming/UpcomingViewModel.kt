@@ -34,7 +34,7 @@ class UpcomingViewModel @Inject constructor(
 ) : BaseViewModel() {
 
     private val from: LocalDate = LocalDate.now()
-    private val to:   LocalDate = LocalDate.now().plusDays(60)
+    private val to:   LocalDate = LocalDate.now().plusDays(366)
 
     private val tasksWithDeadline: StateFlow<List<Task>> =
         repository.observeAllPendingTasksWithDeadline()
