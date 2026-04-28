@@ -29,6 +29,24 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import java.time.LocalDate
 
+/** Unified row type for the TaskList widget's combined task + event list. */
+private sealed class TaskListRow {
+    data class TaskRow(
+        val task          : Task,
+        val labelItems    : List<Pair<String, String>>,
+        val folderName    : String,
+        val folderHexColor: String,
+    ) : TaskListRow()
+    data class EventRow(val event: CalendarEvent) : TaskListRow()
+}
+
+private data class TaskListSortable(
+    val date   : LocalDate,
+    val hasTime: Boolean,
+    val time   : String,
+    val row    : TaskListRow,
+)
+
 class TaskListWidget : GlanceAppWidget() {
 
     override val stateDefinition = PreferencesGlanceStateDefinition
@@ -103,37 +121,20 @@ class TaskListWidget : GlanceAppWidget() {
             // ── Unified sorted list: tasks + events ───────────────────────────
             // Tasks are interleaved with events by date order.
             // Undated tasks (no deadlineDate) sort to the very end via LocalDate.MAX.
-            sealed class Row {
-                data class TaskRow(
-                    val task          : Task,
-                    val labelItems    : List<Pair<String, String>>,
-                    val folderName    : String,
-                    val folderHexColor: String,
-                ) : Row()
-                data class EventRow(val event: CalendarEvent) : Row()
-            }
-
-            data class Sortable(
-                val date   : LocalDate,
-                val hasTime: Boolean,
-                val time   : String,
-                val row    : Row,
-            )
-
             val cutoff  = LocalDate.now().plusDays(6)   // 7-day window for events
             val maxDate = LocalDate.MAX
 
-            val sortable: List<Sortable> = buildList {
+            val sortable: List<TaskListSortable> = buildList {
                 // Tasks: dated ones carry their deadline date; undated carry MAX
                 tasks.forEach { task ->
                     val folder = allFolders.find { it.id == task.folderId }
                     val date   = task.deadlineDate.takeIf { it.isNotBlank() }
                         ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-                    add(Sortable(
+                    add(TaskListSortable(
                         date    = date ?: maxDate,
                         hasTime = date != null && task.deadlineTime.isNotBlank(),
                         time    = if (date != null) task.deadlineTime else "",
-                        row     = Row.TaskRow(
+                        row     = TaskListRow.TaskRow(
                             task           = task,
                             labelItems     = task.labels.mapNotNull { lid ->
                                 allLabels.find { it.id == lid }?.let { lbl -> lbl.name to lbl.color }
@@ -148,17 +149,17 @@ class TaskListWidget : GlanceAppWidget() {
                     val date = runCatching { LocalDate.parse(event.startDate) }.getOrNull()
                         ?: return@forEach
                     if (date > cutoff) return@forEach
-                    add(Sortable(
+                    add(TaskListSortable(
                         date    = date,
                         hasTime = event.startTime.isNotBlank(),
                         time    = event.startTime,
-                        row     = Row.EventRow(event),
+                        row     = TaskListRow.EventRow(event),
                     ))
                 }
             }
 
             // Primary sort: date. Secondary: timed items (0) before all-day (1). Tertiary: time.
-            val rows: List<Row> = sortable
+            val rows: List<TaskListRow> = sortable
                 .sortedWith(compareBy({ it.date }, { if (it.hasTime) 0 else 1 }, { it.time }))
                 .map { it.row }
 
@@ -173,12 +174,12 @@ class TaskListWidget : GlanceAppWidget() {
                     LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
                         items(rows.take(20), itemId = { row ->
                             when (row) {
-                                is Row.TaskRow  -> "t_${row.task.id}".hashCode().toLong()
-                                is Row.EventRow -> "e_${row.event.id}".hashCode().toLong()
+                                is TaskListRow.TaskRow  -> "t_${row.task.id}".hashCode().toLong()
+                                is TaskListRow.EventRow -> "e_${row.event.id}".hashCode().toLong()
                             }
                         }) { row ->
                             when (row) {
-                                is Row.TaskRow  -> WidgetTaskRow(
+                                is TaskListRow.TaskRow  -> WidgetTaskRow(
                                     task              = row.task,
                                     labelItems        = row.labelItems,
                                     folderName        = row.folderName,
@@ -186,7 +187,7 @@ class TaskListWidget : GlanceAppWidget() {
                                     showExpandSpace   = false,
                                     pendingCompleteId = pendingCompleteId,
                                 )
-                                is Row.EventRow -> WidgetEventRow(
+                                is TaskListRow.EventRow -> WidgetEventRow(
                                     event           = row.event,
                                     showExpandSpace = false,
                                     timeOnly        = false,
