@@ -18,41 +18,57 @@ import androidx.glance.currentState
 import androidx.glance.layout.Column
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.state.PreferencesGlanceStateDefinition
+import com.stler.tasks.domain.model.CalendarEvent
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.Task
 import dagger.hilt.android.EntryPointAccessors
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import java.time.LocalDate
 
 class TaskListWidget : GlanceAppWidget() {
 
     override val stateDefinition = PreferencesGlanceStateDefinition
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val appWidgetId    = GlanceAppWidgetManager(context).getAppWidgetId(id)
         val filterFolder   = WidgetPrefs.getFilterFolder(context, appWidgetId)
         val filterLabel    = WidgetPrefs.getFilterLabel(context, appWidgetId)
         val filterPriority = WidgetPrefs.getFilterPriority(context, appWidgetId)
 
-        val repo = EntryPointAccessors
-            .fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
-            .taskRepository()
+        val ep   = EntryPointAccessors.fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
+        val repo = ep.taskRepository()
+        val calendarRepo = ep.calendarRepository()
 
         // ── Obtain flows once — collected reactively inside provideContent ────
         val tasksFlow  : Flow<List<Task>>   = repo.observeAllPendingTasks()
         val labelsFlow : Flow<List<Label>>  = repo.observeLabels()
         val foldersFlow: Flow<List<Folder>> = repo.observeFolders()
 
-        // Build a compact filter summary: "@Folder #Label !1/!2/!3"
-        // (Filter prefs are widget-config-time constants, so they don't need to be reactive)
-        val titleParts = buildList<String> {
-            // folder/label names resolved lazily below, inside provideContent
-        }
+        // Events are suppressed entirely when any task filter is active,
+        // mirroring the AllTasks screen behavior in the app.
+        val anyFilterActive = filterFolder != null || filterLabel != null || filterPriority != null
+        val from = LocalDate.now().minusDays(1)
+        val to   = LocalDate.now().plusDays(7)
+        val eventsFlow: Flow<List<CalendarEvent>> =
+            if (anyFilterActive) {
+                flowOf(emptyList())
+            } else {
+                calendarRepo.getSelectedCalendarIds().flatMapLatest { ids ->
+                    if (ids.isEmpty()) flowOf(emptyList())
+                    else calendarRepo.getEventsForCalendars(ids, from, to)
+                }
+            }
 
         provideContent {
             val allTasks   by tasksFlow.collectAsState(initial = emptyList())
             val allLabels  by labelsFlow.collectAsState(initial = emptyList())
             val allFolders by foldersFlow.collectAsState(initial = emptyList())
+            val allEvents  by eventsFlow.collectAsState(initial = emptyList())
 
             val prefs             = currentState<Preferences>()
             val rawPendingId      = prefs[pendingCompleteKey]
@@ -60,6 +76,7 @@ class TaskListWidget : GlanceAppWidget() {
             val pendingCompleteId = rawPendingId
                 ?.takeIf { System.currentTimeMillis() - pendingTs < 4_000L }
 
+            // Apply task filters
             val tasks = allTasks
                 .let { list -> if (filterFolder   != null) list.filter { it.folderId == filterFolder } else list }
                 .let { list -> if (filterLabel    != null) list.filter { filterLabel in it.labels }    else list }
@@ -83,25 +100,69 @@ class TaskListWidget : GlanceAppWidget() {
                 }
             }.joinToString(" ").ifEmpty { "Tasks" }
 
-            data class Row(
-                val task          : Task,
-                val labelItems    : List<Pair<String, String>>,
-                val folderName    : String,
-                val folderHexColor: String,
-            )
-
-            val rows = tasks.map { task ->
-                val folder = allFolders.find { it.id == task.folderId }
-                Row(
-                    task           = task,
-                    labelItems     = task.labels.mapNotNull { lid ->
-                        allLabels.find { it.id == lid }?.let { lbl -> lbl.name to lbl.color }
-                    },
-                    folderName     = if (filterFolder != null) "" else (folder?.name ?: "Inbox"),
-                    folderHexColor = if (filterFolder != null) "" else (folder?.color ?: ""),
-                )
+            // ── Unified sorted list: tasks + events ───────────────────────────
+            // Tasks are interleaved with events by date order.
+            // Undated tasks (no deadlineDate) sort to the very end via LocalDate.MAX.
+            sealed class Row {
+                data class TaskRow(
+                    val task          : Task,
+                    val labelItems    : List<Pair<String, String>>,
+                    val folderName    : String,
+                    val folderHexColor: String,
+                ) : Row()
+                data class EventRow(val event: CalendarEvent) : Row()
             }
 
+            data class Sortable(
+                val date   : LocalDate,
+                val hasTime: Boolean,
+                val time   : String,
+                val row    : Row,
+            )
+
+            val cutoff  = LocalDate.now().plusDays(6)   // 7-day window for events
+            val maxDate = LocalDate.MAX
+
+            val sortable: List<Sortable> = buildList {
+                // Tasks: dated ones carry their deadline date; undated carry MAX
+                tasks.forEach { task ->
+                    val folder = allFolders.find { it.id == task.folderId }
+                    val date   = task.deadlineDate.takeIf { it.isNotBlank() }
+                        ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                    add(Sortable(
+                        date    = date ?: maxDate,
+                        hasTime = date != null && task.deadlineTime.isNotBlank(),
+                        time    = if (date != null) task.deadlineTime else "",
+                        row     = Row.TaskRow(
+                            task           = task,
+                            labelItems     = task.labels.mapNotNull { lid ->
+                                allLabels.find { it.id == lid }?.let { lbl -> lbl.name to lbl.color }
+                            },
+                            folderName     = if (filterFolder != null) "" else (folder?.name ?: "Inbox"),
+                            folderHexColor = if (filterFolder != null) "" else (folder?.color ?: ""),
+                        ),
+                    ))
+                }
+                // Events: always have a date; skip those beyond the 7-day window
+                allEvents.forEach { event ->
+                    val date = runCatching { LocalDate.parse(event.startDate) }.getOrNull()
+                        ?: return@forEach
+                    if (date > cutoff) return@forEach
+                    add(Sortable(
+                        date    = date,
+                        hasTime = event.startTime.isNotBlank(),
+                        time    = event.startTime,
+                        row     = Row.EventRow(event),
+                    ))
+                }
+            }
+
+            // Primary sort: date. Secondary: timed items (0) before all-day (1). Tertiary: time.
+            val rows: List<Row> = sortable
+                .sortedWith(compareBy({ it.date }, { if (it.hasTime) 0 else 1 }, { it.time }))
+                .map { it.row }
+
+            // ── Render ────────────────────────────────────────────────────────
             GlanceTheme {
                 Column(
                     modifier = GlanceModifier
@@ -110,15 +171,27 @@ class TaskListWidget : GlanceAppWidget() {
                 ) {
                     WidgetHeader(title = title, screenUri = "stlertasks://all_tasks")
                     LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                        items(rows.take(20), itemId = { it.task.id.hashCode().toLong() }) { row ->
-                            WidgetTaskRow(
-                                task              = row.task,
-                                labelItems        = row.labelItems,
-                                folderName        = row.folderName,
-                                folderHexColor    = row.folderHexColor,
-                                showExpandSpace   = false,
-                                pendingCompleteId = pendingCompleteId,
-                            )
+                        items(rows.take(20), itemId = { row ->
+                            when (row) {
+                                is Row.TaskRow  -> "t_${row.task.id}".hashCode().toLong()
+                                is Row.EventRow -> "e_${row.event.id}".hashCode().toLong()
+                            }
+                        }) { row ->
+                            when (row) {
+                                is Row.TaskRow  -> WidgetTaskRow(
+                                    task              = row.task,
+                                    labelItems        = row.labelItems,
+                                    folderName        = row.folderName,
+                                    folderHexColor    = row.folderHexColor,
+                                    showExpandSpace   = false,
+                                    pendingCompleteId = pendingCompleteId,
+                                )
+                                is Row.EventRow -> WidgetEventRow(
+                                    event           = row.event,
+                                    showExpandSpace = false,
+                                    timeOnly        = false,
+                                )
+                            }
                         }
                     }
                 }

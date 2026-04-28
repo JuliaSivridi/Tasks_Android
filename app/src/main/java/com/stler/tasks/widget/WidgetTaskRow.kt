@@ -130,16 +130,15 @@ fun WidgetTaskRow(
 
             Spacer(GlanceModifier.width(6.dp))
 
-            // ── Checkbox — 32dp touch target, 22dp visual ─────────────────────
-            // Both states use the task's priority color (urgent=red, important=orange,
-            // normal=gray) matching the app's TaskCheckbox.
-            //
-            // Unchecked: ic_check_box_outline_blank outline icon tinted with priority color.
-            // Pending-complete: priority-colored filled box with white (WCheckmark) checkmark —
-            //   white is always visible on top of any of the three priority shades.
+            // ── Checkbox — 36dp touch target ──────────────────────────────────
+            // Sizes tuned to match the app's TaskCheckbox visual weight (18dp canvas):
+            //   Unchecked: 26dp icon — the outline square occupies ~75% of the icon
+            //              viewport (18/24 ratio), giving ≈19.5dp visible stroke square.
+            //   Checked:   24dp filled box — appears similar in weight to the outline.
+            // Both states use the task's priority color (urgent=red, important=orange, normal=gray).
             Box(
                 modifier = GlanceModifier
-                    .size(32.dp)
+                    .size(36.dp)
                     .clickable(
                         actionRunCallback<CompleteTaskAction>(
                             actionParametersOf(taskIdKey to task.id)
@@ -151,7 +150,7 @@ fun WidgetTaskRow(
                     // Filled priority-colored box with white checkmark inside
                     Box(
                         modifier = GlanceModifier
-                            .size(22.dp)
+                            .size(24.dp)
                             .cornerRadius(3.dp)
                             .background(priorityColor),
                         contentAlignment = Alignment.Center,
@@ -159,16 +158,16 @@ fun WidgetTaskRow(
                         Image(
                             provider           = ImageProvider(R.drawable.ic_check_mark),
                             contentDescription = "Completing…",
-                            modifier           = GlanceModifier.size(15.dp),
+                            modifier           = GlanceModifier.size(16.dp),
                             colorFilter        = ColorFilter.tint(WCheckmark),
                         )
                     }
                 } else {
-                    // Outline square tinted with priority color
+                    // Outline square icon tinted with priority color
                     Image(
                         provider           = ImageProvider(R.drawable.ic_check_box_outline_blank),
                         contentDescription = "Mark complete",
-                        modifier           = GlanceModifier.size(22.dp),
+                        modifier           = GlanceModifier.size(26.dp),
                         colorFilter        = ColorFilter.tint(priorityColor),
                     )
                 }

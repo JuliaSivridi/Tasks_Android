@@ -129,7 +129,7 @@ fun WidgetEventRow(
                         hasContent = true
                     }
 
-                    val calSep = if (hasContent) " · " else ""
+                    val calSep = if (hasContent) "  " else ""
                     Text(
                         text  = "$calSep${event.calendarName}",
                         style = TextStyle(color = WOnSurfaceVariant, fontSize = 14.sp),

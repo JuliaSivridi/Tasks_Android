@@ -349,9 +349,9 @@ _Branch: `feature/widget-calendar`. Base: `main` after Stage 12 merge._
 - [x] 13.2.5 Render `UpcomingRow.Event` → `WidgetEventRow(timeOnly=true)` in the `LazyColumn`
 
 ### 13.3 Calendar events on List (TaskList) widget
-- [ ] 13.3.1 `TaskListWidget.kt` — collect calendar events (same as 13.2.2); merge with tasks; sort by date+time (dated tasks + events interleaved, undated tasks last)
-- [ ] 13.3.2 Hide events when any task filter (folder / label / priority) is active — mirrors app AllTasks behavior
-- [ ] 13.3.3 Render event rows using `WidgetEventRow`
+- [x] 13.3.1 `TaskListWidget.kt` — collect calendar events (same as 13.2.2); merge with tasks; sort by date+time (dated tasks + events interleaved, undated tasks last)
+- [x] 13.3.2 Hide events when any task filter (folder / label / priority) is active — mirrors app AllTasks behavior
+- [x] 13.3.3 Render event rows using `WidgetEventRow`
 
 ### 13.4 Calendar widget (new)
 - [ ] 13.4.1 `WidgetPrefs.kt` — add `getCalendarWidgetIds(appWidgetId)` / `setCalendarWidgetIds()` storing a comma-separated set of selected calendar IDs
