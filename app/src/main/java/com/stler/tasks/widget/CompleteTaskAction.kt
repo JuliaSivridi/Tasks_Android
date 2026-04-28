@@ -13,6 +13,7 @@ import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 val taskIdKey    = ActionParameters.Key<String>("taskId")
@@ -65,15 +66,28 @@ class CompleteTaskAction : ActionCallback {
                 it[pendingCompleteTimestamp] = System.currentTimeMillis()
             }
         }
-        refreshAll(context)   // re-render: checkmark now visible
+        refreshAll(context)   // for MIUI / non-running sessions
+
+        // Let the checkmark be visible for a moment before Room removes the task.
+        delay(300)
 
         // ── Step 2: commit to Room ───────────────────────────────────────────
-        // Room's flow emission will re-render the widget (task disappears or
-        // deadline advances for recurring tasks).  The 10-second timestamp window
-        // ensures the checkmark auto-clears even if the Room flow fires late.
         withContext(Dispatchers.IO) { repo(context).completeTask(taskId) }
 
-        refreshAll(context)   // MIUI safety: explicit refresh after Room commit
+        // ── Step 3: clear pending state ──────────────────────────────────────
+        // updateAppWidgetState writes to DataStore; a *running* Glance session
+        // immediately recomposes on that change (DataStore-driven path, not WorkManager),
+        // so recurring tasks with an advanced deadline stop showing a stale checkmark
+        // before the next WorkManager worker starts.
+        // The 4-second timestamp in widget provideContent is a safety net for the
+        // WorkManager path (non-running / MIUI background sessions).
+        updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
+            prefs.toMutablePreferences().also {
+                it.remove(pendingCompleteKey)
+                it.remove(pendingCompleteTimestamp)
+            }
+        }
+        refreshAll(context)   // MIUI safety: force refresh so cleared state reaches all widgets
     }
 }
 

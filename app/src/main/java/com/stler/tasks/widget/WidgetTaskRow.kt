@@ -41,24 +41,20 @@ import com.stler.tasks.ui.task.deadlineStatus
  * Widget task row — mirrors the app's TaskItem layout (without action buttons):
  *
  *   [chevron?] [checkbox] Title
- *                         deadline · #label1 · folder
- *                         ✓N ○N ≡N   (subtask counters, FolderWidget only)
+ *                         deadline  #label1  folder  ✓N ○N ≡N
  *
- * Checkbox:
- *   - Unchecked: [ic_check_box_outline_blank] tinted with priority color — a clean outline square.
- *   - Pending-complete: priority-colored filled box with white checkmark — immediate visual feedback
- *     between the tap and the next widget refresh (driven by [pendingCompleteId]).
+ * Checkbox — neutral (no priority color), theme-aware:
+ *   Unchecked: ic_check_box_outline_blank tinted with WOnSurface (near-black in light,
+ *              near-white in dark) — matches the app's stroke-only rounded rectangle.
+ *   Checked/pending: WOnSurface box with WCheckmark (= widget_surface = white in light,
+ *              dark in dark) checkmark — always high-contrast in both themes.
  *
  * Tapping the checkbox area marks the task complete.
  * Tapping the text column opens the task for editing.
  *
  * @param labelItems        List of (labelName, hexColor) pairs for the meta row
- * @param folderHexColor    Hex color string for the folder name; blank = default color
- * @param pendingChildCount Number of pending (non-completed) child tasks
- * @param completedChildCount Number of completed child tasks
- * @param totalChildCount   Total child count (pending + completed); shown when > 0
- * @param pendingCompleteId If equal to [task].id the checkbox renders as checked (visual-only,
- *                          before Room confirms). Expires after a short timestamp window.
+ * @param pendingChildCount Remaining (non-completed) child tasks; shown in meta row when > 0
+ * @param totalChildCount   total child task count; shown when > 0
  */
 @Composable
 fun WidgetTaskRow(
@@ -78,11 +74,6 @@ fun WidgetTaskRow(
     pendingCompleteId  : String? = null,
 ) {
     val showCheckmark = (task.id == pendingCompleteId)
-    val priorityColor = when (task.priority) {
-        Priority.URGENT    -> WPriorityUrgent
-        Priority.IMPORTANT -> WPriorityImportant
-        Priority.NORMAL    -> WPriorityNormal
-    }
 
     val dlStatus = deadlineStatus(task.deadlineDate)
     val dlLabel  = deadlineLabel(task.deadlineDate, task.deadlineTime, includeDate = !timeOnly)
@@ -94,11 +85,8 @@ fun WidgetTaskRow(
         else                     -> WOnSurfaceVariant
     }
 
-    // Row 2 (meta): deadline, recurring indicator, labels, folder
-    val hasMetaRow = dlLabel != null || labelItems.isNotEmpty()
-        || folderName.isNotBlank() || task.isRecurring
-    // Row 3 (counters): child task stats — always on its own row so it always fits and aligns
-    val hasCounterRow = totalChildCount > 0
+    val hasRow2 = dlLabel != null || labelItems.isNotEmpty() || folderName.isNotBlank()
+        || task.isRecurring || totalChildCount > 0
 
     Column(modifier = GlanceModifier.fillMaxWidth()) {
         Row(
@@ -138,9 +126,15 @@ fun WidgetTaskRow(
 
             Spacer(GlanceModifier.width(6.dp))
 
-            // ── Checkbox — 32dp touch target, 20dp visual ─────────────────────
-            // Unchecked: ic_check_box_outline_blank tinted with priority color.
-            // Pending-complete: priority-colored filled box with white checkmark icon.
+            // ── Checkbox — 32dp touch target, 22dp visual ─────────────────────
+            // Neutral color (WOnSurface) in both states — no priority color coding on
+            // the widget checkbox so the checkmark/outline is always clearly visible in
+            // both light and dark themes without depending on individual priority shades.
+            //
+            // Unchecked: ic_check_box_outline_blank outline icon.
+            // Pending-complete: WOnSurface filled box with WCheckmark (= widget_surface)
+            //   checkmark — contrast guaranteed because surface and onSurface are always
+            //   complementary (white/near-black pair).
             Box(
                 modifier = GlanceModifier
                     .size(32.dp)
@@ -152,35 +146,33 @@ fun WidgetTaskRow(
                 contentAlignment = Alignment.Center,
             ) {
                 if (showCheckmark) {
-                    // Filled: priority-colored box with white checkmark
                     Box(
                         modifier = GlanceModifier
-                            .size(20.dp)
+                            .size(22.dp)
                             .cornerRadius(3.dp)
-                            .background(priorityColor),
+                            .background(WOnSurface),
                         contentAlignment = Alignment.Center,
                     ) {
                         Image(
                             provider           = ImageProvider(R.drawable.ic_check_mark),
                             contentDescription = "Completing…",
-                            modifier           = GlanceModifier.size(14.dp),
+                            modifier           = GlanceModifier.size(15.dp),
                             colorFilter        = ColorFilter.tint(WCheckmark),
                         )
                     }
                 } else {
-                    // Outline: clean square icon tinted with priority color
                     Image(
                         provider           = ImageProvider(R.drawable.ic_check_box_outline_blank),
                         contentDescription = "Mark complete",
-                        modifier           = GlanceModifier.size(20.dp),
-                        colorFilter        = ColorFilter.tint(priorityColor),
+                        modifier           = GlanceModifier.size(22.dp),
+                        colorFilter        = ColorFilter.tint(WOnSurface),
                     )
                 }
             }
 
             Spacer(GlanceModifier.width(8.dp))
 
-            // ── Title + meta row + counter row ────────────────────────────────
+            // ── Title + meta row ──────────────────────────────────────────────
             Column(
                 modifier = GlanceModifier
                     .defaultWeight()
@@ -207,31 +199,31 @@ fun WidgetTaskRow(
                     ),
                 )
 
-                // Row 2: ↻ deadline · #label(s) · folder
-                if (hasMetaRow) {
+                // Row 2: ↻ deadline  #label(s)  folder  ✓N ○N ≡N
+                // Items separated by double-space (matching app's style — no dot separators).
+                // verticalAlignment = CenterVertically so the small counter icons (11dp) sit
+                // at mid-text rather than at the top of the row.
+                // Counter children: 6 total (Image+Text × 3, padding instead of Spacer)
+                // to stay within Glance/RemoteViews child count limits in LazyColumn items.
+                if (hasRow2) {
                     Row(
                         modifier          = GlanceModifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         var hasContent = false
 
-                        // Recurring indicator — shares a logical slot with deadline
+                        // ↻ — tight grouping with deadline, no separator between them
                         if (task.isRecurring) {
                             Text(
                                 text  = "↻",
                                 style = TextStyle(color = WOnSurfaceVariant, fontSize = 14.sp),
                             )
-                            // hasContent stays false: deadline follows without " · "
                             if (dlLabel == null) hasContent = true
                         }
 
-                        // Deadline — space after ↻ (if recurring), separator otherwise
+                        // Deadline
                         if (dlLabel != null) {
-                            val sep = when {
-                                task.isRecurring -> " "     // "↻ HH:MM"
-                                hasContent       -> " · "
-                                else             -> ""
-                            }
+                            val sep = if (task.isRecurring) " " else if (hasContent) "  " else ""
                             Text(
                                 text  = "$sep$dlLabel",
                                 style = TextStyle(color = dlColor, fontSize = 14.sp),
@@ -241,11 +233,7 @@ fun WidgetTaskRow(
 
                         // Labels
                         labelItems.forEachIndexed { i, (name, hexColor) ->
-                            val prefix = when {
-                                i == 0 && hasContent -> " · #"
-                                i == 0               -> "#"
-                                else                 -> ", #"
-                            }
+                            val prefix = if (i == 0 && hasContent) "  #" else if (i == 0) "#" else "  #"
                             val lColor = hexToColorProvider(hexColor) ?: WOnSurfaceVariant
                             Text(
                                 text  = "$prefix$name",
@@ -256,58 +244,54 @@ fun WidgetTaskRow(
 
                         // Folder
                         if (folderName.isNotBlank()) {
-                            val sep    = if (hasContent) " · " else ""
+                            val sep    = if (hasContent) "  " else ""
                             val fColor = hexToColorProvider(folderHexColor) ?: WOnSurfaceVariant
                             Text(
                                 text  = "$sep$folderName",
                                 style = TextStyle(color = fColor, fontSize = 14.sp),
                             )
+                            hasContent = true
                         }
-                    }
-                }
 
-                // Row 3: child task counters — separate row so icons always align and always fit
-                // Shows: ✓completed  ○pending  ≡total
-                if (hasCounterRow) {
-                    Row(
-                        modifier          = GlanceModifier.fillMaxWidth().padding(top = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Image(
-                            provider           = ImageProvider(R.drawable.ic_check_mark),
-                            contentDescription = null,
-                            modifier           = GlanceModifier.size(11.dp),
-                            colorFilter        = ColorFilter.tint(WOnSurfaceVariant),
-                        )
-                        Spacer(GlanceModifier.width(2.dp))
-                        Text(
-                            text  = "$completedChildCount",
-                            style = TextStyle(color = WOnSurfaceVariant, fontSize = 12.sp),
-                        )
-                        Spacer(GlanceModifier.width(5.dp))
-                        Image(
-                            provider           = ImageProvider(R.drawable.ic_radio_button_unchecked),
-                            contentDescription = null,
-                            modifier           = GlanceModifier.size(11.dp),
-                            colorFilter        = ColorFilter.tint(WOnSurfaceVariant),
-                        )
-                        Spacer(GlanceModifier.width(2.dp))
-                        Text(
-                            text  = "$pendingChildCount",
-                            style = TextStyle(color = WOnSurfaceVariant, fontSize = 12.sp),
-                        )
-                        Spacer(GlanceModifier.width(5.dp))
-                        Image(
-                            provider           = ImageProvider(R.drawable.ic_format_list_bulleted),
-                            contentDescription = null,
-                            modifier           = GlanceModifier.size(11.dp),
-                            colorFilter        = ColorFilter.tint(WOnSurfaceVariant),
-                        )
-                        Spacer(GlanceModifier.width(2.dp))
-                        Text(
-                            text  = "$totalChildCount",
-                            style = TextStyle(color = WOnSurfaceVariant, fontSize = 12.sp),
-                        )
+                        // Child task counters: ✓completed  ○pending  ≡total
+                        // 6 children (Image+Text × 3) with padding instead of Spacer children
+                        // to keep the total row child count low and avoid Glance clipping.
+                        if (totalChildCount > 0) {
+                            Image(
+                                provider           = ImageProvider(R.drawable.ic_check_mark),
+                                contentDescription = null,
+                                modifier           = GlanceModifier.size(11.dp)
+                                    .padding(start = if (hasContent) 6.dp else 0.dp),
+                                colorFilter        = ColorFilter.tint(WOnSurfaceVariant),
+                            )
+                            Text(
+                                text     = "$completedChildCount",
+                                modifier = GlanceModifier.padding(start = 2.dp, end = 5.dp),
+                                style    = TextStyle(color = WOnSurfaceVariant, fontSize = 12.sp),
+                            )
+                            Image(
+                                provider           = ImageProvider(R.drawable.ic_radio_button_unchecked),
+                                contentDescription = null,
+                                modifier           = GlanceModifier.size(11.dp),
+                                colorFilter        = ColorFilter.tint(WOnSurfaceVariant),
+                            )
+                            Text(
+                                text     = "$pendingChildCount",
+                                modifier = GlanceModifier.padding(start = 2.dp, end = 5.dp),
+                                style    = TextStyle(color = WOnSurfaceVariant, fontSize = 12.sp),
+                            )
+                            Image(
+                                provider           = ImageProvider(R.drawable.ic_format_list_bulleted),
+                                contentDescription = null,
+                                modifier           = GlanceModifier.size(11.dp),
+                                colorFilter        = ColorFilter.tint(WOnSurfaceVariant),
+                            )
+                            Text(
+                                text     = "$totalChildCount",
+                                modifier = GlanceModifier.padding(start = 2.dp),
+                                style    = TextStyle(color = WOnSurfaceVariant, fontSize = 12.sp),
+                            )
+                        }
                     }
                 }
             }
