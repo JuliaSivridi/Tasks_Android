@@ -1,5 +1,6 @@
 package com.stler.tasks.widget
 
+import androidx.compose.ui.graphics.Color
 import androidx.glance.unit.ColorProvider
 import com.stler.tasks.R
 
@@ -31,13 +32,8 @@ internal val WDeadlineToday     = ColorProvider(R.color.widget_deadline_today)
 internal val WDeadlineTomorrow  = ColorProvider(R.color.widget_deadline_tomorrow)
 internal val WDeadlineThisWeek  = ColorProvider(R.color.widget_deadline_this_week)
 
-/**
- * Checkmark fill for the completed/pending-complete checkbox.
- * Uses the widget surface color so it always contrasts the [WOnSurface] box background:
- *  - light theme: white (#FFFFFF) checkmark on near-black (#18181F) box → visible
- *  - dark theme: dark (#1C1C1C) checkmark on near-white (#F2F2F2) box → visible
- */
-internal val WCheckmark = ColorProvider(R.color.widget_surface)
+/** White checkmark drawn inside the priority-colored filled box when a task is pending-complete. */
+internal val WCheckmark = ColorProvider(Color.White)
 
 /**
  * Parses a hex color string (e.g. "#3b82f6") into a Glance [ColorProvider], or null on failure.

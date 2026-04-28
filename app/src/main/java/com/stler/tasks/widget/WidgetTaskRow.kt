@@ -7,7 +7,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.ColorFilter
 import androidx.glance.GlanceModifier
-import androidx.glance.GlanceTheme
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.action.actionParametersOf
@@ -74,6 +73,11 @@ fun WidgetTaskRow(
     pendingCompleteId  : String? = null,
 ) {
     val showCheckmark = (task.id == pendingCompleteId)
+    val priorityColor = when (task.priority) {
+        Priority.URGENT    -> WPriorityUrgent
+        Priority.IMPORTANT -> WPriorityImportant
+        Priority.NORMAL    -> WPriorityNormal
+    }
 
     val dlStatus = deadlineStatus(task.deadlineDate)
     val dlLabel  = deadlineLabel(task.deadlineDate, task.deadlineTime, includeDate = !timeOnly)
@@ -127,14 +131,12 @@ fun WidgetTaskRow(
             Spacer(GlanceModifier.width(6.dp))
 
             // ── Checkbox — 32dp touch target, 22dp visual ─────────────────────
-            // Neutral color (WOnSurface) in both states — no priority color coding on
-            // the widget checkbox so the checkmark/outline is always clearly visible in
-            // both light and dark themes without depending on individual priority shades.
+            // Both states use the task's priority color (urgent=red, important=orange,
+            // normal=gray) matching the app's TaskCheckbox.
             //
-            // Unchecked: ic_check_box_outline_blank outline icon.
-            // Pending-complete: WOnSurface filled box with WCheckmark (= widget_surface)
-            //   checkmark — contrast guaranteed because surface and onSurface are always
-            //   complementary (white/near-black pair).
+            // Unchecked: ic_check_box_outline_blank outline icon tinted with priority color.
+            // Pending-complete: priority-colored filled box with white (WCheckmark) checkmark —
+            //   white is always visible on top of any of the three priority shades.
             Box(
                 modifier = GlanceModifier
                     .size(32.dp)
@@ -146,11 +148,12 @@ fun WidgetTaskRow(
                 contentAlignment = Alignment.Center,
             ) {
                 if (showCheckmark) {
+                    // Filled priority-colored box with white checkmark inside
                     Box(
                         modifier = GlanceModifier
                             .size(22.dp)
                             .cornerRadius(3.dp)
-                            .background(WOnSurface),
+                            .background(priorityColor),
                         contentAlignment = Alignment.Center,
                     ) {
                         Image(
@@ -161,11 +164,12 @@ fun WidgetTaskRow(
                         )
                     }
                 } else {
+                    // Outline square tinted with priority color
                     Image(
                         provider           = ImageProvider(R.drawable.ic_check_box_outline_blank),
                         contentDescription = "Mark complete",
                         modifier           = GlanceModifier.size(22.dp),
-                        colorFilter        = ColorFilter.tint(WOnSurface),
+                        colorFilter        = ColorFilter.tint(priorityColor),
                     )
                 }
             }
