@@ -1,6 +1,6 @@
 # Stler Tasks Android — Technical Specification
 
-**Version:** 1.1 (May 2026)  
+**Version:** 2.1 (May 2026)  
 **Repository:** github.com/JuliaSivridi/Tasks_Android  
 **Stack:** Kotlin · Jetpack Compose · Room · Hilt · WorkManager · Glance · Google Sheets API v4 · Google Calendar API v3  
 **Min SDK:** 26 (Android 8.0) · **Target SDK:** 36
