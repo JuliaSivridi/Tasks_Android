@@ -380,13 +380,80 @@ Triggered by WorkManager. Execution order:
 5. Retry: up to 4 attempts (`WorkManager` exponential backoff); returns `Result.failure()` after 5th
 
 ### 7.2 Calendar Event Write Path
-Calendar event mutations (create / update / delete) bypass the SyncQueue entirely and go directly to the Calendar API:
-- **Create:** `CalendarRepository.createEvent(calendarId, CalendarEventRequest)` → `PUT` to `events` endpoint → on success, fetches and upserts new event to Room
-- **Update:** `CalendarRepository.updateEvent(calendarId, eventId, CalendarEventRequest)` → `PUT` (replaces entire event, avoids residual fields from PATCH merge)
-- **Delete:** `CalendarRepository.deleteEvent(calendarId, eventId)` → `DELETE` → removes from Room
-- **Move calendar:** `CalendarRepository.moveEvent(fromCalendarId, toCalendarId, eventId)` → `POST .../move` endpoint
 
-**EventDateTime serialization:** A custom Gson `TypeAdapter` (`EventDateTimeAdapter`) is registered in `CalendarModule`. It omits null fields by default (Gson `serializeNulls=false`), ensuring only `date` or only `dateTime` is sent — never both. The `timeZone` field (IANA name, e.g. `"Europe/Helsinki"`) is included for timed events and required by the Calendar API for recurring timed events.
+Calendar event mutations bypass the SyncQueue entirely and go directly to the Calendar API. All methods are in `CalendarRepositoryImpl`.
+
+**createEvent(calendarId, request)**
+1. POST to Calendar API → receives dto
+2. Fetch `calendarMeta` (5-min in-memory cache; refreshed from `listCalendars()` if stale) to resolve calendar name + color
+3. Map dto → entity via `CalendarMapper.dtoToEntity`
+4. Upsert entity to Room immediately (instant UI feedback before any re-fetch)
+5. If `request.recurrence` is non-empty: re-fetch full calendar (today..today+366) to pick up all generated recurring instances
+6. Return the mapped domain event
+
+**updateEvent(calendarId, eventId, request)**
+1. PUT to Calendar API (full replace — avoids residual `start.date` left by PATCH merge on recurring timed events)
+2. Map response → entity → upsert to Room
+3. Always re-fetch the full calendar to update all recurring instances
+4. Return mapped domain event
+
+**deleteEvent(calendarId, eventId)**
+1. HTTP DELETE; a 410 (Gone — already deleted) is accepted as success
+2. Remove from Room by `eventId` (`calendarEventDao.deleteById`)
+
+**deleteEventSeries(calendarId, seriesId)**
+1. HTTP DELETE on `seriesId` (the base/master event ID)
+2. Remove from Room all entries sharing that `seriesId` (`calendarEventDao.deleteBySeriesId`)
+
+**moveEvent(fromCalendarId, toCalendarId, eventId)**
+1. `calendarApi.moveEvent(fromCalendarId, eventId, toCalendarId)` (POST to `.../move`)
+2. Map response → new entity with `toCalendarId` metadata
+3. `calendarEventDao.deleteSeriesAndReplace(eventId, entity)` — atomic Room transaction (delete old series entries + insert new)
+
+**getBaseEvent(calendarId, seriesId)**
+1. `calendarApi.getEvent(calendarId, seriesId)` — single event fetch (the series master)
+2. Extract RRULE: `dto.recurrence?.firstOrNull { it.startsWith("RRULE:") } ?: ""`
+3. Extract endTime: `dto.end.dateTime?.substring(11, 16)` (characters 11–15, i.e. `"HH:MM"`); blank if absent
+4. Returns `CalendarEventWithRRule(event, rrule, endTime)`
+
+**calendarMeta cache:** 5-minute TTL in-memory cache mapping `calendarId → (calendarName, calendarColor)`. Used after create/update/move to label Room entities correctly without extra API calls on every write.
+
+**EventDateTime serialization** (custom Gson `TypeAdapter` registered in `CalendarModule`):
+- All-day event: `EventDateTime(date = "YYYY-MM-DD")` — `dateTime` absent from JSON
+- Timed event: `EventDateTime(dateTime = "YYYY-MM-DDTHH:MM:SS+HH:MM", timeZone = "IANA/Zone")` — `date` absent from JSON
+- Null fields are silently omitted (`serializeNulls=false` default) — intentional; sending `"date": null` causes HTTP 400 for recurring timed events in Google Calendar API v3
+- `timeZone` is REQUIRED for recurring timed events (Google Calendar API v3 requirement)
+
+**`buildEventDateTime` (in `TaskFormViewModel`):**
+```kotlin
+if (time.isBlank())
+    EventDateTime(date = date)
+else {
+    val zone = ZoneId.systemDefault()
+    val zdt  = ZonedDateTime.of(LocalDate.parse(date), LocalTime.parse(time), zone)
+    EventDateTime(dateTime = zdt.format(ISO_OFFSET_DATE_TIME), timeZone = zone.id)
+}
+```
+
+**`buildEndDateTime` (in `TaskFormViewModel`):**
+```kotlin
+if (startTime.isBlank()) {
+    // All-day: end = next calendar day
+    EventDateTime(date = LocalDate.parse(startDate).plusDays(1).toString())
+} else {
+    val startLocal = LocalTime.parse(startTime)
+    val endT = when {
+        endTime.isBlank()                                   -> startLocal.plusHours(1).format("HH:mm")
+        !LocalTime.parse(endTime).isAfter(startLocal)       -> startLocal.plusHours(1).format("HH:mm")
+        // clamp: if user moved start past old end, end defaults to start+1h
+        else                                                 -> endTime
+    }
+    val zone = ZoneId.systemDefault()
+    val zdt  = ZonedDateTime.of(LocalDate.parse(startDate), LocalTime.parse(endT), zone)
+    EventDateTime(dateTime = zdt.format(ISO_OFFSET_DATE_TIME), timeZone = zone.id)
+}
+```
+Special case: end time is clamped to start+1 h whenever the stored end time is ≤ start time (e.g. after the user moves the start time past the old end time).
 
 ### 7.3 SyncManager
 - **Periodic:** `PeriodicWorkRequest` every 30 min, constraint `CONNECTED`
@@ -415,11 +482,32 @@ Displayed in the sidebar footer (count badge + spinning icon when Syncing).
 - Horizontal date strip (7 day-pills: date number + weekday letter + orange dot if tasks exist)
 - Left/right navigation arrows to shift the visible week
 - "Today" button (primary border when on the current week)
-- Filter pills: priority chips + label chips + folder chip
+- Filter pills: priority chips + label chips + folder chip + calendar chip
 - Tasks and calendar events unified into a date-grouped timeline (`"16 Apr · Thursday · Today"`)
-- **Overdue section** — all past-due tasks/events collapsed into one group above the date strip
+- **Overdue section** — all past-due tasks/events collapsed into one group above the date strip (date key = `LocalDate.MIN`)
 - `showDateInDeadline = false` on `TaskItem` (date shown in section header, only time shown in row 2)
 - `isLoading` StateFlow → shimmer skeleton on first load
+
+**Filter matrix** — four independent filter sets: `priorityFilter`, `labelFilter`, `folderFilter`, `calendarFilter`:
+
+```
+taskFiltersActive = priorityFilter.isNotEmpty() || labelFilter.isNotEmpty() || folderFilter.isNotEmpty()
+calFiltersActive  = calendarFilter.isNotEmpty()
+
+shown tasks  = if (calFiltersActive && !taskFiltersActive) → none
+               else → tasks filtered by priority ∩ label ∩ folder
+
+shown events = if (calFiltersActive)  → events filtered by calendarId ∈ calendarFilter
+               if (taskFiltersActive) → none
+               else                   → all events
+```
+
+**Sort order within each date group:**
+1. Overdue group: secondary sort by `startDate`/`deadlineDate` string ascending
+2. Timed items (`startTime != ""`) sort before all-day items
+3. Within timed: ascending by time string
+
+**`calendarsInEvents`:** derived `StateFlow<List<CalendarItem>>` — distinct calendars present in the currently loaded events. Used to populate the calendar filter chip dropdown in UpcomingScreen.
 
 ### 8.2 All Tasks
 **ViewModel:** `AllTasksViewModel`  
@@ -605,60 +693,266 @@ Indented by `depth × 20 + 54dp`
 
 ## 10. TaskFormSheet (Create / Edit Tasks and Events)
 
-Single bottom sheet for task creation, task editing, and calendar event creation/editing. Mode is set by `TaskFormViewModel.formMode` (a `mutableStateOf<FormMode>`).
+Single bottom sheet for task creation, task editing, and calendar event creation/editing. Mode is controlled by `TaskFormViewModel.formMode: FormMode` (TASK or EVENT).
 
-### 10.1 Form Modes
+### 10.1 Parameters
 
-**TASK mode** (default): Title → Deadline (date + optional time) → Repeat → Folder → Labels → Priority  
-**EVENT mode**: Title → Date → Start time / End time → Repeat → Calendar picker
+```kotlin
+fun TaskFormSheet(
+    task            : Task? = null,          // non-null → edit task mode
+    calendarEvent   : CalendarEvent? = null, // non-null → edit event mode
+    scheduleOnly    : Boolean = false,       // true → show only date/time/repeat, hide title + calendar picker
+    initialFolderId : String = "fld-inbox",
+    initialParentId : String = "",
+    labels          : List<Label>,
+    folders         : List<Folder>,
+    onConfirm       : (TaskFormResult) -> Unit,
+    onDismiss       : () -> Unit,
+    viewModel       : TaskFormViewModel = hiltViewModel(),
+)
+```
 
-Mode toggle: `SingleChoiceSegmentedButtonRow` with Task / Event segments, shown at the top of the sheet.
+Derived flags: `isEditing = task != null`, `isEditingEvent = calendarEvent != null`.
 
-### 10.2 TASK mode
-**Fields (in order):** Title → Deadline → Repeat → Folder → Labels → Priority
+### 10.2 Form State Initialization
 
-**Smart parsing in title field:** `@FolderName` sets folder (stripped from title); `#LabelName` adds label (stripped from title). Only applied in TASK mode.
+| Field | Initial value |
+|---|---|
+| `title` | `task?.title ?: calendarEvent?.title ?: ""` |
+| `priority` | `task?.priority ?: Priority.NORMAL` |
+| `selectedLabelIds` | `task?.labels ?: emptyList()` |
+| `deadlineDate` | `task?.deadlineDate ?: calendarEvent?.startDate ?: ""` |
+| `deadlineTime` | `task?.deadlineTime ?: calendarEvent?.startTime ?: ""` |
+| `isRecurring` | `task?.isRecurring ?: false` (never pre-filled from event) |
+| `recurType` | `task?.recurType ?: RecurType.DAYS` |
+| `recurValue` | `task?.recurValue?.toString() ?: "1"` |
+| `folderId` | `task?.folderId ?: initialFolderId` |
 
-**Repeat row:** Checkbox + "Every [N] [days/weeks/months]" — hidden until a deadline date is selected.
+### 10.3 LaunchedEffect(Unit) — Form Open Behavior
 
-**Folder selector:** Scrollable popup, single select; pre-filled from current screen context.
+On every form open:
+1. If `!scheduleOnly` → request focus on the title field
+2. Reset ViewModel recurrence state: `crsByDay = ∅`, `crsMonthlyIdx = 0`, `crsEnds = NEVER`, `crsEndDate = null`, `crsAfterCountStr = "13"`
 
-**Labels:** Opens `LabelPickerSheet` bottom sheet on tap; selected labels shown as chips below the row.
+**When `isEditingEvent` (editing a calendar event):**
+- `viewModel.formMode = FormMode.EVENT`
+- `viewModel.endTime = calendarEvent.endTime`
+- `viewModel.selectedCalendarId = calendarEvent.calendarId`
+- `viewModel.loadCalendars()`
+- If `calendarEvent.isRecurring`:
+  - Call `viewModel.loadBaseEvent(calendarId, seriesId)` with a callback that receives `(_, _, _, _, parsed)`
+  - **Only recurrence state is applied from the base event** — date/time/title remain as the specific instance's values
+  - If `parsed != null`:
+    - `isRecurring = true`
+    - `recurType` = map `RRuleFreq → RecurType` (DAILY→DAYS, WEEKLY→WEEKS, MONTHLY→MONTHS, YEARLY→YEARS)
+    - `recurValue = parsed.interval.toString()`
+    - `viewModel.crsByDay = parsed.byDay`
+    - `viewModel.crsEnds = parsed.ends`
+    - `viewModel.crsEndDate = parsed.endDate`
+    - `viewModel.crsAfterCountStr = parsed.afterCount.toString()`
+    - If MONTHLY and `deadlineDate.isNotBlank()`: compute `monthlyOptions(deadlineDate)`, find the option matching `parsed.byDay` code, set `viewModel.crsMonthlyIdx`
+  - Set `baseEventLoaded = true`
 
-**Edit extras:** Delete task button (destructive, confirm dialog).
+**When creating or editing a task:**
+- `viewModel.endTime = ""`
+- `viewModel.formMode = FormMode.TASK`
 
-### 10.3 EVENT mode
-**Fields (in order):** Title → Date chip → Start time chip — End time chip → Repeat → Custom RRULE → Calendar dropdown
+### 10.4 Mode Toggle
 
-**End time picker:** `EndTimePickerDialog` (Material3 TimePicker wrapper). Clear button removes the end time.
+`SingleChoiceSegmentedButtonRow` (Task / Event segments) is shown **only when `!isEditing && !isEditingEvent`** (i.e., only when creating a brand-new item).
+- Task segment → `viewModel.formMode = FormMode.TASK`
+- Event segment → `viewModel.formMode = FormMode.EVENT; viewModel.loadCalendars()`
 
-**Custom recurrence:** `CustomRecurrenceSheet` bottom sheet. Builds a full RRULE string:
-- Frequency: Daily / Weekly / Monthly / Yearly
-- Interval: 1–99
-- Weekly: BYDAY (multi-select Mon–Sun)
-- Monthly: by day-of-month / by ordinal weekday / by last weekday
-- Ends: Never / On date / After N occurrences
+### 10.5 Deadline Section
 
-**Calendar dropdown:** `ExposedDropdownMenuBox` listing only calendars the user has write access to (accessRole `writer` or `owner`). Calendars loaded once via `loadCalendars()` guard.
+**EVENT mode** — row: `[Date chip*] [Start time chip] — [End time chip]`
 
-**Submit:** Calls `TaskFormViewModel.createEvent()` or `updateEvent()`. On success, `_eventCreated` SharedFlow emits → sheet closes.
+| Element | Blank state | Set state | Error state | On click |
+|---|---|---|---|---|
+| Date chip | "Date *" (gray) | formatted date in deadline color | "Date *" in error color when `startDateError=true` | `showDeadlinePicker=true; startDateError=false` |
+| Start time chip | "HH:MM" (gray) | time in deadline color | — | `showTimePicker=true` |
+| "—" separator | always visible | — | — | — |
+| End time chip | "HH:MM" | "HH:MM" when set | "HH:MM*" when startTime set but endTime blank (hint) / "End time *" when `endTimeError=true` | `showEndTimePicker=true; endTimeError=false` |
 
-**Editing recurring events:** Moving to EVENT edit opens `loadBaseEvent()` to fetch the series base event data (title, start, recurrence) and pre-fills the form with those values.
+**TASK mode** — row: `[Date chip] [Time chip — only shown when date is set]`
+- Date chip: "No date" when blank; formatted date in deadline color when set
+- Time chip: only rendered when `deadlineDate.isNotBlank()`
 
-### 10.4 TaskFormViewModel
+### 10.6 Repeat Row
+
+Shown when `deadlineDate.isNotBlank() || formMode == EVENT`.
+
+`RepeatRow`: Checkbox + label. When unchecked: label is "Repeat". When checked: "Repeat every [N] [day|week|month|year▾]".
+- Interval: numeric `BasicTextField`, max 3 digits
+- Frequency dropdown: day / week / month / year → maps to `RecurType.DAYS / WEEKS / MONTHS / YEARS`
+
+### 10.7 EVENT Mode Recurrence Extras
+
+Shown when `formMode == EVENT && isRecurring`.
+
+**"Repeat on"** (WEEKLY only):
+- 7 circle buttons Mon–Sun
+- Selected day: `FilledTonalButton`; unselected: `TextButton`
+- `LaunchedEffect(recurType)`: when switching to WEEKLY and `crsByDay` is empty, automatically seeds it from `deadlineDate.dayOfWeek`
+- Tapping a day toggles it in/out of `viewModel.crsByDay`
+
+**"Repeat by"** (MONTHLY only):
+- `monthlyOptions(LocalDate.parse(deadlineDate))` computes 2 or 3 options:
+  1. "Monthly on day N"
+  2. "Monthly on the Nth Weekday"
+  3. "Monthly on the last Weekday" (only when `dayOfMonth > 21` and the same weekday doesn't fit in the next month's occurrence)
+- `ExposedDropdownMenuBox` showing those options; selection stored in `viewModel.crsMonthlyIdx`
+
+**"Ends"** (all repeating events — WEEKLY, MONTHLY, DAILY, YEARLY):
+- Three `RadioButton` options:
+  - **Never** → `EndsType.NEVER`
+  - **On** → `EndsType.ON_DATE`; shows a `TextButton` with the chosen date → opens `DatePickerDialog` (sets `viewModel.crsEndDate`)
+  - **After** → `EndsType.AFTER_COUNT`; shows `BasicTextField` (1–3 digits) + "occurrences" label
+
+### 10.8 TASK Mode Fields
+
+Shown only when `formMode == TASK`.
+
+**Folder:** `FilterChip` always in selected state. Background = `folder.color @ 18% alpha`. `onClick` → `showFolderPicker = true`.
+
+**Labels:** Clickable row showing "Labels [N]▸". Tapping opens `LabelPickerSheet`. Selected labels are shown as `FilterChip`s with a × trailing icon for quick-remove.
+
+**Priority:** Three `FilterChip`s (Urgent / Important / Normal). Each chip background = priority color @ 18% alpha. Selected chip shows a Check icon; unselected shows a Flag icon.
+
+### 10.9 EVENT Mode Fields
+
+Shown only when `formMode == EVENT`.
+
+**Calendar picker** (hidden when `scheduleOnly = true`):
+- Loading → `CircularProgressIndicator`
+- Empty list → message "No calendars selected. Go to Settings → Calendars." (shown in error color when `calendarError = true`)
+- Loaded → `OutlinedTextField` (readOnly) with `CalendarMonth` icon tinted + dropdown; selecting a calendar sets `viewModel.selectedCalendarId = cal.id; calendarError = false`
+
+### 10.10 Buttons Row
+
+**Left side (TASK mode only):**
+- **"Clear"**: shown when `isEditing && (deadlineDate.isNotBlank() || deadlineTime.isNotBlank())`. Resets: `deadlineDate=""`, `deadlineTime=""`, `isRecurring=false`, `recurType=DAYS`, `recurValue="1"`
+- **"Postpone"**: shown when `isEditing && isRecurring && deadlineDate.isNotBlank()`. Advances `deadlineDate` by `recurValue × recurType` using `LocalDate.plusDays/plusWeeks/plusMonths`
+
+**Right side (always):**
+- "Cancel" `TextButton` → `onDismiss()`
+- "Save" / "Create" `TextButton` with Check icon:
+  - TASK mode → `submitTask()`
+  - EVENT mode, editing a recurring event → `showEditSeriesDialog = true`
+  - EVENT mode, otherwise → `submitEvent()`
+  - Label: "Save" when `isEditing || isEditingEvent`, "Create" otherwise
+
+### 10.11 Edit Recurring Event Dialog
+
+`AlertDialog` shown when the user taps Save while editing a recurring calendar event. Presents:
+1. **"Edit this event only"** → `submitEventForInstance()`
+2. **"Edit all events in series"** → `submitEvent()`
+3. **"Cancel"** → dismisses dialog
+
+### 10.12 submitTask()
+
+```
+trimmed = title.trim()
+if (trimmed.isBlank()) → titleError = true; return
+
+parsed = parseSmartTitle(trimmed, folders, labels, folderId, selectedLabelIds)
+
+onConfirm(TaskFormResult(
+    title        = parsed.title,
+    folderId     = parsed.folderId,
+    parentId     = task?.parentId ?: initialParentId,
+    priority     = parsed.priority ?: priority,
+    labelIds     = parsed.labelIds,
+    deadlineDate = deadlineDate,
+    deadlineTime = deadlineTime,
+    isRecurring  = isRecurring,
+    recurType    = recurType,
+    recurValue   = recurValue.toIntOrNull() ?: 1,
+))
+```
+
+### 10.13 submitEvent() — new event or edit whole series
+
+```
+if (!scheduleOnly && title.isBlank()) → titleError = true; return
+if (deadlineDate.isBlank()) → startDateError = true; return
+if (!scheduleOnly && calendars.isEmpty() && !isEditingEvent) → calendarError = true; return
+
+Build RRULE (if isRecurring):
+  freq      = recurType → RRuleFreq
+  interval  = recurValue.toIntOrNull() ?: 1
+  if MONTHLY: monthlyOpt = monthlyOptions(deadlineDate)[crsMonthlyIdx]
+  rrule = buildRRule(freq, interval,
+    byDay         = if WEEKLY then crsByDay else ∅,
+    monthlyOption = if MONTHLY then monthlyOpt else null,
+    ends          = crsEnds,
+    endDate       = crsEndDate,
+    afterCount    = crsAfterCountStr.toIntOrNull().coerceIn(1, 999) ?: 13)
+
+if (isEditingEvent):
+  // Target the series master event, not the individual instance
+  targetId = if (calendarEvent.isRecurring) calendarEvent.recurringEventId else calendarEvent.id
+  viewModel.updateEvent(selectedCalendarId, targetId, trimmed,
+    deadlineDate, deadlineTime, viewModel.endTime, rrule,
+    originalCalendarId = calendarEvent.calendarId)
+else:
+  viewModel.createEvent(selectedCalendarId, trimmed,
+    deadlineDate, deadlineTime, viewModel.endTime, rrule)
+```
+
+### 10.14 submitEventForInstance() — edit this instance only
+
+```
+eventId = calendarEvent.id   // the specific instance ID, NOT recurringEventId
+viewModel.updateEvent(selectedCalendarId, eventId, trimmed,
+  deadlineDate, deadlineTime, viewModel.endTime, rrule = null,
+  originalCalendarId = calendarEvent.calendarId)
+```
+`rrule = null` removes recurrence from this instance, effectively detaching it from the series.
+
+### 10.15 Smart Title Parsing (TASK mode only)
+
+Applied in `parseSmartTitle()` before calling `onConfirm`:
+
+| Token | Rule | Behavior |
+|---|---|---|
+| `@FolderName` | Case-insensitive folder name match | Sets `folderId`; token stripped from title |
+| `#LabelName` | Case-insensitive label name match | Adds to `labelIds` if not already present; token stripped |
+| `!1` | Literal | Sets `Priority.URGENT`; stripped |
+| `!2` | Literal | Sets `Priority.IMPORTANT`; stripped |
+| `!3` | Literal | Sets `Priority.NORMAL`; stripped |
+
+Multiple spaces collapsed to single space. Unmatched tokens remain in the title.
+
+### 10.16 Sub-Dialogs
+
+| Dialog state | Trigger | Behavior |
+|---|---|---|
+| `showDeadlinePicker` | Date chip click | `DatePickerDialog` initialized from current `deadlineDate` as epoch millis (UTC). Monday-first locale enforced via `CompositionLocalProvider(LocalConfiguration)`. **Clear button sets both `deadlineDate=""` and `deadlineTime=""`** (clears time too). |
+| `showTimePicker` | Start time chip click | `AlertDialog` with Material3 `TimePicker` (24 h). Default initial time 09:00 (or parsed from `deadlineTime`). On OK: sets `deadlineTime = "HH:MM"`; in EVENT mode, if new start time ≥ `endTime` → `viewModel.endTime = ""`. **Clear button sets `deadlineTime = ""`**. |
+| `showEndTimePicker` | End time chip click | `EndTimePickerDialog(initialTime = viewModel.endTime, onConfirm = { viewModel.endTime = it }, onClear = { viewModel.endTime = "" }, onDismiss)` |
+| `showFolderPicker` | Folder chip click (TASK only) | `FolderPickerDialog` — `AlertDialog` listing Inbox + all non-inbox folders as radio-style rows; selected folder row shows Check icon |
+| `showLabelPicker` | Labels row click (TASK only) | `LabelPickerSheet` bottom sheet — multi-select with create-new option |
+| `showEndsDatePicker` | "On" ends radio button (EVENT + recurring only) | `DatePickerDialog` → sets `viewModel.crsEndDate` |
+
+### 10.17 TaskFormViewModel State
+
 Extends `BaseViewModel`. Injected: `TaskRepository`, `CalendarRepository`.
 
 | State | Type | Description |
 |---|---|---|
-| formMode | FormMode | TASK / EVENT |
-| endTime | String | Event end time `"HH:MM"` or `""` |
-| selectedCalendarId | String | Target calendar for event creation |
-| baseEventLoading | Boolean | True while fetching series base event |
-| selectedCalendars | StateFlow\<List\<CalendarItem\>\> | Writable calendars for dropdown |
-| calendarsLoading | StateFlow\<Boolean\> | Loading spinner for dropdown |
-| eventCreated | SharedFlow\<String\> | Emitted on successful event create/update |
-
-**Recurrence state** (persists between form openings): `crsByDay`, `crsMonthlyIdx`, `crsEnds`, `crsEndDate`, `crsAfterCountStr`.
+| `formMode` | `FormMode` | TASK / EVENT |
+| `endTime` | `String` | Event end time `"HH:MM"` or `""` |
+| `selectedCalendarId` | `String` | Target calendar for event creation/update |
+| `baseEventLoading` | `Boolean` | True while fetching series base event |
+| `selectedCalendars` | `StateFlow<List<CalendarItem>>` | Writable calendars for dropdown |
+| `calendarsLoading` | `StateFlow<Boolean>` | Loading spinner for calendar dropdown |
+| `eventCreated` | `SharedFlow<String>` | Emitted on successful event create/update → sheet closes |
+| `crsByDay` | `Set<DayOfWeek>` | Selected days for WEEKLY recurrence |
+| `crsMonthlyIdx` | `Int` | Index into `monthlyOptions()` for MONTHLY recurrence |
+| `crsEnds` | `EndsType` | NEVER / ON_DATE / AFTER_COUNT |
+| `crsEndDate` | `LocalDate?` | End date for ON_DATE ends |
+| `crsAfterCountStr` | `String` | Occurrence count string for AFTER_COUNT ends (default "13") |
 
 ---
 
