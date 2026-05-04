@@ -615,7 +615,30 @@ com.stler.tasks/<br>
 <p>Tabs: Urgent / Important / Normal. Sort: deadline → createdAt. EmptyState per tab.</p>
 
 <h2>8.7 Calendar</h2>
-<p>Month grid (6×7 day cells) with event dots. Day selection shows event list below. <code>CalendarEventItem</code>: calendar color icon + title + time range. Tap event → opens event edit form (<code>stlertasks://event/{calendarId}/{id}</code>). FAB creates new event (opens <code>TaskFormSheet</code> in EVENT mode).</p>
+<p><strong>Route:</strong> <code>calendar/{calendarId}</code> — отдельный экран на каждый календарь; <code>calendarId</code> передаётся через <code>SavedStateHandle</code>.<br>
+<strong>Data:</strong> события одного конкретного календаря из Room, от <code>today</code> до <code>today&nbsp;+&nbsp;366</code> дней.</p>
+<ul>
+  <li><code>LazyColumn</code> событий, сгруппированных по дате (аналогично UpcomingScreen)</li>
+  <li>Заголовок перед каждой группой (<code>CalendarDayHeader</code>): <code>"d MMM ‧ Weekday"</code> + <code>"‧ Today"</code> / <code>"‧ Tomorrow"</code></li>
+  <li>Просроченные события (startDate &lt; today) — в группу <code>"Overdue"</code> (ключ <code>LocalDate.MIN</code>)</li>
+  <li>До загрузки — <code>ShimmerTaskList</code>; без событий — <code>EmptyState</code></li>
+  <li>FAB отсутствует; сетки месяца и выбора дня нет</li>
+</ul>
+
+<h2>8.8 CalendarEventItem</h2>
+<p>Shared-компонент события, используется в CalendarScreen и других местах.</p>
+<p><strong>Строка 1:</strong> <code>[40dp placeholder] [40dp: CalendarMonth icon 24dp, tinted calColor] [title weight=1] [Schedule btn] [MoreHoriz btn]</code></p>
+<ul>
+  <li>Иконка <code>CalendarMonth</code> (24dp) тонирована цветом календаря</li>
+  <li><strong>Schedule</strong> (<code>Icons.Outlined.Schedule</code>, 18dp, deadlineColor): быстрое редактирование даты/времени</li>
+  <li><strong>MoreHoriz</strong>: <code>ModalBottomSheet</code> → Edit / Delete</li>
+</ul>
+<p><strong>Строка 2</strong> (отступ 54dp): <code>[time label?] [CalendarMonth icon 14dp, tinted] [calendar name]</code></p>
+<ul>
+  <li>Перед названием календаря — иконка <code>CalendarMonth</code> 14dp тонированная (не точка, не badge)</li>
+  <li>timeLabel: timed → <code>"HH:MM — HH:MM"</code>; all-day + showDate=true → <code>"d MMM"</code>/<code>"Today"</code>; all-day + showDate=false → пусто</li>
+</ul>
+<p><strong>Удаление:</strong> нерекуррентное — AlertDialog; рекуррентное — три кнопки: "Delete this event only" / "Delete all events in series" (error color) / Cancel.</p>
 
 <!-- ─── 9. TaskItem ─────────────────────────────────────────────────────────── -->
 <h1 id="taskitem">9. TaskItem Component</h1>
@@ -759,7 +782,7 @@ deadlineLabel(date, time, includeDate):
   <tr><td><code>folder/{folderId}</code></td><td>Folder task list</td></tr>
   <tr><td><code>label/{labelId}</code></td><td>Label task list</td></tr>
   <tr><td><code>priority/{priority}</code></td><td>Priority list (<code>urgent</code>/<code>important</code>/<code>normal</code>)</td></tr>
-  <tr><td><code>calendar</code></td><td>Calendar screen</td></tr>
+  <tr><td><code>calendar/{calendarId}</code></td><td>Список событий одного календаря</td></tr>
 </table>
 
 <h2>13.2 Deeplinks (<code>stlertasks://</code>)</h2>

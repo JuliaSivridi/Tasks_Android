@@ -464,13 +464,49 @@ Displayed in the sidebar footer (count badge + spinning icon when Syncing).
 
 ### 8.7 Calendar
 **ViewModel:** `CalendarViewModel`  
-**Data:** `calendar_events` from Room; filtered to selected calendars and current month  
+**Route:** `calendar/{calendarId}` — отдельный экран на каждый календарь; `calendarId` берётся из `SavedStateHandle`  
+**Data:** события одного конкретного календаря из Room, от `today` до `today + 366 дней`  
 **Features:**
-- Month grid (6×7 day cells) with event dots
-- Day selection shows event list below the grid
-- `CalendarEventItem` composable: calendar color icon + title + time range
-- Tapping an event opens the event edit form (via `stlertasks://event/{calendarId}/{id}` deeplink)
-- FAB creates a new calendar event (opens `TaskFormSheet` in EVENT mode)
+- `LazyColumn` событий, сгруппированных по дате (аналогично UpcomingScreen)
+- Заголовок-дата перед каждой группой (`CalendarDayHeader`): `"d MMM ‧ Weekday"` + `"‧ Today"` / `"‧ Tomorrow"` для ближайших дат
+- Все просроченные события (startDate < today) объединяются в группу `"Overdue"` (ключ `LocalDate.MIN`)
+- Пока данные не загружены — `ShimmerTaskList`; если событий нет — `EmptyState`
+- `CalendarEventItem` на каждое событие (см. §8.8)
+- FAB отсутствует; сетки месяца и выбора дня нет
+
+### 8.8 CalendarEventItem
+
+Shared-компонент для отображения одного события — используется и в `CalendarScreen`, и в других местах.
+
+**Строка 1:**
+```
+[40dp placeholder] [40dp box: CalendarMonth icon, tinted calColor, 24dp] [title weight=1] [Schedule btn] [MoreHoriz btn]
+```
+- Иконка `CalendarMonth` (24dp) тонирована `event.calendarColor` — идентифицирует принадлежность к календарю
+- Title: кликабелен если передан `onEdit`; 2 строки max
+- **Schedule** (`Icons.Outlined.Schedule`, 18dp, цвет `deadlineColor`): быстрое редактирование расписания (`onEditSchedule`)
+- **MoreHoriz** (18dp): открывает `ModalBottomSheet` с пунктами Edit и Delete
+
+**Строка 2** (отступ 54dp):
+```
+[time label?]  [CalendarMonth icon 14dp, tinted]  [calendar name]
+```
+- `timeLabel`: для timed-события — `"HH:MM — HH:MM"` или `"HH:MM"`; для all-day + `showDate=true` — `"d MMM"` / `"Today"` / `"Tomorrow"`; для all-day + `showDate=false` — пусто
+- Иконка `CalendarMonth` 14dp тонирована `calColor` перед названием календаря (не точка, не badge — именно иконка)
+
+**Удаление:**
+- Нерекуррентное: `AlertDialog` "Delete event?" → `onDelete()`
+- Рекуррентное: `AlertDialog` с тремя кнопками — "Delete this event only" / "Delete all events in series" (error color) / "Cancel"
+
+**Параметры:**
+| Параметр | Описание |
+|---|---|
+| `event` | `CalendarEvent` |
+| `showDate` | Показывать дату в строке 2 (false когда дата уже в заголовке группы) |
+| `onEdit` | Открыть форму редактирования (полная); если null — кнопки не показываются |
+| `onEditSchedule` | Открыть форму редактирования только расписания (Schedule-кнопка) |
+| `onDelete` | Удалить событие |
+| `onDeleteSeries` | Удалить всю серию (для рекуррентных) |
 
 ---
 
@@ -712,7 +748,7 @@ Material 3 default typography scale. No custom fonts.
 | `folder/{folderId}` | Folder task list |
 | `label/{labelId}` | Label task list |
 | `priority/{priority}` | Priority task list (`urgent`/`important`/`normal`) |
-| `calendar` | Calendar screen (month grid + event list) |
+| `calendar/{calendarId}` | Calendar screen — список событий одного календаря |
 
 Navigation is handled by Compose Navigation (`NavHost` in `MainScreen`). The sidebar `ModalNavigationDrawer` calls `onNavigate(route)` → `navController.navigate(route)`.
 
