@@ -423,7 +423,7 @@ com.stler.tasks/<br>
   <tr><td><code>deadlineDate</code></td><td>String</td><td>ISO date <code>"YYYY-MM-DD"</code> or <code>""</code></td></tr>
   <tr><td><code>deadlineTime</code></td><td>String</td><td><code>"HH:MM"</code> or <code>""</code></td></tr>
   <tr><td><code>isRecurring</code></td><td>Boolean</td><td>Recurring task flag</td></tr>
-  <tr><td><code>recurType</code></td><td>RecurType</td><td><code>DAILY</code>, <code>WEEKLY</code>, <code>MONTHLY</code></td></tr>
+  <tr><td><code>recurType</code></td><td>RecurType</td><td><code>NONE</code>, <code>DAYS</code>, <code>WEEKS</code>, <code>MONTHS</code>, <code>YEARS</code></td></tr>
   <tr><td><code>recurValue</code></td><td>Int</td><td>Recurrence interval (e.g. 2 = every 2 days)</td></tr>
   <tr><td><code>labels</code></td><td>List&lt;String&gt;</td><td>List of label IDs</td></tr>
   <tr><td><code>sortOrder</code></td><td>Int</td><td>Position within parent (index × 10)</td></tr>
@@ -509,7 +509,7 @@ com.stler.tasks/<br>
   <tr><td>G</td><td>deadline_date</td><td>String or Sheets serial date</td></tr>
   <tr><td>H</td><td>deadline_time</td><td><code>"HH:MM"</code> or <code>""</code></td></tr>
   <tr><td>I</td><td>is_recurring</td><td><code>"TRUE"</code> / <code>"FALSE"</code></td></tr>
-  <tr><td>J</td><td>recur_type</td><td><code>"daily"</code> / <code>"weekly"</code> / <code>"monthly"</code></td></tr>
+  <tr><td>J</td><td>recur_type</td><td><code>"days"</code> / <code>"weeks"</code> / <code>"months"</code> / <code>"years"</code></td></tr>
   <tr><td>K</td><td>recur_value</td><td>String (Int)</td></tr>
   <tr><td>L</td><td>labels</td><td>comma-separated label IDs</td></tr>
   <tr><td>M</td><td>sort_order</td><td>String (Int)</td></tr>
@@ -899,59 +899,72 @@ shown events = if (calFiltersActive)  → events filtered by calendarId ∈ cale
   </tbody>
 </table>
 
-<h2>8.7 Calendar</h2>
-<p><strong>Route:</strong> <code>calendar/{calendarId}</code> — отдельный экран на каждый календарь; <code>calendarId</code> передаётся через <code>SavedStateHandle</code>.<br>
-<strong>Data:</strong> события одного конкретного календаря из Room, от <code>today</code> до <code>today&nbsp;+&nbsp;366</code> дней.</p>
+<h2 id="s8-7">8.7 Calendar</h2>
+<p><strong>ViewModel:</strong> <code>CalendarViewModel</code><br>
+<strong>Route:</strong> <code>calendar/{calendarId}</code> — separate screen per calendar; <code>calendarId</code> from <code>SavedStateHandle</code> (URL-decoded).<br>
+<strong>Data:</strong> events for one specific calendar from Room, from <code>today</code> to <code>today&nbsp;+&nbsp;366&nbsp;days</code>.</p>
 <ul>
-  <li><code>LazyColumn</code> событий, сгруппированных по дате (аналогично UpcomingScreen)</li>
-  <li>Заголовок перед каждой группой (<code>CalendarDayHeader</code>): <code>"d MMM ‧ Weekday"</code> + <code>"‧ Today"</code> / <code>"‧ Tomorrow"</code></li>
-  <li>Просроченные события (startDate &lt; today) — в группу <code>"Overdue"</code> (ключ <code>LocalDate.MIN</code>)</li>
-  <li>До загрузки — <code>ShimmerTaskList</code>; без событий — <code>EmptyState</code></li>
-  <li>Собственного FAB в <code>CalendarScreen</code> нет; глобальный FAB <code>MainScreen</code> отображается на всех экранах и открывает создание <strong>задачи</strong> (TASK mode), не события</li>
+  <li><code>LazyColumn</code> of events grouped by date (same pattern as UpcomingScreen)</li>
+  <li>Date header before each group (<code>CalendarDayHeader</code>): <code>"d MMM ‧ Weekday"</code> with <code>"‧ Today"</code> / <code>"‧ Tomorrow"</code> suffix for near dates</li>
+  <li>All overdue events (<code>startDate &lt; today</code>) collapsed into a single <code>"Overdue"</code> group (key = <code>LocalDate.MIN</code>)</li>
+  <li><code>ShimmerTaskList</code> while loading; <code>EmptyState</code> when no events</li>
+  <li>One <code>CalendarEventItem</code> per event (see §8.8)</li>
+  <li>No FAB inside <code>CalendarScreen</code> itself; the global <code>MainScreen</code> FAB is still visible and opens <strong>task</strong> creation (TASK mode), not event creation</li>
 </ul>
 
-<h2>8.8 CalendarEventItem</h2>
-<p>Shared-компонент события, используется в CalendarScreen и других местах.</p>
-<p><strong>Строка 1:</strong> <code>[40dp placeholder] [40dp: CalendarMonth icon 24dp, tinted calColor] [title weight=1] [Schedule btn] [MoreHoriz btn]</code></p>
+<h2 id="s8-8">8.8 CalendarEventItem</h2>
+<p>Shared composable for displaying a single calendar event — used in <code>CalendarScreen</code>, <code>AllTasksScreen</code>, and <code>UpcomingScreen</code>.</p>
+<p><strong>Row 1:</strong> <code>[40dp placeholder] [40dp: CalendarMonth icon 24dp, tinted calColor] [title weight=1] [Schedule btn] [MoreHoriz btn]</code></p>
 <ul>
-  <li>Иконка <code>CalendarMonth</code> (24dp) тонирована цветом календаря</li>
-  <li><strong>Schedule</strong> (<code>Icons.Outlined.Schedule</code>, 18dp, deadlineColor): быстрое редактирование даты/времени</li>
-  <li><strong>MoreHoriz</strong>: <code>ModalBottomSheet</code> → Edit / Delete</li>
+  <li><code>CalendarMonth</code> icon (24dp) tinted with <code>event.calendarColor</code> — identifies which calendar the event belongs to</li>
+  <li>Title: clickable when <code>onEdit</code> is non-null; 2-line max</li>
+  <li><strong>Schedule</strong> (<code>Icons.Outlined.Schedule</code>, 18dp, <code>deadlineColor</code> tint): quick schedule edit → <code>onEditSchedule</code></li>
+  <li><strong>MoreHoriz</strong> (18dp): opens <code>ModalBottomSheet</code> with Edit and Delete items</li>
 </ul>
-<p><strong>Строка 2</strong> (отступ 54dp): <code>[time label?] [CalendarMonth icon 14dp, tinted] [calendar name]</code></p>
+<p><strong>Row 2</strong> (54dp indent): <code>[time label?] [CalendarMonth icon 14dp, tinted] [calendar name]</code></p>
 <ul>
-  <li>Перед названием календаря — иконка <code>CalendarMonth</code> 14dp тонированная (не точка, не badge)</li>
-  <li>timeLabel: timed → <code>"HH:MM — HH:MM"</code>; all-day + showDate=true → <code>"d MMM"</code>/<code>"Today"</code>; all-day + showDate=false → пусто</li>
+  <li><code>CalendarMonth</code> icon 14dp tinted with <code>calColor</code> before the calendar name (not a dot or badge — it is the icon)</li>
+  <li><code>timeLabel</code>: timed → <code>"HH:MM — HH:MM"</code> or <code>"HH:MM"</code>; all-day + <code>showDate=true</code> → <code>"d MMM"</code> / <code>"Today"</code> / <code>"Tomorrow"</code>; all-day + <code>showDate=false</code> → empty</li>
 </ul>
-<p><strong>Удаление:</strong> нерекуррентное — AlertDialog; рекуррентное — три кнопки: "Delete this event only" / "Delete all events in series" (error color) / Cancel.</p>
+<p><strong>Deletion:</strong> non-recurring — <code>AlertDialog</code> "Delete event?"; recurring — three-button <code>AlertDialog</code>: "Delete this event only" / "Delete all events in series" (error color) / "Cancel".</p>
+<table>
+  <thead><tr><th>Parameter</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>event</code></td><td><code>CalendarEvent</code></td></tr>
+    <tr><td><code>showDate</code></td><td>Show date in row 2 (false when date is already shown in the section header)</td></tr>
+    <tr><td><code>onEdit</code></td><td>Open full edit form; if null — edit/schedule buttons are not shown</td></tr>
+    <tr><td><code>onEditSchedule</code></td><td>Open schedule-only edit form (Schedule button)</td></tr>
+    <tr><td><code>onDelete</code></td><td>Delete this event instance</td></tr>
+    <tr><td><code>onDeleteSeries</code></td><td>Delete the entire recurring series</td></tr>
+  </tbody>
+</table>
 
-<h2>8.9 MainScreen — глобальный FAB</h2>
-<p>Единственный <code>FloatingActionButton</code> находится в <code>Scaffold</code> <code>MainScreen</code> и отображается на всех экранах без исключения.</p>
+<h2 id="s8-9">8.9 MainScreen — Global FAB and Settings</h2>
+<p><strong>FAB</strong> — the single <code>FloatingActionButton</code> in the <code>MainScreen</code> <code>Scaffold</code>. Visible on <strong>all</strong> screens. Opens <code>TaskFormSheet</code> in TASK mode:</p>
 <ul>
-  <li>На экране Folder — открывает <code>TaskFormSheet</code> с <code>folderId = currentFolderId</code></li>
-  <li>На всех остальных экранах — открывает <code>TaskFormSheet</code> с <code>folderId = "fld-inbox"</code></li>
-  <li>Режим всегда TASK — события через FAB создать нельзя</li>
+  <li>On the Folder screen — creates a task in the current folder (<code>sidebarFolderContext = currentFolderId</code>)</li>
+  <li>On all other screens — creates a task in Inbox (<code>folderId = "fld-inbox"</code>)</li>
+  <li>Mode is always TASK — event creation is not wired to the FAB</li>
 </ul>
-<p><strong>Settings</strong> открывается не через NavHost-маршрут, а как overlay: <code>showSettings = true</code> заменяет основной контент на <code>SettingsScreen</code>. Вызывается из <code>TasksTopAppBar</code>.</p>
+<p><strong>Settings</strong> — opened not via a NavHost route but as an overlay: <code>showSettings = true</code> in <code>MainScreen</code> replaces the main content with <code>SettingsScreen</code>. Triggered by the settings icon in <code>TasksTopAppBar</code>.</p>
 
-<h2>8.10 Settings Screen</h2>
-<p><strong>ViewModel:</strong> <code>SettingsViewModel</code>. Открывается поверх контента (не NavHost), закрывается кнопкой Back в TopAppBar.</p>
+<h2 id="s8-10">8.10 Settings Screen</h2>
+<p><strong>ViewModel:</strong> <code>SettingsViewModel</code>. Opens as an overlay on top of the main content (not via NavHost); closed by the Back button in the TopAppBar.</p>
 
-<p><strong>Секция SPREADSHEET</strong></p>
+<p><strong>SPREADSHEET section</strong></p>
 <ul>
-  <li>Показывает имя и ID активной таблицы Google Sheets</li>
-  <li>Кнопка "Change" разворачивает список всех Google Sheets из Drive (<code>listUserSheets()</code>)</li>
-  <li>Активная таблица отмечена иконкой Check</li>
-  <li>Клик по другой таблице → <code>switchSpreadsheet()</code>: сохраняет новый spreadsheetId в DataStore, очищает Room (tasks / folders / labels / sync_queue), запускает sync</li>
+  <li>Shows the name and ID of the active Google Sheets spreadsheet</li>
+  <li>"Change" button expands an <code>AnimatedVisibility</code> list of all Google Sheets in the user's Drive (calls <code>listUserSheets()</code> on first open)</li>
+  <li>The active spreadsheet is marked with a Check icon; clicking another calls <code>switchSpreadsheet()</code>: saves the new ID to DataStore, clears Room (tasks / folders / labels / sync_queue), triggers sync</li>
 </ul>
 
-<p><strong>Секция CALENDARS</strong></p>
+<p><strong>CALENDARS section</strong></p>
 <ul>
-  <li>Список всех Google Calendars пользователя (загружается при открытии через <code>loadCalendars()</code>)</li>
-  <li>Каждая строка: иконка <code>CalendarMonth</code> тонированная + название + <code>Checkbox</code></li>
-  <li><code>toggleCalendar()</code>: обновляет <code>selectedCalendarIds</code> в DataStore + оптимистично обновляет UI</li>
-  <li>Кнопка Refresh — повторный запрос к Calendar API</li>
-  <li><strong>Только отмеченные календари синхронизируются</strong> (SyncWorker запрашивает события только для <code>isSelected = true</code>) и отображаются в Upcoming / Calendar screens / виджетах</li>
+  <li>Lists all of the user's Google Calendars (loaded on screen open via <code>loadCalendars()</code>)</li>
+  <li>Each row: <code>CalendarMonth</code> icon tinted with calendar color + name + <code>Checkbox</code></li>
+  <li>Clicking a row or the Checkbox → <code>toggleCalendar()</code>: updates <code>selectedCalendarIds</code> in DataStore + optimistically updates UI without re-fetching from API</li>
+  <li>Refresh button in section header — re-fetches from the Calendar API</li>
+  <li><strong>Only calendars with <code>isSelected = true</code> are synced</strong> (SyncWorker fetches events only for selected calendars) and shown in Upcoming / Calendar screens / widgets</li>
 </ul>
 
 <h3 id="s8-12">8.12 Sidebar (SidebarMenu)</h3>
@@ -1358,7 +1371,7 @@ deadlineLabel(date, time, includeDate):
   <tr><td><code>folder/{folderId}</code></td><td>Folder task list</td></tr>
   <tr><td><code>label/{labelId}</code></td><td>Label task list</td></tr>
   <tr><td><code>priority/{priority}</code></td><td>Priority list (<code>urgent</code>/<code>important</code>/<code>normal</code>)</td></tr>
-  <tr><td><code>calendar/{calendarId}</code></td><td>Список событий одного календаря</td></tr>
+  <tr><td><code>calendar/{calendarId}</code></td><td>Calendar screen — event list for one calendar</td></tr>
 </table>
 
 <h2>13.2 Deeplinks (<code>stlertasks://</code>)</h2>

@@ -127,7 +127,7 @@ com.stler.tasks/
 │   ├── Label.kt
 │   ├── ListItem.kt               sealed class for mixed task/event lists
 │   ├── Priority.kt               enum: URGENT, IMPORTANT, NORMAL
-│   ├── RecurType.kt              enum: DAILY, WEEKLY, MONTHLY
+│   ├── RecurType.kt              enum: NONE, DAYS, WEEKS, MONTHS, YEARS (defined in Task.kt)
 │   ├── Task.kt                   domain model
 │   └── TaskStatus.kt             enum: PENDING, COMPLETED
 │
@@ -195,7 +195,7 @@ com.stler.tasks/
 | deadlineDate | String | ISO date `"YYYY-MM-DD"` or `""` |
 | deadlineTime | String | `"HH:MM"` or `""` |
 | isRecurring | Boolean | Recurring task flag |
-| recurType | RecurType | `DAILY`, `WEEKLY`, `MONTHLY` |
+| recurType | RecurType | `NONE`, `DAYS`, `WEEKS`, `MONTHS`, `YEARS` |
 | recurValue | Int | Recurrence interval (e.g. 2 = every 2 days) |
 | labels | List\<String\> | List of label IDs |
 | sortOrder | Int | Position within parent (sort_order = index × 10) |
@@ -300,7 +300,7 @@ Migration path: v4 → v5 (added `calendar_events`), v5 → v6 (added `series_id
 | G | deadline_date | String `"YYYY-MM-DD"` or Sheets serial date (Number) |
 | H | deadline_time | String `"HH:MM"` or `""` |
 | I | is_recurring | String `"TRUE"` / `"FALSE"` |
-| J | recur_type | String (`"daily"` / `"weekly"` / `"monthly"`) |
+| J | recur_type | String (`"days"` / `"weeks"` / `"months"` / `"years"`) |
 | K | recur_value | String (Int) |
 | L | labels | String (comma-separated label IDs) |
 | M | sort_order | String (Int) |
@@ -678,80 +678,80 @@ shown events = if (calFiltersActive)  → events filtered by calendarId ∈ cale
 
 ### 8.7 Calendar
 **ViewModel:** `CalendarViewModel`  
-**Route:** `calendar/{calendarId}` — отдельный экран на каждый календарь; `calendarId` берётся из `SavedStateHandle`  
-**Data:** события одного конкретного календаря из Room, от `today` до `today + 366 дней`  
+**Route:** `calendar/{calendarId}` — separate screen per calendar; `calendarId` from `SavedStateHandle` (URL-decoded)  
+**Data:** events for one specific calendar from Room, from `today` to `today + 366 days`  
 **Features:**
-- `LazyColumn` событий, сгруппированных по дате (аналогично UpcomingScreen)
-- Заголовок-дата перед каждой группой (`CalendarDayHeader`): `"d MMM ‧ Weekday"` + `"‧ Today"` / `"‧ Tomorrow"` для ближайших дат
-- Все просроченные события (startDate < today) объединяются в группу `"Overdue"` (ключ `LocalDate.MIN`)
-- Пока данные не загружены — `ShimmerTaskList`; если событий нет — `EmptyState`
-- `CalendarEventItem` на каждое событие (см. §8.8)
-- FAB отсутствует в самом `CalendarScreen`; глобальный FAB MainScreen здесь тоже отображается и открывает создание **задачи** (`TaskFormSheet` в TASK mode), а не события
+- `LazyColumn` of events grouped by date (same pattern as UpcomingScreen)
+- Date header before each group (`CalendarDayHeader`): `"d MMM ‧ Weekday"` with `"‧ Today"` / `"‧ Tomorrow"` suffix for near dates
+- All overdue events (`startDate < today`) collapsed into a single `"Overdue"` group (key = `LocalDate.MIN`)
+- `ShimmerTaskList` while loading; `EmptyState` when no events
+- One `CalendarEventItem` per event (see §8.8)
+- No FAB inside `CalendarScreen` itself; the global MainScreen FAB is still visible and opens **task** creation (`TaskFormSheet` in TASK mode), not event creation
 
 ### 8.8 CalendarEventItem
 
-Shared-компонент для отображения одного события — используется и в `CalendarScreen`, и в других местах.
+Shared composable for displaying a single calendar event — used in `CalendarScreen`, `AllTasksScreen`, and `UpcomingScreen`.
 
-**Строка 1:**
+**Row 1:**
 ```
 [40dp placeholder] [40dp box: CalendarMonth icon, tinted calColor, 24dp] [title weight=1] [Schedule btn] [MoreHoriz btn]
 ```
-- Иконка `CalendarMonth` (24dp) тонирована `event.calendarColor` — идентифицирует принадлежность к календарю
-- Title: кликабелен если передан `onEdit`; 2 строки max
-- **Schedule** (`Icons.Outlined.Schedule`, 18dp, цвет `deadlineColor`): быстрое редактирование расписания (`onEditSchedule`)
-- **MoreHoriz** (18dp): открывает `ModalBottomSheet` с пунктами Edit и Delete
+- `CalendarMonth` icon (24dp) tinted with `event.calendarColor` — identifies which calendar the event belongs to
+- Title: clickable when `onEdit` is non-null; 2-line max
+- **Schedule** button (`Icons.Outlined.Schedule`, 18dp, `deadlineColor` tint): quick schedule edit → `onEditSchedule`
+- **MoreHoriz** button (18dp): opens `ModalBottomSheet` with Edit and Delete items
 
-**Строка 2** (отступ 54dp):
+**Row 2** (54dp indent):
 ```
 [time label?]  [CalendarMonth icon 14dp, tinted]  [calendar name]
 ```
-- `timeLabel`: для timed-события — `"HH:MM — HH:MM"` или `"HH:MM"`; для all-day + `showDate=true` — `"d MMM"` / `"Today"` / `"Tomorrow"`; для all-day + `showDate=false` — пусто
-- Иконка `CalendarMonth` 14dp тонирована `calColor` перед названием календаря (не точка, не badge — именно иконка)
+- `timeLabel`: for timed events — `"HH:MM — HH:MM"` or `"HH:MM"`; for all-day + `showDate=true` — `"d MMM"` / `"Today"` / `"Tomorrow"`; for all-day + `showDate=false` — empty
+- `CalendarMonth` icon 14dp tinted with `calColor` before the calendar name (not a dot or badge — it is the icon)
 
-**Удаление:**
-- Нерекуррентное: `AlertDialog` "Delete event?" → `onDelete()`
-- Рекуррентное: `AlertDialog` с тремя кнопками — "Delete this event only" / "Delete all events in series" (error color) / "Cancel"
+**Deletion:**
+- Non-recurring: `AlertDialog` "Delete event?" → `onDelete()`
+- Recurring: `AlertDialog` with three buttons — "Delete this event only" / "Delete all events in series" (error color) / "Cancel"
 
-**Параметры:**
-| Параметр | Описание |
+**Parameters:**
+| Parameter | Description |
 |---|---|
 | `event` | `CalendarEvent` |
-| `showDate` | Показывать дату в строке 2 (false когда дата уже в заголовке группы) |
-| `onEdit` | Открыть форму редактирования (полная); если null — кнопки не показываются |
-| `onEditSchedule` | Открыть форму редактирования только расписания (Schedule-кнопка) |
-| `onDelete` | Удалить событие |
-| `onDeleteSeries` | Удалить всю серию (для рекуррентных) |
+| `showDate` | Show date in row 2 (false when date is already shown in the section header) |
+| `onEdit` | Open full edit form; if null — edit/schedule buttons are not shown |
+| `onEditSchedule` | Open schedule-only edit form (Schedule button) |
+| `onDelete` | Delete this event instance |
+| `onDeleteSeries` | Delete the entire recurring series |
 
-### 8.9 MainScreen — глобальный FAB и Settings
+### 8.9 MainScreen — Global FAB and Settings
 
-**FAB** — единственная кнопка `FloatingActionButton` в `Scaffold` `MainScreen`. Отображается на **всех** экранах. Открывает `TaskFormSheet` в TASK mode:
-- На экране Folder — создаёт задачу в текущей папке (`sidebarFolderContext = currentFolderId`)
-- На всех остальных экранах — создаёт задачу в Inbox
+**FAB** — the single `FloatingActionButton` in the `MainScreen` `Scaffold`. Visible on **all** screens. Opens `TaskFormSheet` in TASK mode:
+- On the Folder screen — creates a task in the current folder (`sidebarFolderContext = currentFolderId`)
+- On all other screens — creates a task in Inbox
 
-Кнопка создания событий в FAB **не** встроена — события создаются через кнопку "+" в шапке виджета или в EVENT mode внутри `TaskFormSheet`.
+Event creation is **not** wired to the FAB — events are created via the "+" button in widget headers or by switching to EVENT mode inside `TaskFormSheet`.
 
-**Settings** — открывается не через навигационный маршрут, а как overlay: `showSettings = true` в `MainScreen` заменяет основной контент на `SettingsScreen`. Кнопка вызова — в `TasksTopAppBar`.
+**Settings** — opened not via a NavHost route but as an overlay: `showSettings = true` in `MainScreen` replaces the main content with `SettingsScreen`. Triggered by the settings icon in `TasksTopAppBar`.
 
 ### 8.10 Settings Screen
 
-**ViewModel:** `SettingsViewModel`. Открывается поверх основного контента (не через NavHost), закрывается кнопкой Back в TopAppBar.
+**ViewModel:** `SettingsViewModel`. Opens as an overlay on top of the main content (not via NavHost); closed by the Back button in the TopAppBar.
 
-Два раздела:
+Two sections:
 
 **SPREADSHEET**
-- Показывает имя и ID активной таблицы Google Sheets
-- Кнопка "Change" разворачивает `AnimatedVisibility`-список всех Google Sheets из Drive пользователя (загружает `listUserSheets()` при первом открытии)
-- Активная таблица отмечена иконкой Check; клик по другой — переключение: сохраняет новый ID в DataStore, очищает Room (tasks / folders / labels / sync\_queue), запускает sync
+- Shows the name and ID of the active Google Sheets spreadsheet
+- "Change" button expands an `AnimatedVisibility` list of all Google Sheets in the user's Drive (calls `listUserSheets()` on first open)
+- The active spreadsheet is marked with a Check icon; clicking another switches it: saves the new ID to DataStore, clears Room (tasks / folders / labels / sync\_queue), and triggers sync
 
 **CALENDARS**
-- Список всех Google Calendars пользователя (загружается при открытии экрана через `loadCalendars()`)
-- Каждый календарь: иконка `CalendarMonth` тонированная цветом + название + `Checkbox`
-- Клик по строке или Checkbox → `toggleCalendar()`:
-  - Обновляет `selectedCalendarIds` в DataStore
-  - Оптимистично обновляет UI без повторного запроса к API
-- Кнопка Refresh в заголовке секции — повторный запрос к Calendar API
-- **Только отмеченные (`isSelected = true`) календари синхронизируются** в SyncWorker и отображаются в Upcoming / Calendar screens / виджетах
-- Календари с `isSelected = false` в App остаются в списке (user может включить позже), но события из них не запрашиваются
+- Lists all of the user's Google Calendars (loaded on screen open via `loadCalendars()`)
+- Each calendar: `CalendarMonth` icon tinted with calendar color + name + `Checkbox`
+- Clicking a row or the Checkbox → `toggleCalendar()`:
+  - Updates `selectedCalendarIds` in DataStore
+  - Optimistically updates the UI without re-fetching from the API
+- Refresh button in the section header — re-fetches from the Calendar API
+- **Only calendars with `isSelected = true` are synced** in SyncWorker and shown in Upcoming / Calendar screens / widgets
+- Calendars with `isSelected = false` remain in the list (user can re-enable later) but their events are not fetched
 
 ### 8.12 Sidebar (SidebarMenu)
 
@@ -1294,7 +1294,7 @@ Material 3 default typography scale. No custom fonts.
 | `folder/{folderId}` | Folder task list |
 | `label/{labelId}` | Label task list |
 | `priority/{priority}` | Priority task list (`urgent`/`important`/`normal`) |
-| `calendar/{calendarId}` | Calendar screen — список событий одного календаря |
+| `calendar/{calendarId}` | Calendar screen — event list for one calendar |
 
 Navigation is handled by Compose Navigation (`NavHost` in `MainScreen`). The sidebar `ModalNavigationDrawer` calls `onNavigate(route)` → `navController.navigate(route)`.
 
