@@ -622,7 +622,7 @@ com.stler.tasks/<br>
   <li>Заголовок перед каждой группой (<code>CalendarDayHeader</code>): <code>"d MMM ‧ Weekday"</code> + <code>"‧ Today"</code> / <code>"‧ Tomorrow"</code></li>
   <li>Просроченные события (startDate &lt; today) — в группу <code>"Overdue"</code> (ключ <code>LocalDate.MIN</code>)</li>
   <li>До загрузки — <code>ShimmerTaskList</code>; без событий — <code>EmptyState</code></li>
-  <li>FAB отсутствует; сетки месяца и выбора дня нет</li>
+  <li>Собственного FAB в <code>CalendarScreen</code> нет; глобальный FAB <code>MainScreen</code> отображается на всех экранах и открывает создание <strong>задачи</strong> (TASK mode), не события</li>
 </ul>
 
 <h2>8.8 CalendarEventItem</h2>
@@ -639,6 +639,35 @@ com.stler.tasks/<br>
   <li>timeLabel: timed → <code>"HH:MM — HH:MM"</code>; all-day + showDate=true → <code>"d MMM"</code>/<code>"Today"</code>; all-day + showDate=false → пусто</li>
 </ul>
 <p><strong>Удаление:</strong> нерекуррентное — AlertDialog; рекуррентное — три кнопки: "Delete this event only" / "Delete all events in series" (error color) / Cancel.</p>
+
+<h2>8.9 MainScreen — глобальный FAB</h2>
+<p>Единственный <code>FloatingActionButton</code> находится в <code>Scaffold</code> <code>MainScreen</code> и отображается на всех экранах без исключения.</p>
+<ul>
+  <li>На экране Folder — открывает <code>TaskFormSheet</code> с <code>folderId = currentFolderId</code></li>
+  <li>На всех остальных экранах — открывает <code>TaskFormSheet</code> с <code>folderId = "fld-inbox"</code></li>
+  <li>Режим всегда TASK — события через FAB создать нельзя</li>
+</ul>
+<p><strong>Settings</strong> открывается не через NavHost-маршрут, а как overlay: <code>showSettings = true</code> заменяет основной контент на <code>SettingsScreen</code>. Вызывается из <code>TasksTopAppBar</code>.</p>
+
+<h2>8.10 Settings Screen</h2>
+<p><strong>ViewModel:</strong> <code>SettingsViewModel</code>. Открывается поверх контента (не NavHost), закрывается кнопкой Back в TopAppBar.</p>
+
+<p><strong>Секция SPREADSHEET</strong></p>
+<ul>
+  <li>Показывает имя и ID активной таблицы Google Sheets</li>
+  <li>Кнопка "Change" разворачивает список всех Google Sheets из Drive (<code>listUserSheets()</code>)</li>
+  <li>Активная таблица отмечена иконкой Check</li>
+  <li>Клик по другой таблице → <code>switchSpreadsheet()</code>: сохраняет новый spreadsheetId в DataStore, очищает Room (tasks / folders / labels / sync_queue), запускает sync</li>
+</ul>
+
+<p><strong>Секция CALENDARS</strong></p>
+<ul>
+  <li>Список всех Google Calendars пользователя (загружается при открытии через <code>loadCalendars()</code>)</li>
+  <li>Каждая строка: иконка <code>CalendarMonth</code> тонированная + название + <code>Checkbox</code></li>
+  <li><code>toggleCalendar()</code>: обновляет <code>selectedCalendarIds</code> в DataStore + оптимистично обновляет UI</li>
+  <li>Кнопка Refresh — повторный запрос к Calendar API</li>
+  <li><strong>Только отмеченные календари синхронизируются</strong> (SyncWorker запрашивает события только для <code>isSelected = true</code>) и отображаются в Upcoming / Calendar screens / виджетах</li>
+</ul>
 
 <!-- ─── 9. TaskItem ─────────────────────────────────────────────────────────── -->
 <h1 id="taskitem">9. TaskItem Component</h1>
