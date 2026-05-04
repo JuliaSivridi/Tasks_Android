@@ -696,20 +696,208 @@ shown events = if (calFiltersActive)  → events filtered by calendarId ∈ cale
 <h3>calendarsInEvents</h3>
 <p>Derived <code>StateFlow&lt;List&lt;CalendarItem&gt;&gt;</code> — distinct calendars present in the currently loaded events. Used to populate the calendar filter chip dropdown in <code>UpcomingScreen</code>.</p>
 
-<h2>8.2 All Tasks</h2>
-<p>Root <code>PENDING</code> tasks. Sort: priority → deadline → createdAt. Filter chips: priority / label / folder. Shimmer on first load, EmptyState when nothing matches.</p>
+<h3 id="s8-2">8.2 All Tasks</h3>
+<p><strong>ViewModel:</strong> <code>AllTasksViewModel</code><br>
+<strong>Route:</strong> <code>all_tasks</code><br>
+<strong>Data:</strong> All <code>PENDING</code> tasks from all folders + calendar events (today..today+366), unified into a single flat list.</p>
 
-<h2>8.3 Completed</h2>
-<p><code>COMPLETED</code> tasks sorted by completedAt desc. <code>enableSwipe = false</code>, strikethrough title, Restore + Delete buttons.</p>
+<p><strong>Data flow:</strong></p>
+<ul>
+  <li><code>tasks</code> — <code>repository.observeAllPendingTasks()</code> (all PENDING root and subtasks)</li>
+  <li><code>eventsFlow</code> — selected calendar IDs from DataStore → <code>getEventsForCalendars(ids, today, today+366)</code> via <code>flatMapLatest</code></li>
+  <li><code>calendarsInEvents</code> — distinct calendars derived from <code>eventsFlow</code>; used for calendar filter chip</li>
+  <li><code>filteredItems: StateFlow&lt;List&lt;ListItem&gt;&gt;</code> — combined result (tasks + events) applying filter matrix</li>
+</ul>
 
-<h2>8.4 Folder</h2>
-<p>Hierarchical task list for a single folder. Drag-to-reorder (reorderable library). Indent/outdent via "…" menu. <code>isExpanded</code> controls subtask visibility and persists to Room + Sheets.</p>
+<p><strong>Filter matrix</strong> (identical to UpcomingViewModel — see §8.1 for details):</p>
+<ul>
+  <li>4 independent filter sets: <code>priorityFilter</code>, <code>labelFilter</code>, <code>folderFilter</code>, <code>calendarFilter</code></li>
+  <li>Same logic: task-only filter hides events; calendar-only filter hides tasks; both active = both filtered</li>
+</ul>
 
-<h2>8.5 Label</h2>
-<p>Root <code>PENDING</code> tasks with selected label. Priority filter chip. EmptyState.</p>
+<p><strong>Sorting within <code>filteredItems</code>:</strong></p>
+<ol>
+  <li>Tasks with a valid <code>deadlineDate</code> and calendar events are mixed together, sorted by:
+    <ul>
+      <li><code>deadlineDate</code>/<code>startDate</code> string ascending (ISO format → sorts correctly)</li>
+      <li>Timed items (<code>deadlineTime != ""</code> / <code>startTime != ""</code>) sort before all-day within the same date (0 vs 1)</li>
+      <li>Time string ascending within same date+timed group</li>
+    </ul>
+  </li>
+  <li>Tasks WITHOUT a deadline (<code>deadlineDate.isBlank()</code>) are appended <strong>after</strong> all dated items, in their original (Room-observed) order</li>
+</ol>
 
-<h2>8.6 Priority</h2>
-<p>Tabs: Urgent / Important / Normal. Sort: deadline → createdAt. EmptyState per tab.</p>
+<p><strong>Initial scroll-to-today:</strong> On first load, <code>LaunchedEffect(firstTodayIdx)</code> with a 200 ms debounce delay scrolls the list to the first item whose date ≥ today. The debounce handles events arriving slightly after tasks and re-centering the scroll.</p>
+
+<p><strong>Layout:</strong></p>
+<ul>
+  <li><code>FilterBar</code> (shared component — see §8.11) at top</li>
+  <li><code>ShimmerTaskList</code> while <code>isLoading</code></li>
+  <li><code>EmptyState</code> (<code>FormatListBulleted</code> icon, "No tasks") when <code>filteredItems</code> is empty</li>
+  <li><code>LazyColumn</code> with <code>TaskItem</code> and <code>CalendarEventItem</code> rows, <code>HorizontalDivider</code> (0.5dp) between each</li>
+  <li><code>TaskItem</code> params: <code>showFolder=true</code>, <code>folderName</code>/<code>folderColor</code> looked up from <code>folders</code></li>
+  <li><code>CalendarEventItem</code> params: <code>showDate=true</code> (date shown in row 2 since no date-group headers)</li>
+</ul>
+
+<p><strong>Actions:</strong> complete, delete task; delete event / delete event series; update deadline; update priority; update labels.</p>
+
+<h3 id="s8-3">8.3 Completed</h3>
+<p><strong>ViewModel:</strong> <code>CompletedViewModel</code><br>
+<strong>Route:</strong> <code>completed</code><br>
+<strong>Data:</strong> <code>COMPLETED</code> tasks (all folders) sorted by <code>completedAt</code> descending (Room query order).</p>
+
+<p><strong>Filters:</strong> Priority / Label / Folder via <code>FilterBar</code> (no calendar filter — completed screen has no events).</p>
+
+<p><strong><code>filteredTasks</code>:</strong> <code>combine(allTasks, priorityFilter, labelFilter, folderFilter)</code> — all three filters are AND-conditions on the already-completed list.</p>
+
+<p><strong>Layout:</strong></p>
+<ul>
+  <li><code>FilterBar</code> at top</li>
+  <li><code>ShimmerTaskList</code> while <code>isLoading</code></li>
+  <li><code>EmptyState</code> (<code>CheckCircle</code> icon, "No completed tasks") when empty</li>
+  <li><code>LazyColumn</code> with <code>TaskItem(enableSwipe = false)</code> — swipe is disabled; task rows show strikethrough title and muted alpha</li>
+  <li>When a completed task is rendered: "Restore" and "Delete" buttons appear instead of deadline/more buttons; <code>onCheckedChange(false)</code> → <code>restoreTask(id)</code> (sets status=PENDING, clears completedAt)</li>
+  <li><code>HorizontalDivider</code> (0.5dp) between rows</li>
+</ul>
+
+<p><strong>Actions:</strong> <code>restoreTask(id)</code> — <code>repository.restoreTask(id)</code> (reverse of complete); <code>deleteTask(id)</code> — permanent remove from Room + SyncQueue DELETE.</p>
+
+<h3 id="s8-4">8.4 Folder</h3>
+<p><strong>ViewModel:</strong> <code>FolderViewModel</code><br>
+<strong>Route:</strong> <code>folder/{folderId}</code><br>
+<strong>Data source:</strong> <code>repository.observePendingInFolder(folderId)</code> — all PENDING tasks in the folder (root + all subtask descendants). <code>folderId</code> from <code>SavedStateHandle</code>.</p>
+
+<p><strong><code>displayList: StateFlow&lt;List&lt;TaskNode&gt;&gt;</code>:</strong> Derived from <code>combine(allTasks, completedCounts)</code>. Built by <code>buildDisplayList()</code>:</p>
+<ol>
+  <li>Group tasks by <code>parentId</code> (<code>Map&lt;String, List&lt;Task&gt;&gt;</code>)</li>
+  <li>DFS from root tasks (<code>byParent[""]</code> sorted by <code>sortOrder</code>)</li>
+  <li>Each task becomes a <code>TaskNode(task, depth, childCount, completedChildCount)</code></li>
+  <li>If <code>task.isExpanded</code>: recursively add children sorted by <code>sortOrder</code> at <code>depth + 1</code></li>
+  <li>If <code>!task.isExpanded</code>: children are NOT added (subtree hidden)</li>
+</ol>
+
+<p><code>completedCounts: Map&lt;String, Int&gt;</code> — from <code>observeCompletedChildCountsInFolder(folderId)</code>, counts completed direct children per parent ID. Used for the subtask progress display in <code>TaskItem</code>.</p>
+
+<p><strong>Drag-to-reorder (reorderable library):</strong></p>
+<ul>
+  <li><code>localList</code> — local <code>mutableStateOf(displayList)</code> for optimistic drag preview; rebuilt when <code>displayList</code> changes (i.e. after DB write)</li>
+  <li><code>pendingReorder</code> — plain object (<em>NOT</em> <code>mutableStateOf</code> to avoid per-frame recomposition) with fields <code>parentId</code>, <code>fromIdx</code>, <code>toIdx</code></li>
+  <li><code>onMove { from, to }</code>:
+    <ol>
+      <li>Mutates <code>localList</code> (remove from <code>from.index</code>, insert at <code>to.index</code>) — instant visual feedback</li>
+      <li>Computes <code>fromSiblingIdx</code> / <code>toSiblingIdx</code> within the same parent, stores in <code>pendingReorder</code></li>
+    </ol>
+  </li>
+  <li><code>LaunchedEffect(isDragging)</code> inside <code>ReorderableItem</code>: when <code>isDragging</code> transitions to <code>false</code> AND <code>pendingReorder.fromIdx != pendingReorder.toIdx</code> → calls <code>viewModel.reorderSiblings(parentId, fromIdx, toIdx)</code> → resets <code>pendingReorder.fromIdx = -1</code></li>
+  <li><code>reorderSiblings()</code>: filters siblings by <code>parentId</code>, sorts by <code>sortOrder</code>, moves item, rewrites <code>sortOrder = index × 10</code> for all siblings in a single batch <code>repository.updateTasks(updated)</code></li>
+</ul>
+
+<p><strong>Reparenting (Indent / Outdent):</strong></p>
+<ul>
+  <li><code>onIndent</code>: task above in <code>localList</code> becomes new parent. Calls <code>viewModel.reparentTask(taskId, above.task.id)</code>.</li>
+  <li><code>onOutdent</code>: find current task's parent in <code>localList</code>, use that parent's <code>parentId</code> as new parent (moving up one level). Calls <code>viewModel.reparentTask(taskId, grandparentId)</code>.</li>
+  <li><code>reparentTask(taskId, newParentId)</code>: appends to end of new parent's siblings (<code>maxSortOrder + 10</code>), updates <code>parentId</code> + <code>sortOrder</code> + <code>updatedAt</code>.</li>
+</ul>
+
+<p><strong>Layout:</strong></p>
+<ul>
+  <li>No <code>FilterBar</code> or <code>EmptyState</code> composable; empty state is a centered <code>Text("No tasks in this folder")</code></li>
+  <li><code>LazyColumn</code> with <code>ReorderableItem</code> per node</li>
+  <li>Each row: <code>Row(verticalAlignment=CenterVertically)</code> → <code>Icon(DragHandle, 20dp, .draggableHandle())</code> + <code>TaskItem(modifier=Modifier.weight(1f))</code></li>
+  <li><code>TaskItem</code> params: <code>showFolder=false</code>, <code>depth=node.depth</code>, <code>hasChildren=node.childCount &gt; 0</code>, <code>completedChildCount</code>, <code>totalChildCount</code>, swipe enabled, <code>onIndent</code>/<code>onOutdent</code> wired</li>
+</ul>
+
+<p><strong><code>toggleExpanded(task)</code>:</strong> calls <code>repository.toggleExpanded(task.id, !task.isExpanded)</code> — writes to Room (triggers <code>displayList</code> recomposition) without touching <code>updatedAt</code>.</p>
+
+<h3 id="s8-5">8.5 Label</h3>
+<p><strong>ViewModel:</strong> <code>LabelViewModel</code><br>
+<strong>Route:</strong> <code>label/{labelId}</code><br>
+<strong>Data source:</strong> <code>repository.observeAllPendingTasks()</code> filtered by <code>labelId in task.labels</code>. <code>labelId</code> from <code>SavedStateHandle</code>.</p>
+
+<p><strong>No filter bar</strong> — there is no <code>FilterBar</code> in <code>LabelScreen</code>. The screen shows only tasks with this label, no secondary filters.</p>
+
+<p><strong><code>showLabels = false</code></strong> passed to <code>TaskItem</code> — label chips are not shown in row 2 (the label is implicit from context).</p>
+
+<p><strong><code>showFolder = true</code></strong> — folder name and color shown in row 2.</p>
+
+<p><strong>Sort:</strong> Tasks are in the order returned by <code>observeAllPendingTasks()</code> filtered by label (Room default order — not re-sorted by priority/deadline). All tasks with the matching label ID appear regardless of folder.</p>
+
+<p><strong>Layout:</strong></p>
+<ul>
+  <li><code>ShimmerTaskList</code> while <code>isLoading</code></li>
+  <li><code>EmptyState</code> (<code>Label</code> icon, "No tasks", "Tasks with this label will appear here") when empty</li>
+  <li><code>LazyColumn</code> of <code>TaskItem</code> rows with <code>HorizontalDivider</code> (0.5dp)</li>
+</ul>
+
+<p><strong>Actions:</strong> complete, delete; update deadline, priority, labels.</p>
+
+<h3 id="s8-6">8.6 Priority</h3>
+<p><strong>ViewModel:</strong> <code>PriorityViewModel</code><br>
+<strong>Route:</strong> <code>priority/{priority}</code> — each priority level is a <strong>separate route</strong> (<code>priority/urgent</code>, <code>priority/important</code>, <code>priority/normal</code>). There are no tabs within <code>PriorityScreen</code>; the sidebar has three separate nav items that navigate to three separate route instances.</p>
+
+<p><strong>Data source:</strong> <code>repository.observeAllPendingTasks()</code> filtered by <code>task.priority == selectedPriority</code>.</p>
+
+<p><strong><code>selectedPriority</code>:</strong> set via <code>viewModel.selectPriority(p)</code> in <code>LaunchedEffect(priority)</code> when the composable receives the route param (<code>"urgent"</code> → <code>Priority.URGENT</code>, <code>"important"</code> → <code>Priority.IMPORTANT</code>, else → <code>Priority.NORMAL</code>).</p>
+
+<p><strong>Sort (within <code>filteredTasks</code>):</strong></p>
+<ol>
+  <li>Dated tasks first (0) before undated (1)</li>
+  <li><code>deadlineDate</code> ascending</li>
+  <li>Timed (0) before all-day (1) within same date</li>
+  <li><code>deadlineTime</code> ascending</li>
+  <li><code>createdAt</code> ascending</li>
+</ol>
+
+<p><strong>No filter bar</strong> — there is no <code>FilterBar</code> in <code>PriorityScreen</code>.</p>
+
+<p><strong><code>showFolder = true</code></strong> — folder name and color shown in row 2.</p>
+
+<p><strong>Layout:</strong></p>
+<ul>
+  <li><code>ShimmerTaskList</code> while <code>isLoading</code></li>
+  <li><code>EmptyState</code> (<code>Flag</code> icon, "No tasks", "No {Priority} priority tasks") when empty</li>
+  <li><code>LazyColumn</code> of <code>TaskItem</code> rows with <code>HorizontalDivider</code> (0.5dp)</li>
+</ul>
+
+<p><strong>Actions:</strong> complete, delete; update deadline, priority, labels.</p>
+
+<h3 id="s8-11">8.11 FilterBar (Shared Component)</h3>
+<p><code>FilterBar</code> is a shared composable defined in <code>AllTasksScreen.kt</code>, reused by <code>AllTasksScreen</code> and <code>CompletedScreen</code>.</p>
+
+<p><strong>Layout:</strong> <code>Row(horizontalArrangement=spacedBy(4.dp))</code> — compact filter bar, never wraps.</p>
+
+<p><strong>Chips shown (left to right):</strong></p>
+<ol>
+  <li><strong>✕ Clear-all button</strong> — <code>IconButton(32dp)</code> with <code>Close</code> icon, <strong>only visible when any filter is active</strong> (<code>hasFilters = priorityFilter.isNotEmpty() || labelFilter.isNotEmpty() || folderFilter.isNotEmpty() || calendarFilter.isNotEmpty()</code>)</li>
+  <li><strong>Priority chip</strong> — <code>Flag</code> icon; always shown; label shows <code>priorityFilter.size</code> count when active</li>
+  <li><strong>Labels chip</strong> — <code>Label</code> icon; hidden when <code>showLabelFilter=false</code> or <code>labels.isEmpty()</code>; label shows count when active</li>
+  <li><strong>Folders chip</strong> — <code>Folder</code> icon; hidden when <code>showFolderFilter=false</code> or <code>folders.isEmpty()</code>; label shows count when active</li>
+  <li><strong>Calendar chip</strong> — <code>CalendarMonth</code> icon; shown when <code>calendars.isNotEmpty() || calendarFilter.isNotEmpty()</code>; label shows count when active</li>
+</ol>
+
+<p><strong>Chip behavior:</strong></p>
+<ul>
+  <li>Each chip opens a <code>DropdownMenu</code> on click (<code>Box</code>-wrapped for proper anchor)</li>
+  <li>Selected chip renders with <code>neutralChipColors()</code> (bypasses Material You warm tint): light mode = <code>SelectedHighlightLight</code> (#D8D8D8), dark mode = <code>primaryContainer</code></li>
+  <li>Active filter items in the dropdown show a <code>Check</code> icon as <code>trailingIcon</code>; items in priority dropdown show priority-colored <code>Flag</code> as <code>leadingIcon</code>; label/folder/calendar items show their hex color via <code>toComposeColor()</code></li>
+  <li>Tapping an item toggles it (additive multi-select within each category)</li>
+</ul>
+
+<p><strong>Parameters:</strong></p>
+<table>
+  <thead><tr><th>Parameter</th><th>Default</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>labels</code></td><td>—</td><td>All labels for the label dropdown</td></tr>
+    <tr><td><code>folders</code></td><td><code>emptyList()</code></td><td>All folders for folder dropdown</td></tr>
+    <tr><td><code>priorityFilter</code></td><td>—</td><td>Active priority set</td></tr>
+    <tr><td><code>labelFilter</code></td><td>—</td><td>Active label ID set</td></tr>
+    <tr><td><code>folderFilter</code></td><td><code>emptySet()</code></td><td>Active folder ID set</td></tr>
+    <tr><td><code>calendars</code></td><td><code>emptyList()</code></td><td><code>CalendarItem</code> list (distinct from events)</td></tr>
+    <tr><td><code>calendarFilter</code></td><td><code>emptySet()</code></td><td>Active calendar ID set</td></tr>
+    <tr><td><code>showLabelFilter</code></td><td><code>true</code></td><td>Hide label chip (e.g. on LabelScreen)</td></tr>
+    <tr><td><code>showFolderFilter</code></td><td><code>true</code></td><td>Hide folder chip (e.g. on FolderScreen)</td></tr>
+  </tbody>
+</table>
 
 <h2>8.7 Calendar</h2>
 <p><strong>Route:</strong> <code>calendar/{calendarId}</code> — отдельный экран на каждый календарь; <code>calendarId</code> передаётся через <code>SavedStateHandle</code>.<br>
@@ -765,6 +953,59 @@ shown events = if (calFiltersActive)  → events filtered by calendarId ∈ cale
   <li>Кнопка Refresh — повторный запрос к Calendar API</li>
   <li><strong>Только отмеченные календари синхронизируются</strong> (SyncWorker запрашивает события только для <code>isSelected = true</code>) и отображаются в Upcoming / Calendar screens / виджетах</li>
 </ul>
+
+<h3 id="s8-12">8.12 Sidebar (SidebarMenu)</h3>
+<p><code>ModalDrawerSheet</code> occupying 70% of screen width (<code>fillMaxWidth(0.70f)</code>). Opened via the hamburger button in <code>TasksTopAppBar</code>.</p>
+
+<p><strong>Structure (top to bottom):</strong></p>
+<ol>
+  <li><strong>"Add task" button</strong> — full-width <code>Button</code>; calls <code>onAddTask()</code> (same as FAB; creates task in Inbox or current folder)</li>
+  <li><strong>Main nav items</strong> (always visible, never collapsed):
+    <ul>
+      <li>Upcoming (<code>CalendarMonth</code> icon)</li>
+      <li>All Tasks (<code>FormatListBulleted</code> icon)</li>
+      <li>Completed (<code>CheckCircle</code> icon)</li>
+    </ul>
+  </li>
+  <li><strong>Priorities section</strong> (collapsible):
+    <ul>
+      <li>Section header with <code>ExpandMore</code> chevron + toggle</li>
+      <li>3 nav items: Urgent (<code>Flag</code>, PriorityUrgent color) / Important (<code>Flag</code>, PriorityImportant) / Normal (<code>Flag</code>, PriorityNormal)</li>
+      <li>Each navigates to <code>priority/{key}</code> route</li>
+    </ul>
+  </li>
+  <li><strong>Labels section</strong> (collapsible, has "+" add button):
+    <ul>
+      <li>Each label: <code>Label</code> icon (label.color) + name; badge area shows <code>MoreVert</code> → <code>DropdownMenu</code> (Edit / Delete)</li>
+    </ul>
+  </li>
+  <li><strong>Folders section</strong> (collapsible, has "+" add button):
+    <ul>
+      <li>Inbox: <code>Inbox</code> icon; other folders: <code>Folder</code> icon — both tinted with <code>folder.color</code></li>
+      <li>Each folder: badge area shows <code>MoreVert</code> → <code>DropdownMenu</code> (Edit / Delete)</li>
+    </ul>
+  </li>
+  <li><strong>Calendars section</strong> (collapsible, <strong>only shown when <code>selectedCalendars.isNotEmpty()</code></strong>):
+    <ul>
+      <li>Each calendar: <code>CalendarMonth</code> icon tinted <code>cal.color</code> + <code>cal.summary</code></li>
+      <li>Navigates to <code>calendar/{calendarId}</code> (URL-encoded via <code>Screen.calendarRoute()</code>)</li>
+      <li>No "+" button (calendars are managed in Settings)</li>
+    </ul>
+  </li>
+  <li><strong>Sync footer</strong> — bottom of sidebar:
+    <ul>
+      <li><code>SyncState.Idle</code>: static text</li>
+      <li><code>SyncState.Syncing</code>: <code>Sync</code> icon with infinite rotation animation + "Syncing..."</li>
+      <li><code>SyncState.Pending(count)</code>: <code>Sync</code> icon + "$count pending"</li>
+    </ul>
+  </li>
+</ol>
+
+<p><strong>Selected item highlight:</strong> <code>NavigationDrawerItem</code> uses <code>sidebarItemColors()</code> — overrides Material You default (<code>primaryContainer</code>) with <code>NavSelected</code> in light mode and <code>SelectedHighlightDark</code> in dark mode for clearer active item visibility.</p>
+
+<p><strong><code>SidebarState</code></strong> — tracks which sections are open/closed (<code>prioritiesOpen</code>, <code>labelsOpen</code>, <code>foldersOpen</code>, <code>calendarsOpen</code>); persisted via <code>SidebarPreferences</code> (DataStore).</p>
+
+<hr>
 
 <!-- ─── 9. TaskItem ─────────────────────────────────────────────────────────── -->
 <h1 id="taskitem">9. TaskItem Component</h1>
