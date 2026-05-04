@@ -59,7 +59,7 @@
     background: #222;
     font-size: 12px;
     color: #a1a1aa;
-    max-width: 480px;
+    max-width: 520px;
   }
   .cover .inspiration strong { color: #e4e4e7; }
 
@@ -227,16 +227,17 @@
   <div class="subtitle">Technical Specification</div>
   <div class="accent-line"></div>
   <div class="meta">
-    <strong>Version:</strong> 1.3 (April 2026)<br>
+    <strong>Version:</strong> 1.1 (May 2026)<br>
     <strong>Repository:</strong> github.com/JuliaSivridi/Tasks_Android<br>
-    <strong>Stack:</strong> Kotlin · Jetpack Compose · Room · Hilt · WorkManager · Glance · Google Sheets API v4<br>
+    <strong>Stack:</strong> Kotlin · Jetpack Compose · Room · Hilt · WorkManager · Glance · Google Sheets API v4 · Google Calendar API v3<br>
     <strong>Min SDK:</strong> 26 (Android 8.0) &nbsp;·&nbsp; <strong>Target SDK:</strong> 36
   </div>
   <div class="inspiration">
     <strong>Relationship to PWA:</strong> Native Android rewrite of
     <strong>Stler Tasks PWA</strong> (stler-tasks.vercel.app). Both apps share the same
-    <code>db_tasks</code> Google Spreadsheet per user — data is always in sync between
-    the web and Android versions.
+    <code>db_tasks</code> Google Spreadsheet per user — task data is always in sync
+    between the web and Android versions. Calendar events are fetched directly from
+    Google Calendar API v3 and displayed alongside tasks.
   </div>
 </div>
 
@@ -252,666 +253,611 @@
     <li><a href="#architecture">Architecture</a></li>
     <li><a href="#packages">Package Structure</a></li>
     <li><a href="#data-model">Data Model</a></li>
-    <li><a href="#sheets-schema">Google Sheets Schema</a></li>
     <li><a href="#auth">Authentication &amp; First-Launch Setup</a></li>
     <li><a href="#sync">Synchronization</a></li>
     <li><a href="#screens">UI Screens</a></li>
     <li><a href="#taskitem">TaskItem Component</a></li>
-    <li><a href="#taskform">Task Form Sheet</a></li>
+    <li><a href="#taskform">TaskFormSheet</a></li>
     <li><a href="#widgets">Widgets</a></li>
     <li><a href="#theme">Theme &amp; Colors</a></li>
     <li><a href="#navigation">Navigation &amp; Deeplinks</a></li>
     <li><a href="#loading">Loading &amp; Empty States</a></li>
-    <li><a href="#cicd">CI/CD &amp; Build</a></li>
+    <li><a href="#cicd">CI/CD</a></li>
     <li><a href="#setup">First-Time Setup</a></li>
     <li><a href="#algorithms">Key Algorithms</a></li>
   </ol>
 </div>
 
-<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- ─── 1. Overview ────────────────────────────────────────────────────────── -->
 <h1 id="overview">1. Overview</h1>
 
-<p>Stler Tasks is a native Android task manager backed by Google Sheets as the database. There is no dedicated backend server — all persistent data lives in a <strong>Google Spreadsheet</strong> (<code>db_tasks</code>) accessed via the Sheets API v4. Room acts as a local cache, making the app fully functional offline. All UI is built in Jetpack Compose.</p>
+<p>Stler Tasks is a personal task manager for Android. It is a native rewrite of a PWA with the same Google Sheets backend, so both apps share one <code>db_tasks</code> spreadsheet per user. There is no dedicated backend server — all persistent task data lives in Google Sheets, accessed via the Sheets API v4. Room serves as a local cache that makes the app fully functional offline.</p>
 
-<h2>Key Design Goals</h2>
+<p>In addition to tasks, the app integrates with <strong>Google Calendar API v3</strong>: events from selected calendars are fetched, cached in Room, and displayed alongside tasks in the Upcoming screen, Calendar screen, and all widgets.</p>
+
+<p><strong>Key design goals:</strong></p>
 <ul>
-  <li><strong>Google Sheets as the single source of truth</strong> — the same spreadsheet is shared with the PWA</li>
-  <li><strong>Offline-first</strong> — full read/write via Room; a sync queue flushes changes when online</li>
-  <li><strong>Reactive UI</strong> — all screens observe Room Flows; data updates propagate automatically without manual refresh</li>
-  <li><strong>Clean MVVM + Repository</strong> with Hilt DI throughout</li>
-  <li><strong>Glance widgets</strong> that react to Room changes without explicit <code>updateAll()</code> calls</li>
-  <li><strong>Zero onboarding friction</strong> — the <code>db_tasks</code> spreadsheet is created automatically on first sign-in</li>
+  <li>Google Sheets as the single source of truth for tasks — no proprietary cloud service</li>
+  <li>Full offline support via Room + sync queue</li>
+  <li>Reactive UI — all screens observe Room Flows; data updates propagate automatically</li>
+  <li>Clean MVVM + Repository architecture with Hilt DI throughout</li>
+  <li>Glance widgets that react to Room changes without explicit refresh calls</li>
+  <li>Google Calendar events surfaced inline with tasks, unified by date</li>
 </ul>
 
-<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- ─── 2. Tech Stack ──────────────────────────────────────────────────────── -->
 <h1 id="tech-stack">2. Tech Stack &amp; Dependencies</h1>
 
 <table>
   <tr><th>Layer</th><th>Library</th><th>Version</th><th>Notes</th></tr>
-  <tr><td>Language</td><td>Kotlin</td><td>2.2.10</td><td>Coroutines throughout</td></tr>
+  <tr><td>Language</td><td>Kotlin</td><td>2.2.10</td><td></td></tr>
   <tr><td>UI</td><td>Jetpack Compose + Material 3</td><td>BOM 2026.02.01</td><td>Compose-only, no XML layouts</td></tr>
   <tr><td>DI</td><td>Hilt</td><td>2.59.2</td><td>KSP processor</td></tr>
-  <tr><td>Local DB</td><td>Room</td><td>2.7.1</td><td>Version 4, fallbackToDestructiveMigration</td></tr>
+  <tr><td>Local DB</td><td>Room</td><td>2.7.1</td><td>version 7, explicit migrations</td></tr>
   <tr><td>Networking</td><td>Retrofit + OkHttp</td><td>2.11.0 / 4.12.0</td><td>Bearer token interceptor + 401 Authenticator</td></tr>
-  <tr><td>Serialization</td><td>Gson</td><td>2.11.0</td><td>For Retrofit responses + SyncQueue payloads</td></tr>
-  <tr><td>Background</td><td>WorkManager</td><td>2.10.1</td><td>Periodic sync (30 min) + one-off triggers</td></tr>
-  <tr><td>Widgets</td><td>Glance + Glance Material 3</td><td>1.1.0</td><td>All 3 widget types</td></tr>
+  <tr><td>Serialization</td><td>Gson</td><td>2.11.0</td><td>For Retrofit + SyncQueue payloads</td></tr>
+  <tr><td>Background</td><td>WorkManager (Hilt)</td><td>2.10.1</td><td>Periodic sync (30 min) + one-off</td></tr>
+  <tr><td>Widgets</td><td>Glance</td><td>1.1.0</td><td>4 widget types</td></tr>
   <tr><td>Auth</td><td>CredentialManager + Identity API</td><td>21.3.0 / 1.1.1</td><td>Google Sign-In + scope authorization</td></tr>
-  <tr><td>Preferences</td><td>DataStore</td><td>1.1.2</td><td>Token, user info, spreadsheetId</td></tr>
-  <tr><td>Image loading</td><td>Coil Compose</td><td>2.7.0</td><td>Avatar in TopAppBar</td></tr>
+  <tr><td>Preferences</td><td>DataStore</td><td>1.1.2</td><td>Token, user info, spreadsheet ID, calendar IDs</td></tr>
+  <tr><td>Image loading</td><td>Coil</td><td>2.7.0</td><td>Avatar in TopAppBar</td></tr>
   <tr><td>Drag &amp; drop</td><td>reorderable (Calvin)</td><td>2.4.3</td><td>FolderScreen drag-to-reorder</td></tr>
   <tr><td>Coroutines</td><td>kotlinx.coroutines</td><td>1.10.2</td><td>Android + Play Services variants</td></tr>
+  <tr><td>Navigation</td><td>Navigation Compose</td><td>2.9.0</td><td></td></tr>
+  <tr><td>Lifecycle</td><td>Lifecycle ViewModel/Runtime</td><td>2.9.0</td><td></td></tr>
 </table>
 
-<p><strong>Build:</strong> AGP 9.1.1 · KSP 2.2.10-2.0.2 · JVM toolchain 11 · Min SDK 26 · Target SDK 36</p>
+<p><strong>Build:</strong> AGP 9.1.1 · KSP 2.2.10-2.0.2 · JVM toolchain 11</p>
 
-<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- ─── 3. Architecture ────────────────────────────────────────────────────── -->
 <h1 id="architecture">3. Architecture</h1>
 
 <p><strong>Pattern:</strong> MVVM + Repository + Unidirectional Data Flow</p>
 
-<pre><code>UI (Composable)
-    ↕  StateFlow / collectAsStateWithLifecycle
-ViewModel  (Hilt, ViewModelScope)
-    ↕  suspend functions / Flow
-Repository  (Singleton, @Inject)
-    ↕  Room DAOs (Flow)          ↕  SyncQueue (write path)
-Local DB (Room)                  SyncWorker (background)
-                                     ↕  Retrofit / OkHttp
-                                 Google Sheets API v4</code></pre>
+<pre>UI (Composable)
+    ↕ StateFlow / collectAsStateWithLifecycle
+ViewModel (Hilt, ViewModelScope)
+    ↕ suspend / Flow
+Repository (Singleton)
+    ↕ Room DAOs (Flow)     ↕ SyncQueue (write path)
+Local DB (Room)            SyncWorker (background push + pull)
+                               ↕ Retrofit / OkHttp
+                           Google Sheets API v4
+                           Google Calendar API v3</pre>
 
-<p><strong>Write path:</strong> Every mutation → Room write (instant, triggers recomposition) + SyncQueue entry. SyncWorker drains the queue on next sync.</p>
-<p><strong>Read path:</strong> Room Flow → ViewModel StateFlow → Composable. Sheets data is only read during the sync pull (<code>fetchAllAndSave</code>), which upserts into Room.</p>
+<p><strong>Write path (tasks):</strong> Every mutation → Room write (instant, triggers UI recomposition) + SyncQueue INSERT. SyncWorker drains the queue on next sync.</p>
 
-<h2>Error Handling</h2>
-<p><code>BaseViewModel.safeLaunch</code> wraps all <code>viewModelScope.launch</code> calls. <code>CancellationException</code> is always rethrown. All other exceptions are emitted to a <code>Channel&lt;String&gt;</code> (<code>uiError</code> Flow). Each screen subscribes via <code>ErrorSnackbarEffect</code> and shows a Snackbar. A <code>LocalSnackbarHostState</code> CompositionLocal and a single <code>SnackbarHost</code> in <code>MainScreen</code> handle display.</p>
+<p><strong>Write path (calendar events):</strong> Mutations (create / update / delete) go directly to the Calendar API via <code>CalendarRepository</code>. On success, Room is updated in place — no SyncQueue, no Google Sheets involvement.</p>
 
-<!-- ════════════════════════════════════════════════════════════════════════ -->
+<p><strong>Read path:</strong> Room Flow → ViewModel StateFlow → Composable. Sheets data is only read during sync pull (<code>fetchAllAndSave</code>); Calendar events are fetched by <code>SyncWorker</code> after the Sheets pull step.</p>
+
+<p><strong>Error handling:</strong> <code>BaseViewModel.safeLaunch</code> wraps all <code>viewModelScope.launch</code> calls, catches exceptions, and emits to a <code>Channel&lt;String&gt;</code> (<code>uiError</code> Flow). <code>ErrorSnackbarEffect</code> in each screen subscribes and shows a Snackbar.</p>
+
+<!-- ─── 4. Package Structure ───────────────────────────────────────────────── -->
 <h1 id="packages">4. Package Structure</h1>
 
 <div class="dir-tree">
 com.stler.tasks/<br>
 ├── <span class="orange">auth/</span><br>
 │   ├── AuthData.kt               <span class="dim">data class (email, name, avatar, spreadsheetId)</span><br>
-│   ├── AuthPreferences.kt        <span class="dim">DataStore wrapper for tokens, user info, spreadsheetId</span><br>
-│   ├── AuthScreen.kt             <span class="dim">Sign-in UI (CredentialManager button + error display)</span><br>
-│   ├── AuthViewModel.kt          <span class="dim">signIn / finalizeAuth / sign-out state machine</span><br>
+│   ├── AuthPreferences.kt        <span class="dim">DataStore wrapper (token, expiry, user info)</span><br>
+│   ├── AuthScreen.kt             <span class="dim">Sign-in UI</span><br>
+│   ├── AuthViewModel.kt          <span class="dim">signIn / finalizeAuth / sign-out state</span><br>
 │   └── GoogleAuthRepository.kt   <span class="dim">full auth flow + find-or-create spreadsheet</span><br>
 │<br>
 ├── <span class="orange">data/</span><br>
 │   ├── local/<br>
-│   │   ├── dao/                  <span class="dim">TaskDao, FolderDao, LabelDao, SyncQueueDao</span><br>
-│   │   ├── entity/               <span class="dim">TaskEntity, FolderEntity, LabelEntity, SyncQueueEntity</span><br>
-│   │   └── TaskDatabase.kt       <span class="dim">Room DB version 4, 4 entities</span><br>
+│   │   ├── dao/                  <span class="dim">TaskDao, FolderDao, LabelDao, SyncQueueDao, CalendarEventDao</span><br>
+│   │   ├── entity/               <span class="dim">TaskEntity, FolderEntity, LabelEntity, SyncQueueEntity, CalendarEventEntity</span><br>
+│   │   └── TaskDatabase.kt       <span class="dim">Room DB (version 7, 5 tables)</span><br>
 │   ├── remote/<br>
-│   │   ├── dto/                  <span class="dim">BatchValuesResponse, ValuesBody, DriveFilesResponse, …</span><br>
-│   │   ├── NetworkModule.kt      <span class="dim">Hilt: OkHttpClient + Retrofit with auth interceptor</span><br>
+│   │   ├── dto/                  <span class="dim">CalendarDtos, BatchValuesResponse, ValuesBody, …</span><br>
+│   │   ├── CalendarApi.kt        <span class="dim">Calendar API v3 endpoints</span><br>
+│   │   ├── CalendarMapper.kt     <span class="dim">CalendarEventDto ↔ CalendarEventEntity</span><br>
+│   │   ├── NetworkModule.kt      <span class="dim">Hilt: OkHttpClient + Retrofit (Sheets)</span><br>
 │   │   ├── SheetsApi.kt          <span class="dim">batchGet / append / batchUpdate / clear</span><br>
-│   │   ├── SheetsMapper.kt       <span class="dim">row ↔ entity bidirectional conversion</span><br>
-│   │   └── TokenProvider.kt      <span class="dim">interface: getAccessToken / refreshToken</span><br>
+│   │   └── SheetsMapper.kt       <span class="dim">row ↔ entity conversion</span><br>
 │   └── repository/<br>
-│       ├── TaskRepository.kt     <span class="dim">interface</span><br>
-│       └── TaskRepositoryImpl.kt <span class="dim">CRUD, Flows, fetchAllAndSave, widget refresh</span><br>
+│       ├── CalendarRepository.kt     <span class="dim">interface</span><br>
+│       ├── CalendarRepositoryImpl.kt <span class="dim">fetchCalendarsAndSave, getEventsForCalendars,</span><br>
+│       │                             <span class="dim">createEvent, updateEvent, deleteEvent, moveEvent</span><br>
+│       ├── TaskRepository.kt         <span class="dim">interface</span><br>
+│       └── TaskRepositoryImpl.kt     <span class="dim">CRUD, Flows, fetchAllAndSave</span><br>
 │<br>
-├── <span class="orange">di/</span>                           <span class="dim">Hilt modules: AuthModule, DatabaseModule, NetworkModule, RepositoryModule</span><br>
+├── <span class="orange">di/</span><br>
+│   ├── AuthModule.kt             <span class="dim">provides GoogleAuthRepository as TokenProvider</span><br>
+│   ├── CalendarModule.kt         <span class="dim">Calendar Retrofit (custom EventDateTime TypeAdapter),</span><br>
+│   │                             <span class="dim">CalendarApi, CalendarRepository</span><br>
+│   ├── DatabaseModule.kt         <span class="dim">Room DB + all DAOs</span><br>
+│   └── RepositoryModule.kt       <span class="dim">binds TaskRepositoryImpl</span><br>
 │<br>
 ├── <span class="orange">domain/model/</span><br>
-│   ├── Task.kt, Folder.kt, Label.kt<br>
-│   ├── Priority.kt               <span class="dim">enum: URGENT, IMPORTANT, NORMAL</span><br>
-│   ├── RecurType.kt              <span class="dim">enum: DAILY, WEEKLY, MONTHLY</span><br>
-│   └── TaskStatus.kt             <span class="dim">enum: PENDING, COMPLETED</span><br>
+│   ├── CalendarEvent.kt          <span class="dim">id, calendarId, title, startDate/Time, isAllDay, seriesId, …</span><br>
+│   ├── CalendarItem.kt           <span class="dim">calendar list entry (id, summary, color, isSelected, accessRole)</span><br>
+│   ├── Folder.kt · Label.kt · Task.kt · Priority.kt · RecurType.kt · TaskStatus.kt<br>
+│   └── ListItem.kt               <span class="dim">sealed class for mixed task/event lists</span><br>
 │<br>
 ├── <span class="orange">sync/</span><br>
-│   ├── NetworkObserver.kt        <span class="dim">callbackFlow wrapping ConnectivityManager</span><br>
-│   ├── SyncManager.kt            <span class="dim">schedules periodic + one-off WorkManager requests</span><br>
-│   ├── SyncState.kt              <span class="dim">sealed: Idle / Syncing / Pending(count)</span><br>
-│   └── SyncWorker.kt             <span class="dim">@HiltWorker: push queue → pull all</span><br>
+│   ├── NetworkObserver.kt · SyncManager.kt · SyncState.kt<br>
+│   └── SyncWorker.kt             <span class="dim">push queue → pull Sheets → pull Calendar</span><br>
 │<br>
 ├── <span class="orange">ui/</span><br>
-│   ├── alltasks/                 <span class="dim">AllTasksScreen + AllTasksViewModel</span><br>
-│   ├── completed/                <span class="dim">CompletedScreen + CompletedViewModel</span><br>
-│   ├── folder/                   <span class="dim">FolderScreen + FolderViewModel + DisplayNode</span><br>
-│   ├── label/                    <span class="dim">LabelScreen + LabelViewModel</span><br>
-│   ├── main/                     <span class="dim">MainScreen, MainViewModel, SidebarMenu,</span><br>
-│   │                             <span class="dim">SidebarPreferences, SidebarState, TasksTopAppBar</span><br>
-│   ├── navigation/               <span class="dim">Screen.kt — route constants + helper functions</span><br>
-│   ├── priority/                 <span class="dim">PriorityScreen + PriorityViewModel</span><br>
-│   ├── task/                     <span class="dim">TaskItem, TaskCheckbox, TaskFormSheet, TaskFormViewModel,</span><br>
-│   │                             <span class="dim">DeadlinePickerDialog, PriorityPickerSheet, LabelPickerSheet,</span><br>
-│   │                             <span class="dim">TaskMobileMenu, TaskColors</span><br>
-│   ├── theme/                    <span class="dim">Color.kt, Theme.kt, Typography.kt</span><br>
-│   ├── upcoming/                 <span class="dim">UpcomingScreen + UpcomingViewModel</span><br>
-│   └── util/                     <span class="dim">BaseViewModel, EmptyState, ShimmerTaskList,</span><br>
-│                                 <span class="dim">ErrorSnackbarEffect, LocalSnackbarHostState</span><br>
+│   ├── alltasks/  completed/  folder/  label/  main/  priority/<br>
+│   ├── calendar/             <span class="dim">CalendarScreen, CalendarViewModel, CalendarEventItem</span><br>
+│   ├── navigation/           <span class="dim">Screen.kt (route constants)</span><br>
+│   ├── task/                 <span class="dim">TaskItem, TaskCheckbox, TaskFormSheet, TaskFormViewModel,</span><br>
+│   │                         <span class="dim">DeadlinePickerDialog, EndTimePickerDialog, CustomRecurrenceSheet,</span><br>
+│   │                         <span class="dim">PriorityPickerSheet, LabelPickerSheet, TaskColors, FormMode</span><br>
+│   ├── theme/                <span class="dim">Color.kt, Theme.kt, Typography.kt</span><br>
+│   ├── upcoming/<br>
+│   └── util/                 <span class="dim">BaseViewModel, EmptyState, ShimmerTaskList, ErrorSnackbarEffect</span><br>
 │<br>
-├── <span class="orange">util/</span>                         <span class="dim">ColorExtensions.kt (String.toComposeColor, etc.)</span><br>
+├── <span class="orange">util/</span><br>
+│   └── ColorExtensions.kt    <span class="dim">String.toComposeColor()</span><br>
 │<br>
 └── <span class="orange">widget/</span><br>
-    ├── CompleteTaskAction.kt     <span class="dim">ActionCallback: complete task + SyncQueue + widget refresh</span><br>
-    ├── FolderWidget.kt + Receiver<br>
-    ├── TaskListWidget.kt + Receiver<br>
-    ├── ToggleExpandAction.kt     <span class="dim">ActionCallback: toggle subtask visibility</span><br>
-    ├── UpcomingWidget.kt + Receiver<br>
-    ├── WidgetColors.kt           <span class="dim">named ColorProvider constants (XML-backed)</span><br>
-    ├── WidgetConfigActivity.kt   <span class="dim">configuration UI for all 3 widget types</span><br>
-    ├── WidgetEntryPoint.kt       <span class="dim">Hilt entry point for widget actions</span><br>
-    ├── WidgetHeader.kt           <span class="dim">shared header (title + "+" button)</span><br>
-    ├── WidgetRefresher.kt        <span class="dim">debounced (400 ms) Glance updateAll() trigger</span><br>
-    └── WidgetTaskRow.kt          <span class="dim">shared task row (checkbox + title + metadata)</span><br>
+    ├── CalendarWidget.kt         <span class="dim">4th widget: mixed task+event timeline</span><br>
+    ├── CompleteTaskAction.kt     <span class="dim">GlanceActionCallback: complete task + sync + refresh</span><br>
+    ├── FolderWidget.kt           <span class="dim">hierarchical folder task list</span><br>
+    ├── TaskListWidget.kt         <span class="dim">flat filtered list (folder / label / priority)</span><br>
+    ├── ToggleExpandAction.kt     <span class="dim">toggle subtask visibility</span><br>
+    ├── UpcomingWidget.kt         <span class="dim">tasks + events ≤ 7 days, grouped by date</span><br>
+    ├── WidgetColors.kt · WidgetConfigActivity.kt · WidgetEntryPoint.kt<br>
+    ├── WidgetEventRow.kt         <span class="dim">calendar event row (icon + title + time + calendar name)</span><br>
+    ├── WidgetHeader.kt · WidgetPrefs.kt · WidgetRefresher.kt<br>
+    └── WidgetTaskRow.kt          <span class="dim">task row (checkbox + title + deadline/labels)</span><br>
 </div>
 
-<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- ─── 5. Data Model ──────────────────────────────────────────────────────── -->
 <h1 id="data-model">5. Data Model</h1>
 
 <h2>5.1 Task</h2>
 <table>
-  <tr><th>Field</th><th>Type</th><th>Default</th><th>Description</th></tr>
-  <tr><td><code>id</code></td><td>String</td><td>—</td><td>UUID, e.g. <code>tsk-xxxxxxxx</code></td></tr>
-  <tr><td><code>parentId</code></td><td>String</td><td><code>""</code></td><td>Parent task ID; empty = root task</td></tr>
-  <tr><td><code>folderId</code></td><td>String</td><td><code>"fld-inbox"</code></td><td>Parent folder ID</td></tr>
-  <tr><td><code>title</code></td><td>String</td><td>—</td><td>Task title</td></tr>
-  <tr><td><code>status</code></td><td>TaskStatus</td><td>PENDING</td><td>PENDING or COMPLETED</td></tr>
-  <tr><td><code>priority</code></td><td>Priority</td><td>NORMAL</td><td>URGENT / IMPORTANT / NORMAL</td></tr>
-  <tr><td><code>deadlineDate</code></td><td>String</td><td><code>""</code></td><td>ISO date <code>"YYYY-MM-DD"</code> or empty</td></tr>
-  <tr><td><code>deadlineTime</code></td><td>String</td><td><code>""</code></td><td><code>"HH:MM"</code> or empty</td></tr>
-  <tr><td><code>isRecurring</code></td><td>Boolean</td><td>false</td><td>Recurring task flag</td></tr>
-  <tr><td><code>recurType</code></td><td>RecurType</td><td>DAILY</td><td>DAILY / WEEKLY / MONTHLY</td></tr>
-  <tr><td><code>recurValue</code></td><td>Int</td><td>1</td><td>Interval (e.g. 2 = every 2 days)</td></tr>
-  <tr><td><code>labels</code></td><td>List&lt;String&gt;</td><td>[]</td><td>Label IDs (stored comma-separated in DB/Sheets)</td></tr>
-  <tr><td><code>sortOrder</code></td><td>Int</td><td>0</td><td>Position among siblings (index × 10)</td></tr>
-  <tr><td><code>createdAt</code></td><td>String</td><td><code>""</code></td><td>ISO instant</td></tr>
-  <tr><td><code>updatedAt</code></td><td>String</td><td><code>""</code></td><td>ISO instant (NOT updated when toggling isExpanded)</td></tr>
-  <tr><td><code>completedAt</code></td><td>String</td><td><code>""</code></td><td>ISO instant or empty</td></tr>
-  <tr><td><code>isExpanded</code></td><td>Boolean</td><td>false</td><td>Whether subtasks are shown; synced to Sheets but doesn't bump updatedAt</td></tr>
+  <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+  <tr><td><code>id</code></td><td>String</td><td><code>"tsk_xxxxxxxx"</code> (8 hex chars)</td></tr>
+  <tr><td><code>parentId</code></td><td>String</td><td>Parent task ID; <code>""</code> for root tasks</td></tr>
+  <tr><td><code>folderId</code></td><td>String</td><td>Folder ID; defaults to <code>"fld-inbox"</code></td></tr>
+  <tr><td><code>title</code></td><td>String</td><td>Task title</td></tr>
+  <tr><td><code>status</code></td><td>TaskStatus</td><td><code>PENDING</code> or <code>COMPLETED</code></td></tr>
+  <tr><td><code>priority</code></td><td>Priority</td><td><code>URGENT</code>, <code>IMPORTANT</code>, <code>NORMAL</code></td></tr>
+  <tr><td><code>deadlineDate</code></td><td>String</td><td>ISO date <code>"YYYY-MM-DD"</code> or <code>""</code></td></tr>
+  <tr><td><code>deadlineTime</code></td><td>String</td><td><code>"HH:MM"</code> or <code>""</code></td></tr>
+  <tr><td><code>isRecurring</code></td><td>Boolean</td><td>Recurring task flag</td></tr>
+  <tr><td><code>recurType</code></td><td>RecurType</td><td><code>DAILY</code>, <code>WEEKLY</code>, <code>MONTHLY</code></td></tr>
+  <tr><td><code>recurValue</code></td><td>Int</td><td>Recurrence interval (e.g. 2 = every 2 days)</td></tr>
+  <tr><td><code>labels</code></td><td>List&lt;String&gt;</td><td>List of label IDs</td></tr>
+  <tr><td><code>sortOrder</code></td><td>Int</td><td>Position within parent (index × 10)</td></tr>
+  <tr><td><code>createdAt</code></td><td>String</td><td>ISO instant</td></tr>
+  <tr><td><code>updatedAt</code></td><td>String</td><td>ISO instant</td></tr>
+  <tr><td><code>completedAt</code></td><td>String</td><td>ISO instant or <code>""</code></td></tr>
+  <tr><td><code>isExpanded</code></td><td>Boolean</td><td>Subtask visibility (does not update <code>updatedAt</code>)</td></tr>
+  <tr><td><code>isRoot</code></td><td>Boolean (computed)</td><td><code>parentId.isBlank()</code></td></tr>
 </table>
 
-<div class="callout"><strong>Recurring task completion:</strong> When <code>isRecurring = true</code>, completing the task does <em>not</em> set <code>status = COMPLETED</code>. Instead, <code>deadlineDate</code> advances by <code>recurValue × recurType</code>, and <code>completedAt</code> is cleared. The task stays PENDING with a new deadline.</div>
+<div class="callout"><strong>Recurring completion:</strong> Completing a recurring task advances <code>deadlineDate</code> by the recurrence interval instead of setting <code>status = COMPLETED</code>. The task stays <code>PENDING</code>.</div>
 
-<h2>5.2 Folder</h2>
+<h2>5.2 CalendarEvent</h2>
 <table>
   <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-  <tr><td><code>id</code></td><td>String</td><td><code>"fld-inbox"</code> for Inbox, <code>"fld-xxxxxxxx"</code> for user folders</td></tr>
-  <tr><td><code>name</code></td><td>String</td><td>Display name</td></tr>
-  <tr><td><code>color</code></td><td>String</td><td>Hex color <code>"#rrggbb"</code></td></tr>
-  <tr><td><code>sortOrder</code></td><td>Int</td><td>Position in sidebar (Inbox always first regardless)</td></tr>
-  <tr><td><code>isInbox</code></td><td>Boolean (computed)</td><td><code>id == "fld-inbox"</code></td></tr>
+  <tr><td><code>id</code></td><td>String</td><td>Google Calendar event ID</td></tr>
+  <tr><td><code>calendarId</code></td><td>String</td><td>Calendar ID (e.g. <code>"primary"</code>)</td></tr>
+  <tr><td><code>calendarName</code></td><td>String</td><td>Human-readable calendar name</td></tr>
+  <tr><td><code>calendarColor</code></td><td>String</td><td>Hex color (e.g. <code>"#039be5"</code>)</td></tr>
+  <tr><td><code>title</code></td><td>String</td><td>Event summary</td></tr>
+  <tr><td><code>startDate</code></td><td>String</td><td><code>"YYYY-MM-DD"</code></td></tr>
+  <tr><td><code>startTime</code></td><td>String</td><td><code>"HH:MM"</code> or <code>""</code> for all-day</td></tr>
+  <tr><td><code>endTime</code></td><td>String</td><td><code>"HH:MM"</code> or <code>""</code></td></tr>
+  <tr><td><code>isAllDay</code></td><td>Boolean</td><td>True when only <code>start.date</code> is set (no <code>dateTime</code>)</td></tr>
+  <tr><td><code>recurringEventId</code></td><td>String?</td><td>Series base event ID (non-null for recurring instances)</td></tr>
+  <tr><td><code>seriesId</code></td><td>String?</td><td>Alias for <code>recurringEventId</code></td></tr>
+  <tr><td><code>isRecurring</code></td><td>Boolean (computed)</td><td><code>recurringEventId != null</code></td></tr>
 </table>
 
-<h2>5.3 Label</h2>
+<h2>5.3 CalendarItem</h2>
 <table>
   <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-  <tr><td><code>id</code></td><td>String</td><td><code>"lbl-xxxxxxxx"</code></td></tr>
-  <tr><td><code>name</code></td><td>String</td><td>Display name</td></tr>
-  <tr><td><code>color</code></td><td>String</td><td>Hex color <code>"#rrggbb"</code></td></tr>
-  <tr><td><code>sortOrder</code></td><td>Int</td><td>Position in sidebar</td></tr>
+  <tr><td><code>id</code></td><td>String</td><td>Calendar ID</td></tr>
+  <tr><td><code>summary</code></td><td>String</td><td>Display name</td></tr>
+  <tr><td><code>color</code></td><td>String</td><td>Hex color</td></tr>
+  <tr><td><code>isSelected</code></td><td>Boolean</td><td>Whether user shows this calendar</td></tr>
+  <tr><td><code>accessRole</code></td><td>String</td><td><code>"owner"</code>, <code>"writer"</code>, <code>"reader"</code>, <code>"freeBusyReader"</code></td></tr>
 </table>
 
-<h2>5.4 SyncQueue Entry</h2>
+<h2>5.4 Room Database (version 7)</h2>
+<p>5 tables: <code>tasks</code>, <code>folders</code>, <code>labels</code>, <code>sync_queue</code>, <code>calendar_events</code>.</p>
+<p>Migration path: v4→v5 (add <code>calendar_events</code>) → v5→v6 (add <code>series_id</code>) → v6→v7 (add <code>calendar_color</code>). Schema JSON files stored in <code>app/schemas/</code>.</p>
+
+<h3>calendar_events columns</h3>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
+  <tr><td><code>id</code></td><td>TEXT PK</td><td>Google event ID</td></tr>
+  <tr><td><code>calendar_id</code></td><td>TEXT</td><td></td></tr>
+  <tr><td><code>calendar_name</code></td><td>TEXT</td><td></td></tr>
+  <tr><td><code>calendar_color</code></td><td>TEXT</td><td></td></tr>
+  <tr><td><code>title</code></td><td>TEXT</td><td></td></tr>
+  <tr><td><code>start_date</code></td><td>TEXT</td><td><code>"YYYY-MM-DD"</code></td></tr>
+  <tr><td><code>start_time</code></td><td>TEXT</td><td><code>"HH:MM"</code> or <code>""</code></td></tr>
+  <tr><td><code>end_time</code></td><td>TEXT</td><td><code>"HH:MM"</code> or <code>""</code></td></tr>
+  <tr><td><code>is_all_day</code></td><td>INTEGER</td><td>0/1</td></tr>
+  <tr><td><code>recurring_event_id</code></td><td>TEXT</td><td>nullable</td></tr>
+  <tr><td><code>series_id</code></td><td>TEXT</td><td>nullable</td></tr>
+</table>
+
+<h2>5.5 SyncQueue Entry</h2>
 <table>
   <tr><th>Field</th><th>Type</th><th>Description</th></tr>
-  <tr><td><code>id</code></td><td>Long (autoincrement)</td><td>Primary key</td></tr>
+  <tr><td><code>id</code></td><td>Long (autoincrement)</td><td></td></tr>
   <tr><td><code>entityType</code></td><td>String</td><td><code>"task"</code>, <code>"folder"</code>, or <code>"label"</code></td></tr>
   <tr><td><code>entityId</code></td><td>String</td><td>ID of the affected entity</td></tr>
-  <tr><td><code>operation</code></td><td>String</td><td><code>"INSERT"</code>, <code>"UPDATE"</code>, or <code>"DELETE"</code></td></tr>
-  <tr><td><code>payloadJson</code></td><td>String</td><td>Full entity serialized as JSON (Gson); empty for DELETE</td></tr>
-  <tr><td><code>retryCount</code></td><td>Int</td><td>Incremented on failure; item deleted after 5 failures</td></tr>
+  <tr><td><code>operation</code></td><td>String</td><td><code>"INSERT"</code>, <code>"UPDATE"</code>, <code>"DELETE"</code></td></tr>
+  <tr><td><code>payloadJson</code></td><td>String</td><td>Full entity as JSON (Gson)</td></tr>
+  <tr><td><code>retryCount</code></td><td>Int</td><td>Removed after 5 failures</td></tr>
 </table>
 
-<!-- ════════════════════════════════════════════════════════════════════════ -->
-<h1 id="sheets-schema">6. Google Sheets Schema</h1>
+<h2>5.6 Google Sheets Schema</h2>
+<p><strong>Spreadsheet name:</strong> <code>db_tasks</code> &nbsp;·&nbsp; <strong>Read:</strong> <code>UNFORMATTED_VALUE</code> &nbsp;·&nbsp; <strong>Write:</strong> <code>RAW</code></p>
 
-<p>Spreadsheet name: <code>db_tasks</code><br>
-Read with <code>valueRenderOption=UNFORMATTED_VALUE</code> (dates return as serial numbers, converted by <code>SheetsMapper.dateStr()</code>).<br>
-Written with <code>valueInputOption=RAW</code> (all values sent as strings).</p>
-
-<div class="callout"><strong>Soft delete:</strong> Rows are emptied (cleared), not physically removed. <code>rowToTask/Folder/Label</code> returns <code>null</code> for rows with an empty ID — these are skipped during pull. Row 1 of every sheet is a header row (skipped by <code>findRowNumber</code>). Entity data starts at row 2.</div>
-
-<h2>Sheet: tasks (columns A–Q)</h2>
+<h3>Sheet: tasks (columns A–Q)</h3>
 <table>
-  <tr><th>Col</th><th>Name</th><th>Sheets format</th></tr>
+  <tr><th>Col</th><th>Name</th><th>Type in Sheets</th></tr>
   <tr><td>A</td><td>id</td><td>String</td></tr>
-  <tr><td>B</td><td>parent_id</td><td>String or empty</td></tr>
-  <tr><td>C</td><td>folder_id</td><td>String, default <code>"fld-inbox"</code></td></tr>
+  <tr><td>B</td><td>parent_id</td><td>String</td></tr>
+  <tr><td>C</td><td>folder_id</td><td>String</td></tr>
   <tr><td>D</td><td>title</td><td>String</td></tr>
   <tr><td>E</td><td>status</td><td><code>"pending"</code> / <code>"completed"</code></td></tr>
   <tr><td>F</td><td>priority</td><td><code>"urgent"</code> / <code>"important"</code> / <code>"normal"</code></td></tr>
-  <tr><td>G</td><td>deadline_date</td><td>ISO string <code>"YYYY-MM-DD"</code> or Sheets serial number</td></tr>
-  <tr><td>H</td><td>deadline_time</td><td><code>"HH:MM"</code> or empty</td></tr>
+  <tr><td>G</td><td>deadline_date</td><td>String or Sheets serial date</td></tr>
+  <tr><td>H</td><td>deadline_time</td><td><code>"HH:MM"</code> or <code>""</code></td></tr>
   <tr><td>I</td><td>is_recurring</td><td><code>"TRUE"</code> / <code>"FALSE"</code></td></tr>
-  <tr><td>J</td><td>recur_type</td><td><code>"days"</code> / <code>"weeks"</code> / <code>"months"</code></td></tr>
-  <tr><td>K</td><td>recur_value</td><td>Integer string</td></tr>
-  <tr><td>L</td><td>labels</td><td>Comma-separated label IDs or empty</td></tr>
-  <tr><td>M</td><td>sort_order</td><td>Integer string</td></tr>
-  <tr><td>N</td><td>created_at</td><td>ISO instant string</td></tr>
-  <tr><td>O</td><td>updated_at</td><td>ISO instant string</td></tr>
-  <tr><td>P</td><td>completed_at</td><td>ISO instant string or empty</td></tr>
+  <tr><td>J</td><td>recur_type</td><td><code>"daily"</code> / <code>"weekly"</code> / <code>"monthly"</code></td></tr>
+  <tr><td>K</td><td>recur_value</td><td>String (Int)</td></tr>
+  <tr><td>L</td><td>labels</td><td>comma-separated label IDs</td></tr>
+  <tr><td>M</td><td>sort_order</td><td>String (Int)</td></tr>
+  <tr><td>N</td><td>created_at</td><td>ISO instant</td></tr>
+  <tr><td>O</td><td>updated_at</td><td>ISO instant</td></tr>
+  <tr><td>P</td><td>completed_at</td><td>ISO instant or <code>""</code></td></tr>
   <tr><td>Q</td><td>is_expanded</td><td><code>"TRUE"</code> / <code>"FALSE"</code></td></tr>
 </table>
 
-<h2>Sheet: folders (columns A–D)</h2>
-<table>
-  <tr><th>Col</th><th>Name</th></tr>
-  <tr><td>A</td><td>id</td></tr>
-  <tr><td>B</td><td>name</td></tr>
-  <tr><td>C</td><td>color</td></tr>
-  <tr><td>D</td><td>sort_order</td></tr>
-</table>
+<p>Row 1 is a header row (skipped). <strong>Soft delete</strong> = clearing all cells in the row; rows with no ID are skipped during pull.</p>
 
-<h2>Sheet: labels (columns A–D)</h2>
-<table>
-  <tr><th>Col</th><th>Name</th></tr>
-  <tr><td>A</td><td>id</td></tr>
-  <tr><td>B</td><td>name</td></tr>
-  <tr><td>C</td><td>color</td></tr>
-  <tr><td>D</td><td>sort_order</td></tr>
-</table>
+<!-- ─── 6. Auth ─────────────────────────────────────────────────────────────── -->
+<h1 id="auth">6. Authentication &amp; First-Launch Setup</h1>
 
-<p>Folders sorted in Room: Inbox always first (<code>CASE id WHEN 'fld-inbox' THEN 0 ELSE 1 END</code>), then by <code>sortOrder</code>. Labels sorted by <code>sortOrder</code>.</p>
-
-<!-- ════════════════════════════════════════════════════════════════════════ -->
-<h1 id="auth">7. Authentication &amp; First-Launch Setup</h1>
-
-<h2>7.1 OAuth Scopes</h2>
+<h2>6.1 OAuth Scopes</h2>
 <ul>
-  <li><code>https://www.googleapis.com/auth/spreadsheets</code> — full Sheets read/write + create new spreadsheets</li>
-  <li><code>https://www.googleapis.com/auth/drive.metadata.readonly</code> — search Drive for existing spreadsheet by name</li>
+  <li><code>https://www.googleapis.com/auth/spreadsheets</code> — full Sheets read/write + create</li>
+  <li><code>https://www.googleapis.com/auth/drive.metadata.readonly</code> — search Drive for existing spreadsheet</li>
+  <li><code>https://www.googleapis.com/auth/calendar</code> — read/write Google Calendar events</li>
 </ul>
 
-<h2>7.2 Sign-In Flow</h2>
+<h2>6.2 Sign-In Flow</h2>
 <ol>
-  <li><strong>CredentialManager</strong> → Google account picker → <code>GoogleIdTokenCredential</code> with email, display name, avatar URL</li>
-  <li><strong>Identity.getAuthorizationClient.authorize()</strong> → requests both scopes → may return a <code>PendingIntent</code> if user hasn't approved yet</li>
-  <li>If <code>hasResolution()</code> → return <code>SignInStep.NeedsAuthorization</code> → <code>AuthScreen</code> launches the intent → <code>finalizeAuth()</code> is called on result</li>
-  <li><strong>findOrCreateSpreadsheet(token)</strong> → Drive API search → if not found, create (see §7.3)</li>
+  <li><strong>CredentialManager</strong> → shows Google account picker → returns <code>GoogleIdTokenCredential</code> with user email, display name, avatar URL</li>
+  <li><strong>Identity.getAuthorizationClient</strong> → requests Sheets + Drive + Calendar scopes → may return a <code>PendingIntent</code> if user hasn't approved yet</li>
+  <li>If <code>hasResolution()</code> → return <code>SignInStep.NeedsAuthorization(pendingIntent)</code> → <code>AuthScreen</code> launches the intent → <code>finalizeAuth()</code> called on result</li>
+  <li><strong>findOrCreateSpreadsheet(token)</strong> → Drive API search for <code>name='db_tasks'</code> → if not found, creates new spreadsheet</li>
   <li><strong>Save to DataStore:</strong> accessToken, tokenExpiry (+1 h), spreadsheetId, userEmail, userName, userAvatarUrl</li>
 </ol>
 
-<h2>7.3 First-Launch Spreadsheet Creation</h2>
-<p>When no <code>db_tasks</code> spreadsheet exists in the user's Drive, <code>createSpreadsheet()</code> runs automatically:</p>
+<h2>6.3 First-Launch Spreadsheet Creation</h2>
 <ol>
-  <li><strong>POST</strong> <code>https://sheets.googleapis.com/v4/spreadsheets</code> — creates spreadsheet with 3 named sheets: <em>tasks</em>, <em>folders</em>, <em>labels</em></li>
-  <li><strong>POST</strong> <code>.../values:batchUpdate</code> — writes header row to each sheet + seeds the Inbox folder row (<code>fld-inbox, Inbox, #6b7280, 0</code>)</li>
-  <li><strong>Room upsert</strong> — seeds <code>FolderEntity(id="fld-inbox")</code> locally so the app is immediately usable before first sync</li>
+  <li>POST <code>https://sheets.googleapis.com/v4/spreadsheets</code> — creates spreadsheet with 3 named sheets (tasks, folders, labels)</li>
+  <li>POST <code>.../values:batchUpdate</code> — writes header rows + seeds Inbox folder row</li>
+  <li>Upserts <code>FolderEntity(id="fld-inbox", ...)</code> to Room so the app is immediately usable</li>
 </ol>
-<div class="note">Both API calls use a plain OkHttpClient (not Retrofit) to avoid a circular dependency with the Hilt-managed client that requires a valid TokenProvider.</div>
 
-<h2>7.4 Token Refresh</h2>
-<p><code>refreshToken()</code> calls <code>Identity.getAuthorizationClient.authorize()</code> silently — no Activity needed. Token is considered stale if it expires within 5 minutes. The <code>NetworkModule</code> 401 Authenticator calls <code>refreshToken()</code> automatically on HTTP 401 responses.</p>
+<h2>6.4 Token Refresh</h2>
+<p><code>refreshToken()</code> calls <code>Identity.getAuthorizationClient.authorize()</code> silently. Token is stale if it expires within 5 minutes. The <code>NetworkModule</code> 401 Authenticator calls <code>refreshToken()</code> automatically.</p>
 
-<h2>7.5 Sign-Out</h2>
-<p>Clears all DataStore keys + deletes all Room tables (tasks, folders, labels, sync_queue).</p>
+<h2>6.5 Sign-Out</h2>
+<p>Clears all DataStore keys + deletes all Room tables (tasks, folders, labels, sync_queue, calendar_events).</p>
 
-<!-- ════════════════════════════════════════════════════════════════════════ -->
-<h1 id="sync">8. Synchronization</h1>
+<!-- ─── 7. Sync ─────────────────────────────────────────────────────────────── -->
+<h1 id="sync">7. Synchronization</h1>
 
-<h2>8.1 SyncWorker — Execution Order</h2>
+<h2>7.1 SyncWorker (push → pull Sheets → pull Calendar)</h2>
 <ol>
-  <li><strong>Push</strong> — drain SyncQueue ordered by insertion:
+  <li><strong>Push</strong> — drain <code>SyncQueue</code> ordered by insertion:
     <ul>
-      <li><code>INSERT</code> → <code>SheetsApi.append(range = "sheet!A:lastCol")</code></li>
-      <li><code>UPDATE</code> → fetch current rows (cached per sheet per push) → find row number → <code>SheetsApi.batchUpdate</code></li>
-      <li><code>DELETE</code> → same row-number lookup → <code>SheetsApi.clear</code></li>
-      <li>On success: <code>syncQueueDao.deleteById</code></li>
-      <li>On failure: <code>syncQueueDao.incrementRetry</code></li>
-      <li>After all items: <code>deleteExhausted()</code> removes items with retryCount ≥ 5</li>
+      <li><code>INSERT</code> → <code>SheetsApi.append</code></li>
+      <li><code>UPDATE</code> → row-number lookup → <code>SheetsApi.batchUpdate</code></li>
+      <li><code>DELETE</code> → row-number lookup → <code>SheetsApi.clear</code></li>
+      <li>On success: delete queue item. On failure: increment retry. After all: remove exhausted (retryCount ≥ 5)</li>
     </ul>
   </li>
-  <li><strong>Delay 1 s</strong> (only if there were pending items) — lets Sheets process the write before the read, preventing stale-cache overwrite of freshly pushed data</li>
-  <li><strong>Pull</strong> — <code>taskRepository.fetchAllAndSave(spreadsheetId)</code>:
-    <ul>
-      <li><code>SheetsApi.batchGet(["tasks", "folders", "labels"])</code></li>
-      <li>All three entities upserted inside a single Room transaction (<code>db.withTransaction</code>)</li>
-    </ul>
-  </li>
+  <li><strong>Delay</strong> — 1 000 ms if there were pending items (lets Sheets process writes)</li>
+  <li><strong>Pull Sheets</strong> — <code>SheetsApi.batchGet(["tasks","folders","labels"])</code> → upsert all three in a single Room transaction</li>
+  <li><strong>Pull Calendar</strong> — for each selected calendar: <code>CalendarApi.listEvents(from=today, to=today+30d)</code> → upsert to <code>calendar_events</code>, delete stale events</li>
 </ol>
-<p>WorkManager retry: up to 4 attempts with exponential backoff; returns <code>Result.failure()</code> after the 5th.</p>
+<p>Retry: up to 4 attempts (WorkManager exponential backoff).</p>
 
-<h2>8.2 SyncManager</h2>
+<h2>7.2 Calendar Event Write Path</h2>
+<p>Calendar mutations bypass the SyncQueue entirely and go directly to the Calendar API:</p>
+<table>
+  <tr><th>Operation</th><th>API method</th><th>Notes</th></tr>
+  <tr><td>Create</td><td>POST <code>events</code></td><td>Saves new event to Room on success</td></tr>
+  <tr><td>Update</td><td><strong>PUT</strong> <code>events/{id}</code></td><td>Replaces entire event — avoids residual <code>start.date</code> from PATCH merge</td></tr>
+  <tr><td>Delete</td><td>DELETE <code>events/{id}</code></td><td>Removes from Room on success</td></tr>
+  <tr><td>Move calendar</td><td>POST <code>events/{id}/move</code></td><td>Called before update when calendar changed</td></tr>
+</table>
+
+<div class="callout"><strong>EventDateTime serialization:</strong> A custom Gson <code>TypeAdapter</code> (<code>EventDateTimeAdapter</code>) omits null fields by default (<code>serializeNulls=false</code>), ensuring only <code>date</code> <em>or</em> only <code>dateTime</code> is sent — never both. The <code>timeZone</code> field (IANA name) is required by the Calendar API for recurring timed events.</div>
+
+<h2>7.3 SyncManager</h2>
 <ul>
-  <li><strong>Periodic:</strong> <code>PeriodicWorkRequest</code> every 30 min, constraint <code>NetworkType.CONNECTED</code>, unique name with <code>KEEP</code> policy</li>
+  <li><strong>Periodic:</strong> <code>PeriodicWorkRequest</code> every 30 min, constraint <code>CONNECTED</code></li>
   <li><strong>One-off:</strong> <code>triggerSync()</code> enqueues an immediate <code>OneTimeWorkRequest</code>, replaces existing with <code>KEEP</code> policy</li>
-  <li>Initialized in <code>TasksApplication.onCreate()</code></li>
 </ul>
 
-<h2>8.3 SyncState</h2>
-<p><code>StateFlow&lt;SyncState&gt;</code> combining WorkManager <code>WorkInfo</code> + <code>SyncQueueDao.observePendingCount()</code>:</p>
+<h2>7.4 SyncState</h2>
+<p><code>StateFlow&lt;SyncState&gt;</code> combining WorkManager <code>WorkInfo</code> + <code>SyncQueueDao.countAll()</code>: <code>Idle</code> / <code>Syncing</code> / <code>Pending(count)</code>. Displayed in the sidebar footer.</p>
+
+<!-- ─── 8. Screens ─────────────────────────────────────────────────────────── -->
+<h1 id="screens">8. UI Screens</h1>
+
+<h2>8.1 Upcoming</h2>
+<p>Unified timeline of root pending tasks + calendar events within 7 days, grouped by date. Horizontal date strip (7 day-pills), overdue section, filter pills (priority / label / folder). Tasks and events interleaved by date→timed-before-allday→time sort.</p>
+
+<h2>8.2 All Tasks</h2>
+<p>Root <code>PENDING</code> tasks. Sort: priority → deadline → createdAt. Filter chips: priority / label / folder. Shimmer on first load, EmptyState when nothing matches.</p>
+
+<h2>8.3 Completed</h2>
+<p><code>COMPLETED</code> tasks sorted by completedAt desc. <code>enableSwipe = false</code>, strikethrough title, Restore + Delete buttons.</p>
+
+<h2>8.4 Folder</h2>
+<p>Hierarchical task list for a single folder. Drag-to-reorder (reorderable library). Indent/outdent via "…" menu. <code>isExpanded</code> controls subtask visibility and persists to Room + Sheets.</p>
+
+<h2>8.5 Label</h2>
+<p>Root <code>PENDING</code> tasks with selected label. Priority filter chip. EmptyState.</p>
+
+<h2>8.6 Priority</h2>
+<p>Tabs: Urgent / Important / Normal. Sort: deadline → createdAt. EmptyState per tab.</p>
+
+<h2>8.7 Calendar</h2>
+<p>Month grid (6×7 day cells) with event dots. Day selection shows event list below. <code>CalendarEventItem</code>: calendar color icon + title + time range. Tap event → opens event edit form (<code>stlertasks://event/{calendarId}/{id}</code>). FAB creates new event (opens <code>TaskFormSheet</code> in EVENT mode).</p>
+
+<!-- ─── 9. TaskItem ─────────────────────────────────────────────────────────── -->
+<h1 id="taskitem">9. TaskItem Component</h1>
+
+<p>Single shared task row used across all screens.</p>
+
+<h2>9.1 Layout</h2>
+<pre>Row 1: [expand 40dp] [checkbox 40dp] [title weight=1] [deadline btn] [more btn]
+Row 2: [recurring?] [deadline label?] [label chips?] [folder?] [subtask count?]
+       (indented by depth×20 + 54dp)</pre>
+
 <ul>
-  <li><code>Idle</code> — no running worker, queue empty</li>
-  <li><code>Syncing</code> — worker is RUNNING</li>
-  <li><code>Pending(count)</code> — queue has items, no worker running</li>
+  <li><strong>Checkbox:</strong> <code>TaskCheckbox</code> — Canvas-drawn, priority-colored border/fill, 40dp touch target, 18dp visual; white checkmark when checked</li>
+  <li><strong>Title:</strong> tappable → opens edit form; strikethrough + 70% alpha when completed</li>
+  <li><strong>When completed:</strong> Restore + Delete buttons replace deadline/more</li>
 </ul>
-<p>Displayed in the sidebar footer: count badge + spinning icon when Syncing.</p>
 
-<h2>8.4 Widget Refresh After Mutations</h2>
-<p><code>WidgetRefresher</code> is injected into <code>TaskRepositoryImpl</code> and called after every mutation (complete, update, delete, reorder, restore). It uses a debounced (400 ms) <code>MutableSharedFlow</code> trigger to call <code>updateAll()</code> on all three widget types without flooding Glance with redundant update requests.</p>
-
-<!-- ════════════════════════════════════════════════════════════════════════ -->
-<h1 id="screens">9. UI Screens</h1>
-
-<h2>9.1 Upcoming</h2>
-<p><strong>ViewModel:</strong> <code>UpcomingViewModel</code> — root pending tasks with a deadline, grouped by <code>deadlineDate</code>.</p>
+<h2>9.2 Swipe Gestures</h2>
+<p><code>SwipeToDismissBox</code> wrapped in <code>key(task.id, task.deadlineDate)</code>:</p>
 <ul>
-  <li>Horizontal date strip: 7 day-pills (date number + weekday letter + orange dot if tasks exist)</li>
-  <li>Left/right arrows to shift the visible week; "Today" button resets to current week</li>
-  <li>Filter pills: priority, label, folder (each multi-select)</li>
-  <li><strong>Overdue section</strong> — all past-due tasks under a red "Overdue" header, above the strip</li>
-  <li>Date headers: <code>"16 Apr · Thursday · Today"</code> (status label at end)</li>
-  <li><code>TaskItem</code> with <code>showDateInDeadline = false</code> (date already in header; only time shown in row 2)</li>
-  <li>Shimmer skeleton on first load; text "No upcoming tasks" if empty</li>
+  <li><strong>Swipe right:</strong> green background + checkmark → 500 ms → <code>onCheckedChange(true)</code></li>
+  <li><strong>Swipe left:</strong> blue background + schedule icon → snaps back → opens <code>DeadlinePickerDialog</code></li>
 </ul>
 
-<h2>9.2 All Tasks</h2>
-<p><strong>ViewModel:</strong> <code>AllTasksViewModel</code> — root pending tasks, sort: priority → deadline → createdAt.</p>
+<h2>9.3 Dialogs / Sheets</h2>
 <ul>
-  <li>Filter pills (priority / label / folder)</li>
-  <li><code>TaskItem</code> with <code>showFolder = true</code></li>
-  <li>EmptyState + shimmer on load</li>
+  <li><code>DeadlinePickerDialog</code> — date + time chips + repeat checkbox + Postpone</li>
+  <li><code>PriorityPickerSheet</code> — 3 options</li>
+  <li><code>LabelPickerSheet</code> — multi-select with create-new</li>
+  <li><code>TaskMobileMenu</code> — Priority / Labels / Add subtask / Indent / Outdent / Edit / Delete</li>
 </ul>
 
-<h2>9.3 Completed</h2>
-<p><strong>ViewModel:</strong> <code>CompletedViewModel</code> — completed tasks, sort: completedAt desc.</p>
+<!-- ─── 10. TaskFormSheet ──────────────────────────────────────────────────── -->
+<h1 id="taskform">10. TaskFormSheet</h1>
+
+<p>Single bottom sheet for task and event create/edit. Mode is <code>TaskFormViewModel.formMode: FormMode</code> (TASK or EVENT). A <code>SingleChoiceSegmentedButtonRow</code> toggle is shown at the top.</p>
+
+<h2>10.1 TASK mode</h2>
+<p><strong>Field order:</strong> Title → Deadline → Repeat → Folder → Labels → Priority</p>
 <ul>
-  <li><code>TaskItem</code> with <code>enableSwipe = false</code>, Restore + Delete buttons</li>
-  <li>EmptyState</li>
+  <li><strong>Smart title parsing:</strong> <code>@FolderName</code> sets folder; <code>#LabelName</code> adds label (both stripped from title)</li>
+  <li><strong>Repeat row:</strong> hidden until a deadline date is selected; "Every [N] [days/weeks/months]"</li>
+  <li><strong>Labels:</strong> opens <code>LabelPickerSheet</code> on tap; selected labels shown as chips</li>
 </ul>
 
-<h2>9.4 Folder</h2>
-<p><strong>ViewModel:</strong> <code>FolderViewModel</code> (receives <code>folderId</code> via SavedStateHandle).</p>
+<h2>10.2 EVENT mode</h2>
+<p><strong>Field order:</strong> Title → Date chip → Start time — End time → Repeat → Custom RRULE → Calendar dropdown</p>
 <ul>
-  <li>Hierarchical display via <code>DisplayNode(task, depth, childCount, completedChildCount)</code></li>
-  <li><code>isExpanded</code> controls subtask visibility; toggling persists to Room + Sheets</li>
-  <li>DragHandle icon (far left) — powered by <code>reorderable</code> library</li>
-  <li>Drag-to-reorder: <code>onMove</code> updates optimistic <code>localList</code> only; on drop (<code>isDragging → false</code>) calls <code>reorderSiblings</code> → single batch Room write + one sync queue entry</li>
-  <li>Indent / Outdent via "..." menu (<code>onIndent</code> / <code>onOutdent</code> in <code>TaskMobileMenu</code>)</li>
-  <li>Swipe gestures enabled (drag handle and swipe use separate touch areas)</li>
+  <li><strong>EndTimePickerDialog:</strong> Material3 TimePicker wrapper with Clear button</li>
+  <li><strong>CustomRecurrenceSheet:</strong> Builds a full RRULE string — frequency (Daily/Weekly/Monthly/Yearly), interval, BYDAY (weekly), monthly mode (by day-N / by ordinal / by last), ends (Never / On date / After N)</li>
+  <li><strong>Calendar dropdown:</strong> <code>ExposedDropdownMenuBox</code> listing only writable calendars (accessRole <code>writer</code> or <code>owner</code>)</li>
+  <li><strong>Recurring edit:</strong> <code>loadBaseEvent()</code> fetches the series base event and pre-fills the form</li>
 </ul>
 
-<h2>9.5 Label</h2>
-<p><strong>ViewModel:</strong> <code>LabelViewModel</code> (receives <code>labelId</code> via SavedStateHandle) — root pending tasks with the label, sort: priority → deadline → createdAt. Priority filter only (label is implicit). EmptyState.</p>
-
-<h2>9.6 Priority</h2>
-<p><strong>ViewModel:</strong> <code>PriorityViewModel</code> — root pending tasks for the selected priority (urgent/important/normal), sort: deadline → createdAt. EmptyState per priority level.</p>
-
-<!-- ════════════════════════════════════════════════════════════════════════ -->
-<h1 id="taskitem">10. TaskItem Component</h1>
-
-<p>Single shared task row composable used on all screens.</p>
-
-<h2>10.1 Layout</h2>
-<p><strong>Row 1</strong> (main task row):</p>
-<pre><code>[expand 40dp] [6dp gap] [checkbox 40dp] [8dp gap] [title weight=1] [4dp] [action btns]</code></pre>
-<ul>
-  <li><strong>Expand box</strong> — 40dp touch target, 24dp chevron (ChevronRight/ExpandMore); empty transparent box when no children to preserve alignment</li>
-  <li><strong>TaskCheckbox</strong> — custom Canvas-drawn, priority-colored border; filled with white checkmark when completed; 40dp touch target, 18dp visual; TalkBack <code>contentDescription</code> "Mark as complete: {title}"</li>
-  <li><strong>Title</strong> — tappable (<code>.clickable { onEdit() }</code>); 2-line max; strikethrough + 70% alpha when completed; indented by <code>depth × 20dp</code></li>
-  <li><strong>Pending buttons:</strong> Schedule icon (opens deadline picker) + MoreHoriz (opens mobile menu sheet)</li>
-  <li><strong>Completed buttons:</strong> Replay (restore) + Delete</li>
-</ul>
-
-<p><strong>Row 2</strong> (metadata, shown when any chip exists):</p>
-<pre><code>[recurring icon?] [deadline label?] [label chips?] [folder chip?] [subtask counter?]</code></pre>
-<p>Indented by <code>depth × 20 + 54dp</code>.</p>
-
-<h2>10.2 Swipe Gestures</h2>
-<p>Wrapped in <code>key(task.id, task.deadlineDate)</code> which forces Compose to recreate all inner state (including <code>rememberSaveable</code> inside <code>rememberSwipeToDismissBoxState</code>) whenever the task ID or deadline changes. This solves two problems:</p>
-<ul>
-  <li>After recurring task completion the deadline advances → key changes → dismiss state resets to Settled → swipe works immediately</li>
-  <li>Navigating back to a screen does not restore a stale <code>StartToEnd</code> state and re-trigger completion</li>
-</ul>
+<h2>10.3 TaskFormViewModel state</h2>
 <table>
-  <tr><th>Direction</th><th>Behaviour</th></tr>
-  <tr><td>Right (StartToEnd)</td><td>Green background + check icon; allowed when not completed; 500 ms delay → <code>onCheckedChange(true)</code></td></tr>
-  <tr><td>Left (EndToStart)</td><td>Blue background + schedule icon; always snaps back (<code>confirmValueChange → false</code>); opens DeadlinePickerDialog as side effect</td></tr>
-</table>
-<p>Position threshold: 40% of total swipe distance. <code>enableSwipe = false</code> in CompletedScreen.</p>
-
-<h2>10.3 Parameters</h2>
-<table>
-  <tr><th>Parameter</th><th>Default</th><th>Purpose</th></tr>
-  <tr><td><code>depth</code></td><td>0</td><td>Indent level (×20dp)</td></tr>
-  <tr><td><code>showFolder</code></td><td>false</td><td>Show folder chip in row 2</td></tr>
-  <tr><td><code>showLabels</code></td><td>true</td><td>Show label chips in row 2</td></tr>
-  <tr><td><code>showDateInDeadline</code></td><td>true</td><td>false in Upcoming (date is in section header)</td></tr>
-  <tr><td><code>onIndent</code></td><td>null</td><td>FolderScreen only — reparent under task above</td></tr>
-  <tr><td><code>onOutdent</code></td><td>null</td><td>FolderScreen only — move up one level</td></tr>
-  <tr><td><code>enableSwipe</code></td><td>true</td><td>false in CompletedScreen</td></tr>
+  <tr><th>State</th><th>Type</th><th>Description</th></tr>
+  <tr><td><code>formMode</code></td><td>FormMode</td><td>TASK / EVENT</td></tr>
+  <tr><td><code>endTime</code></td><td>String</td><td>Event end time <code>"HH:MM"</code> or <code>""</code></td></tr>
+  <tr><td><code>selectedCalendarId</code></td><td>String</td><td>Target calendar for event creation</td></tr>
+  <tr><td><code>baseEventLoading</code></td><td>Boolean</td><td>True while fetching series base event</td></tr>
+  <tr><td><code>selectedCalendars</code></td><td>StateFlow&lt;List&lt;CalendarItem&gt;&gt;</td><td>Writable calendars for dropdown</td></tr>
+  <tr><td><code>eventCreated</code></td><td>SharedFlow&lt;String&gt;</td><td>Emitted on successful create/update → closes sheet</td></tr>
 </table>
 
-<!-- ════════════════════════════════════════════════════════════════════════ -->
-<h1 id="taskform">11. Task Form Sheet</h1>
+<!-- ─── 11. Widgets ────────────────────────────────────────────────────────── -->
+<h1 id="widgets">11. Widgets</h1>
 
-<p>Single bottom sheet for both create and edit mode (<code>task != null</code> = edit mode). Managed by <code>TaskFormViewModel</code>.</p>
+<p>All widgets use Jetpack Glance and react to Room changes automatically via <code>collectAsState()</code>. Widget locale is hardcoded to English (day names, month abbreviations) regardless of device locale.</p>
 
-<p><strong>Fields in order:</strong> Title → Labels → Priority → Deadline (date + optional time) → Repeat → Folder</p>
-
+<h2>11.1 Shared Components</h2>
 <ul>
-  <li><strong>Smart parsing in title:</strong> <code>@FolderName</code> sets folder (stripped from title); <code>#LabelName</code> adds label (stripped from title)</li>
-  <li><strong>Repeat row</strong> hidden until a deadline date is selected</li>
-  <li><strong>Folder selector:</strong> Scrollable popup, single-select; pre-filled from current screen context</li>
-  <li><strong>Edit extras:</strong> Delete task button (destructive, confirm dialog)</li>
-  <li><strong>Deeplink create:</strong> <code>stlertasks://create</code> opens create form; <code>stlertasks://task/{id}</code> opens edit form</li>
+  <li><strong>WidgetHeader:</strong> Title + "+" button (<code>stlertasks://create</code>)</li>
+  <li><strong>WidgetTaskRow:</strong> Optional chevron (28dp) · Checkbox (36dp slot, priority-colored, pending-complete transient state) · Title → deeplink · Row 2: deadline · labels · folder</li>
+  <li><strong>WidgetEventRow:</strong> Calendar icon (36dp slot, tinted with calendar color) · Title → <code>stlertasks://event/...</code> deeplink · Row 2: time range · calendar name</li>
+  <li><strong>CompleteTaskAction:</strong> Marks complete in Room + SyncQueue + stores pending ID in Glance state + refreshes all widgets</li>
 </ul>
 
-<!-- ════════════════════════════════════════════════════════════════════════ -->
-<h1 id="widgets">12. Widgets</h1>
-
-<p>All widgets use Jetpack Glance. Data is fetched inside <code>provideContent</code> using <code>collectAsState()</code> from Room Flows — widgets react to Room changes automatically without requiring explicit <code>updateAll()</code> calls in the normal flow. Mutations from widget actions (checkbox, +) go through <code>WidgetRefresher</code> which triggers a Glance session update.</p>
-
-<h2>12.1 Shared: WidgetTaskRow</h2>
-<ul>
-  <li>Optional chevron (28dp box) → <code>ToggleExpandAction</code></li>
-  <li>Checkbox (32dp touch, 20dp visual) — priority-colored border + surface fill → <code>CompleteTaskAction</code></li>
-  <li>Title (2-line max) → <code>stlertasks://task/{id}</code> deeplink</li>
-  <li>Row 2: deadline · <code>#labels</code> · folder — each with its own named color</li>
-  <li><code>timeOnly: Boolean</code> — when true, shows only time (UpcomingWidget)</li>
-  <li><code>showExpandSpace: Boolean</code> — when false, omits 28dp chevron spacer (TaskListWidget)</li>
-</ul>
-
-<h2>12.2 Upcoming Widget</h2>
-<p>Root pending tasks, <code>deadlineDate ≤ today + 7 days</code>, grouped by date. Overdue section. <code>timeOnly = true</code> on WidgetTaskRow. No configuration needed.</p>
-
-<h2>12.3 Folder Widget</h2>
-<p>Hierarchical: root tasks + expanded children (indented <code>depth × 16dp</code>). Uses <code>isExpanded</code> from Room. <code>showExpandSpace = true</code>. Configured per widget instance (folder ID stored in Glance preferences).</p>
-
-<h2>12.4 Task List Widget</h2>
-<p>Flat, root tasks only. Optional filter: folder / label / priority combination. <code>showExpandSpace = false</code>. Configured per widget instance.</p>
-
-<h2>12.5 WidgetConfigActivity</h2>
-<ul>
-  <li>Detects widget type via <code>AppWidgetManager.getAppWidgetInfo</code></li>
-  <li>Upcoming → auto-confirms immediately (no config)</li>
-  <li>Folder → RadioButton list of all folders</li>
-  <li>Task List → 3 <code>ExposedDropdownMenuBox</code> filters (folder / label / priority)</li>
-  <li>Saves config via <code>updateAppWidgetState(PreferencesGlanceStateDefinition)</code></li>
-</ul>
-
-<h2>12.6 Widget Colors</h2>
-<p>All colors are named <code>ColorProvider</code> constants in <code>WidgetColors.kt</code>, backed by XML color resources in <code>res/values/colors.xml</code> and <code>res/values-night/colors.xml</code> (same explicit values in both — not Material You dynamic color).</p>
+<h2>11.2 Widget Types</h2>
 <table>
-  <tr><th>Constant</th><th>Hex</th><th>Usage</th></tr>
-  <tr><td>WPriorityUrgent</td><td>#F87171</td><td>Urgent priority checkbox border</td></tr>
-  <tr><td>WPriorityImportant</td><td>#FB923C</td><td>Important priority</td></tr>
-  <tr><td>WPriorityNormal</td><td>#9CA3AF</td><td>Normal priority</td></tr>
-  <tr><td>WDeadlineOverdue</td><td>#F87171</td><td>Past-due deadline label</td></tr>
-  <tr><td>WDeadlineToday</td><td>#16A34A</td><td>Due today</td></tr>
-  <tr><td>WDeadlineTomorrow</td><td>#FB923C</td><td>Due tomorrow</td></tr>
-  <tr><td>WDeadlineThisWeek</td><td>#A78BFA</td><td>Due within 7 days</td></tr>
+  <tr><th>Widget</th><th>Content</th><th>Config</th></tr>
+  <tr><td><strong>Upcoming</strong></td><td>Tasks + events ≤ 7 days, grouped by date with DateHeader, overdue section</td><td>Auto-confirm (no config)</td></tr>
+  <tr><td><strong>Folder</strong></td><td>Hierarchical task list for one folder; expand/collapse subtrees</td><td>RadioButton folder picker</td></tr>
+  <tr><td><strong>Task List</strong></td><td>Flat root tasks; optional filter (folder / label / priority)</td><td>3 ExposedDropdownMenuBox filters</td></tr>
+  <tr><td><strong>Calendar</strong></td><td>Mixed task+event timeline (same logic as Upcoming)</td><td>Auto-confirm (no config)</td></tr>
 </table>
 
-<!-- ════════════════════════════════════════════════════════════════════════ -->
-<h1 id="theme">13. Theme &amp; Colors</h1>
-
-<h2>13.1 App Colors</h2>
+<h2>11.3 Widget Colors</h2>
 <table>
-  <tr><th>Constant</th><th>Hex</th><th>Usage</th></tr>
-  <tr><td>Primary</td><td>#e07e38</td><td>Brand orange — buttons, active date dots, FAB</td></tr>
-  <tr><td>PriorityUrgent</td><td>#F87171</td><td>Urgent priority indicator</td></tr>
-  <tr><td>PriorityImportant</td><td>#FB923C</td><td>Important priority indicator</td></tr>
-  <tr><td>PriorityNormal</td><td>#9CA3AF</td><td>Normal priority indicator</td></tr>
-  <tr><td>DeadlineOverdue</td><td>#F87171</td><td>Overdue deadline label</td></tr>
-  <tr><td>DeadlineToday</td><td>#16A34A</td><td>Due today (used for swipe-right background too)</td></tr>
-  <tr><td>DeadlineTomorrow</td><td>#FB923C</td><td>Due tomorrow</td></tr>
-  <tr><td>DeadlineThisWeek</td><td>#A78BFA</td><td>Due within 7 days</td></tr>
-  <tr><td>NavSelected</td><td>#E4E4E4</td><td>Sidebar selected item (light mode)</td></tr>
-  <tr><td>AccentDark</td><td>#3A3A3C</td><td>Sidebar selected item (dark mode)</td></tr>
+  <tr><th>Constant</th><th>Light</th><th>Dark</th></tr>
+  <tr><td>WPrimary</td><td colspan="2">#e07e38</td></tr>
+  <tr><td>WSurface</td><td>#FFFFFF</td><td>#1C1C1E</td></tr>
+  <tr><td>WOnSurface</td><td>#1C1C1E</td><td>#F2F2F7</td></tr>
+  <tr><td>WOnSurfaceVariant</td><td colspan="2">#8E8E93</td></tr>
+  <tr><td>WDeadlineOverdue</td><td colspan="2">#F87171</td></tr>
+  <tr><td>WDeadlineToday</td><td colspan="2">#16A34A</td></tr>
+  <tr><td>WDeadlineTomorrow</td><td colspan="2">#FB923C</td></tr>
+  <tr><td>WDeadlineThisWeek</td><td colspan="2">#A78BFA</td></tr>
+  <tr><td>WPriorityUrgent</td><td colspan="2">#F87171</td></tr>
+  <tr><td>WPriorityImportant</td><td colspan="2">#FB923C</td></tr>
+  <tr><td>WPriorityNormal</td><td colspan="2">#9CA3AF</td></tr>
 </table>
 
-<div class="callout"><strong>Single source of truth:</strong> Priority and deadline colors are defined once in <code>Color.kt</code>. <code>TaskColors.kt</code> imports from there. Widget colors reference XML resources that match the same hex values.</div>
+<!-- ─── 12. Theme ──────────────────────────────────────────────────────────── -->
+<h1 id="theme">12. Theme &amp; Colors</h1>
 
-<h2>13.2 Deadline Status Logic</h2>
-<pre><code>deadlineStatus(dateStr):
-  blank    → NONE
-  today    → TODAY
-  tomorrow → TOMORROW
-  ≤ 7 days → THIS_WEEK
-  past     → OVERDUE
-  else     → FUTURE
+<h2>12.1 App Colors (Color.kt)</h2>
+<table>
+  <tr><th>Constant</th><th>Light</th><th>Dark</th><th>Usage</th></tr>
+  <tr><td>Primary</td><td colspan="2">#e07e38</td><td>Brand orange — buttons, active elements</td></tr>
+  <tr><td>PriorityUrgent</td><td colspan="2">#F87171</td><td>Urgent priority</td></tr>
+  <tr><td>PriorityImportant</td><td colspan="2">#FB923C</td><td>Important priority</td></tr>
+  <tr><td>PriorityNormal</td><td colspan="2">#9CA3AF</td><td>Normal priority</td></tr>
+  <tr><td>DeadlineOverdue</td><td colspan="2">#F87171</td><td>Past-due deadline</td></tr>
+  <tr><td>DeadlineToday</td><td colspan="2">#16A34A</td><td>Due today</td></tr>
+  <tr><td>DeadlineTomorrow</td><td colspan="2">#FB923C</td><td>Due tomorrow</td></tr>
+  <tr><td>DeadlineThisWeek</td><td colspan="2">#A78BFA</td><td>Due this week</td></tr>
+  <tr><td>SelectedHighlightLight</td><td>#D8D8D8</td><td>—</td><td>Selected chip/item bg (light)</td></tr>
+  <tr><td>SelectedHighlightDark</td><td>—</td><td>#515151</td><td>Selected chip/item bg (dark)</td></tr>
+</table>
+
+<div class="note"><strong>Unified highlight system:</strong> <code>primaryContainer</code> in <code>Theme.kt</code> maps to <code>SelectedHighlightLight</code> (light) / <code>SelectedHighlightDark</code> (dark). Controls: TimePicker selected boxes, FAB container, day-pill selection, filter chip selection, sidebar active item.</div>
+
+<h2>12.2 Deadline Status (TaskColors.kt)</h2>
+<pre>deadlineStatus(dateStr): blank→NONE · past→OVERDUE · today→TODAY
+                         tomorrow→TOMORROW · ≤7 days→THIS_WEEK · else→FUTURE
 
 deadlineLabel(date, time, includeDate):
-  if includeDate → "Mon, 16 Apr" or "Mon, 16 Apr · 14:30"
-  else           → "14:30" (time only, used in Upcoming)</code></pre>
+  includeDate=true  → "Mon, 16 Apr" or "Mon, 16 Apr · 14:30"
+  includeDate=false → "14:30"</pre>
 
-<h2>13.3 Folder &amp; Label Color Presets</h2>
-<p>8 predefined hex colors available in create/edit dialogs: Red, Orange, Yellow, Green, Cyan, Blue, Purple, Gray.</p>
+<!-- ─── 13. Navigation ─────────────────────────────────────────────────────── -->
+<h1 id="navigation">13. Navigation &amp; Deeplinks</h1>
 
-<!-- ════════════════════════════════════════════════════════════════════════ -->
-<h1 id="navigation">14. Navigation &amp; Deeplinks</h1>
-
-<h2>14.1 In-App Routes (Screen.kt)</h2>
+<h2>13.1 Routes</h2>
 <table>
   <tr><th>Route</th><th>Screen</th></tr>
-  <tr><td><code>upcoming</code></td><td>UpcomingScreen</td></tr>
-  <tr><td><code>all-tasks</code></td><td>AllTasksScreen</td></tr>
-  <tr><td><code>completed</code></td><td>CompletedScreen</td></tr>
-  <tr><td><code>folder/{folderId}</code></td><td>FolderScreen (arg: folderId)</td></tr>
-  <tr><td><code>label/{labelId}</code></td><td>LabelScreen (arg: labelId)</td></tr>
-  <tr><td><code>priority/{priority}</code></td><td>PriorityScreen (arg: <code>urgent</code>/<code>important</code>/<code>normal</code>)</td></tr>
+  <tr><td><code>upcoming</code></td><td>Upcoming</td></tr>
+  <tr><td><code>all-tasks</code></td><td>All Tasks</td></tr>
+  <tr><td><code>completed</code></td><td>Completed</td></tr>
+  <tr><td><code>folder/{folderId}</code></td><td>Folder task list</td></tr>
+  <tr><td><code>label/{labelId}</code></td><td>Label task list</td></tr>
+  <tr><td><code>priority/{priority}</code></td><td>Priority list (<code>urgent</code>/<code>important</code>/<code>normal</code>)</td></tr>
+  <tr><td><code>calendar</code></td><td>Calendar screen</td></tr>
 </table>
 
-<p>Navigation uses Compose Navigation (<code>NavHost</code> in <code>MainScreen</code>). The sidebar calls <code>onNavigate(route)</code> → <code>navController.navigate(route)</code>.</p>
-
-<h2>14.2 Deeplinks</h2>
+<h2>13.2 Deeplinks (<code>stlertasks://</code>)</h2>
 <table>
   <tr><th>URI</th><th>Action</th></tr>
   <tr><td><code>stlertasks://task/{taskId}</code></td><td>Open edit form for the task</td></tr>
-  <tr><td><code>stlertasks://create</code></td><td>Open create form (Inbox default, normal priority)</td></tr>
+  <tr><td><code>stlertasks://create</code></td><td>Open create form (Inbox, default priority)</td></tr>
+  <tr><td><code>stlertasks://event/{calendarId}/{eventId}</code></td><td>Open event edit form</td></tr>
+  <tr><td><code>stlertasks://upcoming</code></td><td>Navigate to Upcoming screen</td></tr>
 </table>
-<p>Declared in <code>AndroidManifest.xml</code>. <code>MainActivity</code> extracts the URI from the intent and passes it to <code>MainScreen</code>. A <code>LaunchedEffect</code> in MainScreen routes to the appropriate action. Guard: if already on the target route, does not re-navigate.</p>
 
-<!-- ════════════════════════════════════════════════════════════════════════ -->
-<h1 id="loading">15. Loading &amp; Empty States</h1>
+<!-- ─── 14. Loading & Empty ───────────────────────────────────────────────── -->
+<h1 id="loading">14. Loading &amp; Empty States</h1>
 
-<h2>Shimmer Loading (ShimmerTaskList)</h2>
-<p><code>isLoading: StateFlow&lt;Boolean&gt;</code> in every screen ViewModel: <code>filteredTasks.map { false }.stateIn(..., initialValue = true)</code>. Shimmer shown until first Room emission.</p>
-<p><code>ShimmerTaskList(itemCount = 6)</code>: pulsing skeleton rows using <code>rememberInfiniteTransition</code>, alpha 0.25 ↔ 0.6, 900 ms, LinearEasing, Reverse repeat. Each skeleton row: 40dp expand spacer + 18dp checkbox placeholder + title bar (width varies by index).</p>
+<h2>ShimmerTaskList</h2>
+<p><code>isLoading: StateFlow&lt;Boolean&gt;</code> in every ViewModel: <code>filteredTasks.map { false }.stateIn(..., initialValue = true)</code>. Pulsing skeleton rows (alpha 0.25↔0.6, 900 ms, LinearEasing, Reverse). 6 rows per screen.</p>
 
-<h2>Empty States (EmptyState composable)</h2>
-<p>Centered column: 64dp icon (40% opacity) + message (<code>titleMedium</code>) + optional subtitle (<code>bodyMedium</code>, muted color). Used in AllTasksScreen, CompletedScreen, PriorityScreen, LabelScreen.</p>
+<h2>EmptyState</h2>
+<p>Centered column: 64dp icon (40% opacity) + message (titleMedium) + optional subtitle (bodyMedium, muted). Used in AllTasks, Completed, Priority, Label screens.</p>
 
-<!-- ════════════════════════════════════════════════════════════════════════ -->
-<h1 id="cicd">16. CI/CD &amp; Build</h1>
+<!-- ─── 15. CI/CD ──────────────────────────────────────────────────────────── -->
+<h1 id="cicd">15. CI/CD</h1>
 
-<p><strong>Workflow:</strong> <code>.github/workflows/release.yml</code><br>
-<strong>Trigger:</strong> Push of a tag matching <code>v*</code> (e.g. <code>v1.3</code>)</p>
+<p><strong>Workflow:</strong> <code>.github/workflows/release.yml</code> &nbsp;·&nbsp; <strong>Trigger:</strong> push of a tag matching <code>v*</code> (e.g. <code>v1.1</code>)</p>
 
-<h2>Pipeline Steps</h2>
 <ol>
-  <li>Checkout code (<code>actions/checkout@v4</code>)</li>
-  <li>Set up JDK 17 (<code>actions/setup-java@v4</code>)</li>
-  <li>Make <code>gradlew</code> executable</li>
+  <li>Checkout code</li>
+  <li>Set up JDK 11</li>
   <li>Decode keystore from <code>KEYSTORE_BASE64</code> secret → write to temp file</li>
   <li>Set env vars: <code>KEYSTORE_PATH</code>, <code>KEYSTORE_PASSWORD</code>, <code>KEY_ALIAS</code>, <code>KEY_PASSWORD</code></li>
-  <li>Run <code>./gradlew assembleRelease</code></li>
-  <li>Rename APK to <code>stler-tasks.apk</code></li>
-  <li>Create GitHub Release with APK as artifact (<code>softprops/action-gh-release@v2</code>)</li>
+  <li><code>./gradlew assembleRelease</code></li>
+  <li>Upload signed APK as GitHub Release artifact</li>
 </ol>
 
-<h2>Signing Config</h2>
-<p><code>app/build.gradle.kts</code> reads <code>KEYSTORE_PATH</code> env var. The signing config block is only created when the var is non-blank — safe for local debug builds without a keystore. The <code>release</code> build type only applies signing when the config exists (<code>signingConfigs.findByName("release")</code>).</p>
+<p><code>app/build.gradle.kts</code> reads <code>KEYSTORE_PATH</code> env var; signing config is only created when the var is set (safe for local debug builds).</p>
 
-<div class="note"><strong>Minification:</strong> <code>isMinifyEnabled = false</code>. ProGuard rules file exists but is not currently applied.</div>
-
-<!-- ════════════════════════════════════════════════════════════════════════ -->
-<h1 id="setup">17. First-Time Setup (New Developer)</h1>
+<!-- ─── 16. Setup ──────────────────────────────────────────────────────────── -->
+<h1 id="setup">16. First-Time Setup (New Developer)</h1>
 
 <ol>
-  <li>Clone the repository from <code>github.com/JuliaSivridi/Tasks_Android</code></li>
-  <li>In <strong>Google Cloud Console</strong>:
+  <li>Clone the repository</li>
+  <li>In Google Cloud Console:
     <ul>
-      <li>Enable <strong>Google Sheets API</strong> and <strong>Google Drive API</strong></li>
-      <li>Create <strong>OAuth 2.0 Web Client ID</strong> → copy to <code>app/src/main/res/values/strings.xml</code> as <code>google_web_client_id</code></li>
-      <li>Create <strong>OAuth 2.0 Android Client ID</strong> (package <code>com.stler.tasks</code>, SHA-1 of your debug keystore)</li>
-      <li>Set OAuth consent screen to <strong>Production</strong> (so any Google account can sign in, not just test users)</li>
+      <li>Enable <strong>Google Sheets API</strong>, <strong>Google Drive API</strong>, <strong>Google Calendar API</strong></li>
+      <li>Create <strong>OAuth 2.0 Web Client ID</strong> → copy to <code>res/values/strings.xml</code> as <code>google_web_client_id</code></li>
+      <li>Create <strong>OAuth 2.0 Android Client ID</strong> (package <code>com.stler.tasks</code>, SHA-1 of debug keystore)</li>
+      <li>Set OAuth consent screen to <strong>Production</strong> and add all three scopes</li>
     </ul>
   </li>
-  <li>Run on a device or emulator from Android Studio</li>
-  <li>Sign in — the app will automatically find or create the <code>db_tasks</code> spreadsheet</li>
+  <li>Run on device/emulator from Android Studio</li>
+  <li>Sign in — the app will find or create the <code>db_tasks</code> spreadsheet automatically</li>
 </ol>
 
-<p><strong>For release builds:</strong> Create a keystore, base64-encode it, add GitHub secrets <code>KEYSTORE_BASE64</code>, <code>KEYSTORE_PASSWORD</code>, <code>KEY_ALIAS</code>, <code>KEY_PASSWORD</code>. Push a <code>v*</code> tag to trigger the CI build.</p>
+<p><strong>For release builds:</strong> Create a keystore, base64-encode it, add GitHub secrets <code>KEYSTORE_BASE64</code>, <code>KEYSTORE_PASSWORD</code>, <code>KEY_ALIAS</code>, <code>KEY_PASSWORD</code>. Push a <code>v*</code> tag to trigger the build.</p>
 
-<p><strong>Distribution:</strong> Users download the signed APK from the GitHub Release, enable "Install from unknown sources" in Android settings, and install directly — no Play Store involvement required.</p>
+<!-- ─── 17. Algorithms ─────────────────────────────────────────────────────── -->
+<h1 id="algorithms">17. Key Algorithms</h1>
 
-<!-- ════════════════════════════════════════════════════════════════════════ -->
-<h1 id="algorithms">18. Key Algorithms</h1>
-
-<h2>18.1 Recurring Task Completion</h2>
-<pre><code>if (task.isRecurring) {
+<h2>Recurring Task Completion</h2>
+<pre>if (task.isRecurring) {
     val newDate = when (task.recurType) {
-        DAILY   → deadlineDate.plusDays(recurValue)
-        WEEKLY  → deadlineDate.plusWeeks(recurValue)
-        MONTHLY → deadlineDate.plusMonths(recurValue)
+        DAILY   -> LocalDate.parse(deadlineDate).plusDays(recurValue.toLong())
+        WEEKLY  -> LocalDate.parse(deadlineDate).plusWeeks(recurValue.toLong())
+        MONTHLY -> LocalDate.parse(deadlineDate).plusMonths(recurValue.toLong())
     }
-    // Update deadlineDate only.
-    // status stays PENDING, completedAt = "", updatedAt = now.
+    // update deadlineDate only; status stays PENDING; completedAt = ""
 } else {
-    // Set status = COMPLETED, completedAt = now.
-    // Recursively complete all descendants (all tasks loaded once,
-    // then traversed in memory — no N+1 queries).
-}</code></pre>
+    // set status = COMPLETED, completedAt = now
+    // recursively complete all descendants
+}</pre>
 
-<h2>18.2 FolderScreen Tree Flattening</h2>
-<pre><code>// FolderViewModel builds List&lt;DisplayNode&gt;:
-1. Build map: parentId → children (PENDING tasks only, sorted by sortOrder)
-2. DFS from root tasks (parentId == ""), respecting task.isExpanded
-3. Each DisplayNode: task, depth, childCount, completedChildCount
-4. localList = this flattened list (mutable copy for optimistic reorder UI)</code></pre>
+<h2>FolderScreen Tree Flattening</h2>
+<p><code>FolderViewModel</code> builds a <code>List&lt;DisplayNode&gt;</code>:</p>
+<ol>
+  <li>Build map <code>parentId → children</code> (PENDING only)</li>
+  <li>DFS from root tasks (<code>parentId == ""</code>) respecting <code>isExpanded</code></li>
+  <li>Each node carries <code>depth</code>, <code>childCount</code>, <code>completedChildCount</code></li>
+  <li><code>localList</code> (optimistic reorder) updated on drag; DB write only on drop</li>
+</ol>
 
-<h2>18.3 Drag-to-Reorder (FolderScreen)</h2>
-<pre><code>// pendingReorder = plain object (NOT mutableStateOf — avoids recomposition on every drag frame)
-// Stores: parentId, fromIdx (in original displayList), toIdx (in localList)
+<h2>Upcoming / Widget Timeline Merge</h2>
+<p>Tasks and events merged into <code>TimelineEntry(date, hasTime, time, row)</code> and sorted:</p>
+<pre>compareBy({ it.date }, { if (it.hasTime) 0 else 1 }, { it.time })</pre>
+<p>Grouped by date with a <code>Header</code> row inserted before each group. Overdue entries (date &lt; today) collected into a single "Overdue" group at the top.</p>
 
-onMove { from, to →
-    // 1. Update localList optimistically (pure UI, no DB)
-    localList = localList.toMutableList().apply {
-        add(to.index, removeAt(from.index))
-    }
-    // 2. Store final sibling indices
-    pendingReorder.fromIdx = siblings.indexOfFirst { it.task.id == draggedNode.task.id }
-    pendingReorder.toIdx   = siblingsInLocal.indexOfFirst { it.task.id == draggedNode.task.id }
-}
+<h2>EventDateTime Serialization</h2>
+<p>Calendar API requires exactly one of <code>date</code> or <code>dateTime</code> per event boundary:</p>
+<pre>All-day:  EventDateTime(date = "YYYY-MM-DD")
+Timed:    EventDateTime(dateTime = "2026-05-04T14:00:00+03:00",
+                        timeZone = "Europe/Helsinki")</pre>
+<p>Custom <code>EventDateTimeAdapter</code> serializes with <code>serializeNulls=false</code> — absent fields are omitted from JSON. <code>timeZone</code> is required by Google Calendar API for recurring timed events.</p>
 
-LaunchedEffect(isDragging) {
-    if (!isDragging && pendingReorder indices are valid and different) {
-        viewModel.reorderSiblings(parentId, fromIdx, toIdx)
-        // → single batch Room upsertAll + one SyncQueue entry
-        pendingReorder.fromIdx = -1  // reset
-    }
-}</code></pre>
-
-<h2>18.4 Swipe-to-Complete Key Invalidation</h2>
-<pre><code>// key(task.id, task.deadlineDate) { ... } wraps:
-//   rememberSwipeToDismissBoxState + LaunchedEffect + SwipeToDismissBox
-//
-// When deadline changes (recurring task completed) →
-//   key changes → Compose tears down and rebuilds inner state →
-//   rememberSaveable resets to Settled →
-//   swipe works again immediately (no snapTo needed)
-//
-// When navigating back to a screen →
-//   rememberSaveable would normally restore StartToEnd state →
-//   key(task.deadlineDate) invalidates the saved state →
-//   no spurious re-completion of recurring tasks</code></pre>
+<h2>RRULE Builder (CustomRecurrenceSheet)</h2>
+<pre>RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR;COUNT=10
+RRULE:FREQ=MONTHLY;INTERVAL=1;BYDAY=2TU        // 2nd Tuesday
+RRULE:FREQ=MONTHLY;INTERVAL=1;BYDAY=-1SA       // last Saturday
+RRULE:FREQ=DAILY;INTERVAL=1;UNTIL=20261231T235959Z</pre>
+<p>Ordinal prefix: <code>ceil(dayOfMonth / 7.0).toInt()</code> for 1st–4th; <code>-1</code> when the day can fall in the last position (<code>dayOfMonth &gt; 21</code>).</p>
 
 </div><!-- /content -->
 </body>

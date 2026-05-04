@@ -3,18 +3,38 @@ package com.stler.tasks.widget
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.glance.GlanceId
 import androidx.glance.action.ActionParameters
 import androidx.glance.appwidget.updateAll
 import androidx.glance.appwidget.action.ActionCallback
+import androidx.glance.appwidget.state.updateAppWidgetState
+import androidx.glance.state.PreferencesGlanceStateDefinition
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 val taskIdKey    = ActionParameters.Key<String>("taskId")
 val folderIdKey  = ActionParameters.Key<String>("folderId")
 val expandKey    = ActionParameters.Key<Boolean>("expand")
 val screenUriKey = ActionParameters.Key<String>("screenUri")
+
+/**
+ * Glance Preferences key that stores the ID of the task whose checkbox was just tapped
+ * but whose completion hasn't been committed to Room yet.  Each widget instance maintains
+ * its own copy via [PreferencesGlanceStateDefinition], so only the widget that received
+ * the tap shows the transient checkmark.
+ */
+val pendingCompleteKey       = stringPreferencesKey("pending_complete_id")
+
+/**
+ * Timestamp (epoch ms) when [pendingCompleteKey] was last written.
+ * The widget treats the pending state as valid only for 10 seconds after this timestamp,
+ * so recurring tasks never get a permanently-stuck checkmark even without explicit clearing.
+ */
+val pendingCompleteTimestamp = longPreferencesKey("pending_complete_ts")
 
 /**
  * Marks a task complete via the repository, then refreshes all widget instances.
@@ -33,8 +53,41 @@ val screenUriKey = ActionParameters.Key<String>("screenUri")
 class CompleteTaskAction : ActionCallback {
     override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
         val taskId = parameters[taskIdKey] ?: return
+
+        // ── Step 1: show checkmark immediately ───────────────────────────────
+        // Write the pending task ID + a timestamp into this widget's Glance state.
+        // The widget reads the timestamp and only shows the checkmark while it is
+        // < 10 seconds old — no explicit clearing needed, so there is no race with
+        // WorkManager's KEEP policy (which would have caused clearing to happen
+        // before the queued SessionWorker even started).
+        updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
+            prefs.toMutablePreferences().also {
+                it[pendingCompleteKey]       = taskId
+                it[pendingCompleteTimestamp] = System.currentTimeMillis()
+            }
+        }
+        refreshAll(context)   // for MIUI / non-running sessions
+
+        // Let the checkmark be visible for a moment before Room removes the task.
+        delay(300)
+
+        // ── Step 2: commit to Room ───────────────────────────────────────────
         withContext(Dispatchers.IO) { repo(context).completeTask(taskId) }
-        refreshAll(context)
+
+        // ── Step 3: clear pending state ──────────────────────────────────────
+        // updateAppWidgetState writes to DataStore; a *running* Glance session
+        // immediately recomposes on that change (DataStore-driven path, not WorkManager),
+        // so recurring tasks with an advanced deadline stop showing a stale checkmark
+        // before the next WorkManager worker starts.
+        // The 4-second timestamp in widget provideContent is a safety net for the
+        // WorkManager path (non-running / MIUI background sessions).
+        updateAppWidgetState(context, PreferencesGlanceStateDefinition, glanceId) { prefs ->
+            prefs.toMutablePreferences().also {
+                it.remove(pendingCompleteKey)
+                it.remove(pendingCompleteTimestamp)
+            }
+        }
+        refreshAll(context)   // MIUI safety: force refresh so cleared state reaches all widgets
     }
 }
 
@@ -104,4 +157,5 @@ private suspend fun refreshAll(context: Context) {
     UpcomingWidget().updateAll(context)
     FolderWidget().updateAll(context)
     TaskListWidget().updateAll(context)
+    CalendarWidget().updateAll(context)
 }

@@ -29,10 +29,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.stler.tasks.domain.model.CalendarEvent
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.Task
 import com.stler.tasks.ui.alltasks.AllTasksScreen
+import com.stler.tasks.ui.calendar.CalendarScreen
 import com.stler.tasks.ui.completed.CompletedScreen
 import com.stler.tasks.ui.folder.FolderScreen
 import com.stler.tasks.ui.label.LabelScreen
@@ -46,6 +48,7 @@ import com.stler.tasks.ui.upcoming.UpcomingScreen
 import com.stler.tasks.ui.util.LocalSnackbarHostState
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 private sealed interface FolderDialogMode {
     data object Create : FolderDialogMode
@@ -77,17 +80,19 @@ fun MainScreen(
     val scope             = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val folders      by viewModel.folders.collectAsStateWithLifecycle()
-    val labels       by viewModel.labels.collectAsStateWithLifecycle()
-    val syncState    by viewModel.syncState.collectAsStateWithLifecycle()
-    val authData     by viewModel.authData.collectAsStateWithLifecycle()
-    val sidebarState by viewModel.sidebarState.collectAsStateWithLifecycle()
+    val folders           by viewModel.folders.collectAsStateWithLifecycle()
+    val labels            by viewModel.labels.collectAsStateWithLifecycle()
+    val syncState         by viewModel.syncState.collectAsStateWithLifecycle()
+    val authData          by viewModel.authData.collectAsStateWithLifecycle()
+    val sidebarState      by viewModel.sidebarState.collectAsStateWithLifecycle()
+    val selectedCalendars by viewModel.selectedCalendars.collectAsStateWithLifecycle()
 
-    val backStackEntry  by navController.currentBackStackEntryAsState()
-    val currentRoute    = backStackEntry?.destination?.route
-    val currentFolderId = backStackEntry?.arguments?.getString("folderId")
-    val currentLabelId  = backStackEntry?.arguments?.getString("labelId")
-    val currentPriority = backStackEntry?.arguments?.getString("priority")
+    val backStackEntry   by navController.currentBackStackEntryAsState()
+    val currentRoute     = backStackEntry?.destination?.route
+    val currentFolderId  = backStackEntry?.arguments?.getString("folderId")
+    val currentLabelId   = backStackEntry?.arguments?.getString("labelId")
+    val currentPriority  = backStackEntry?.arguments?.getString("priority")
+    val currentCalendarId = backStackEntry?.arguments?.getString("calendarId")
 
     val screenTitle = when {
         currentRoute == Screen.UPCOMING  -> "Upcoming"
@@ -98,6 +103,7 @@ fun MainScreen(
         currentRoute == Screen.PRIORITY  -> when (currentPriority) {
             "urgent" -> "Urgent"; "important" -> "Important"; else -> "Normal"
         }
+        currentRoute == Screen.CALENDAR  -> selectedCalendars.find { it.id == currentCalendarId }?.summary ?: "Calendar"
         else -> "Stler Tasks"
     }
 
@@ -106,28 +112,49 @@ fun MainScreen(
     var labelDialog   by remember { mutableStateOf<LabelDialogMode?>(null) }
 
     // ── Task form state ───────────────────────────────────────────────────────
-    var showForm      by remember { mutableStateOf(false) }
-    var editingTask   by remember { mutableStateOf<Task?>(null) }
-    var formFolderId  by remember { mutableStateOf("fld-inbox") }
-    var formParentId  by remember { mutableStateOf("") }
+    var showForm                     by remember { mutableStateOf(false) }
+    var editingTask                  by remember { mutableStateOf<Task?>(null) }
+    var editingCalendarEvent         by remember { mutableStateOf<CalendarEvent?>(null) }
+    var editingCalendarEventScheduleOnly by remember { mutableStateOf(false) }
+    var formFolderId                 by remember { mutableStateOf("fld-inbox") }
+    var formParentId                 by remember { mutableStateOf("") }
 
     fun openCreate(folderId: String = "fld-inbox", parentId: String = "") {
-        editingTask  = null
-        formFolderId = folderId
-        formParentId = parentId
-        showForm     = true
+        editingTask                      = null
+        editingCalendarEvent             = null
+        editingCalendarEventScheduleOnly = false
+        formFolderId                     = folderId
+        formParentId                     = parentId
+        showForm                         = true
     }
     fun openEdit(task: Task) {
-        editingTask  = task
-        formFolderId = task.folderId
-        formParentId = task.parentId
-        showForm     = true
+        editingTask                      = task
+        editingCalendarEvent             = null
+        editingCalendarEventScheduleOnly = false
+        formFolderId                     = task.folderId
+        formParentId                     = task.parentId
+        showForm                         = true
+    }
+    fun openEditEvent(event: CalendarEvent) {
+        editingTask                      = null
+        editingCalendarEvent             = event
+        editingCalendarEventScheduleOnly = false
+        showForm                         = true
+    }
+    /** Opens the event form in schedule-only mode (date/time/repeat only, no title/calendar). */
+    fun openEditEventSchedule(event: CalendarEvent) {
+        editingTask                      = null
+        editingCalendarEvent             = event
+        editingCalendarEventScheduleOnly = true
+        showForm                         = true
     }
     fun openAddSubtask(parent: Task) {
-        editingTask  = null
-        formFolderId = parent.folderId
-        formParentId = parent.id
-        showForm     = true
+        editingTask                      = null
+        editingCalendarEvent             = null
+        editingCalendarEventScheduleOnly = false
+        formFolderId                     = parent.folderId
+        formParentId                     = parent.id
+        showForm                         = true
     }
 
     // ── Deeplink handling ─────────────────────────────────────────────────────
@@ -144,6 +171,24 @@ fun MainScreen(
                     val allPending = viewModel.allTasksForDeepLink.first()
                     val task = allPending.find { it.id == taskId }
                     if (task != null) openEdit(task)
+                }
+                onDeepLinkConsumed()
+            }
+            uri.startsWith("stlertasks://event/") -> {
+                // Format: stlertasks://event/{calendarId}/{eventId}
+                val path  = uri.removePrefix("stlertasks://event/")
+                val slash = path.indexOf('/')
+                if (slash > 0) {
+                    val eventId = path.substring(slash + 1).trimEnd('/')
+                    if (eventId.isNotBlank()) {
+                        // withTimeoutOrNull: avoids blocking indefinitely on cold start
+                        // when Room hasn't emitted yet (large DB / slow disk).
+                        val allEvents = withTimeoutOrNull(2_000L) {
+                            viewModel.allEventsForDeepLink.first()
+                        } ?: emptyList()
+                        val event = allEvents.find { it.id == eventId }
+                        if (event != null) openEditEvent(event)
+                    }
                 }
                 onDeepLinkConsumed()
             }
@@ -216,14 +261,16 @@ fun MainScreen(
         drawerState = drawerState,
         drawerContent = {
             SidebarMenu(
-                currentRoute    = currentRoute,
-                currentFolderId = currentFolderId,
-                currentLabelId  = currentLabelId,
-                currentPriority = currentPriority,
-                folders         = folders,
-                labels          = labels,
-                syncState       = syncState,
-                sidebarState    = sidebarState,
+                currentRoute      = currentRoute,
+                currentFolderId   = currentFolderId,
+                currentLabelId    = currentLabelId,
+                currentPriority   = currentPriority,
+                currentCalendarId = currentCalendarId,
+                folders           = folders,
+                labels            = labels,
+                selectedCalendars = selectedCalendars,
+                syncState         = syncState,
+                sidebarState      = sidebarState,
                 onNavigate      = ::navigateTo,
                 onToggleSection = viewModel::toggleSection,
                 onAddTask       = { openCreate(sidebarFolderContext); scope.launch { drawerState.close() } },
@@ -264,14 +311,18 @@ fun MainScreen(
             ) {
                 composable(Screen.UPCOMING) {
                     UpcomingScreen(
-                        onEditTask   = { openEdit(it) },
-                        onAddSubtask = { openAddSubtask(it) },
+                        onEditTask           = { openEdit(it) },
+                        onAddSubtask         = { openAddSubtask(it) },
+                        onEditEvent          = { openEditEvent(it) },
+                        onEditEventSchedule  = { openEditEventSchedule(it) },
                     )
                 }
                 composable(Screen.ALL_TASKS) {
                     AllTasksScreen(
-                        onEditTask   = { openEdit(it) },
-                        onAddSubtask = { openAddSubtask(it) },
+                        onEditTask           = { openEdit(it) },
+                        onAddSubtask         = { openAddSubtask(it) },
+                        onEditEvent          = { openEditEvent(it) },
+                        onEditEventSchedule  = { openEditEventSchedule(it) },
                     )
                 }
                 composable(Screen.COMPLETED) {
@@ -307,6 +358,17 @@ fun MainScreen(
                         onAddSubtask = { openAddSubtask(it) },
                     )
                 }
+                composable(
+                    route     = Screen.CALENDAR,
+                    arguments = listOf(navArgument("calendarId") { type = NavType.StringType }),
+                ) { entry ->
+                    val calendarId = entry.arguments?.getString("calendarId") ?: return@composable
+                    CalendarScreen(
+                        calendarId          = calendarId,
+                        onEditEvent         = { openEditEvent(it) },
+                        onEditEventSchedule = { openEditEventSchedule(it) },
+                    )
+                }
             }
         }
     }
@@ -337,16 +399,18 @@ fun MainScreen(
         null -> Unit
     }
 
-    // ── Task form sheet ───────────────────────────────────────────────────────
+    // ── Task / Event form sheet ───────────────────────────────────────────────
     if (showForm) {
         TaskFormSheet(
             task            = editingTask,
+            calendarEvent   = editingCalendarEvent,
+            scheduleOnly    = editingCalendarEventScheduleOnly,
             initialFolderId = formFolderId,
             initialParentId = formParentId,
             labels          = labels,
             folders         = folders,
             onConfirm       = { handleFormResult(it) },
-            onDismiss       = { showForm = false },
+            onDismiss       = { showForm = false; editingCalendarEvent = null; editingCalendarEventScheduleOnly = false },
         )
     }
     } // end CompositionLocalProvider(LocalSnackbarHostState)

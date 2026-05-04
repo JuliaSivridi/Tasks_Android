@@ -16,6 +16,7 @@ data class SidebarState(
     val prioritiesOpen: Boolean = true,
     val foldersOpen: Boolean = true,
     val labelsOpen: Boolean = true,
+    val calendarsOpen: Boolean = true,
 )
 
 @Singleton
@@ -26,6 +27,7 @@ class SidebarPreferences @Inject constructor(
         private val PRIORITIES_OPEN = booleanPreferencesKey("priorities_open")
         private val FOLDERS_OPEN    = booleanPreferencesKey("folders_open")
         private val LABELS_OPEN     = booleanPreferencesKey("labels_open")
+        private val CALENDARS_OPEN  = booleanPreferencesKey("calendars_open")
     }
 
     val sidebarState: Flow<SidebarState> = context.sidebarDataStore.data.map { prefs ->
@@ -33,6 +35,7 @@ class SidebarPreferences @Inject constructor(
             prioritiesOpen = prefs[PRIORITIES_OPEN] ?: true,
             foldersOpen    = prefs[FOLDERS_OPEN]    ?: true,
             labelsOpen     = prefs[LABELS_OPEN]     ?: true,
+            calendarsOpen  = prefs[CALENDARS_OPEN]  ?: true,
         )
     }
 
@@ -42,6 +45,7 @@ class SidebarPreferences @Inject constructor(
                 "priorities" -> prefs[PRIORITIES_OPEN] = !(prefs[PRIORITIES_OPEN] ?: true)
                 "folders"    -> prefs[FOLDERS_OPEN]    = !(prefs[FOLDERS_OPEN]    ?: true)
                 "labels"     -> prefs[LABELS_OPEN]     = !(prefs[LABELS_OPEN]     ?: true)
+                "calendars"  -> prefs[CALENDARS_OPEN]  = !(prefs[CALENDARS_OPEN]  ?: true)
             }
         }
     }

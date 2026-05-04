@@ -17,11 +17,13 @@ import com.stler.tasks.data.remote.SheetsApi
 import com.stler.tasks.data.remote.SheetsMapper
 import com.stler.tasks.data.remote.dto.BatchUpdateValuesBody
 import com.stler.tasks.data.remote.dto.ValuesBody
+import com.stler.tasks.data.repository.CalendarRepository
 import com.stler.tasks.data.repository.TaskRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import java.time.LocalDate
 
 /**
  * WorkManager worker that handles bidirectional sync with Google Sheets.
@@ -42,6 +44,7 @@ class SyncWorker @AssistedInject constructor(
     private val authPreferences: AuthPreferences,
     private val authRepository: GoogleAuthRepository,
     private val gson: Gson,
+    private val calendarRepository: CalendarRepository,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -68,6 +71,7 @@ class SyncWorker @AssistedInject constructor(
             // race condition negligible in practice.
             if (hadPendingChanges) delay(1_000L)
             taskRepository.fetchAllAndSave(spreadsheetId)
+            syncCalendars()
             // TODO Stage 9: GlanceAppWidgetManager.getInstance(applicationContext).updateAll()
             Log.d(TAG, "Sync complete")
             Result.success()
@@ -75,6 +79,20 @@ class SyncWorker @AssistedInject constructor(
             Log.e(TAG, "Sync failed (attempt ${runAttemptCount + 1}): ${e.message}", e)
             if (runAttemptCount < 4) Result.retry() else Result.failure()
         }
+    }
+
+    // ── Calendar sync ─────────────────────────────────────────────────────
+    // Auth errors from listCalendars() propagate here and bubble up to doWork(),
+    // which returns Result.retry() — allowing WorkManager to retry with back-off.
+    // Per-calendar fetch errors are handled best-effort inside fetchEventsAndSave().
+
+    private suspend fun syncCalendars() {
+        val selectedIds = authPreferences.selectedCalendarIds.first()
+        if (selectedIds.isEmpty()) return
+        val from = LocalDate.now().minusDays(1)
+        val to   = LocalDate.now().plusDays(366)
+        calendarRepository.fetchEventsAndSave(selectedIds, from, to)
+        Log.i(TAG, "Calendar sync complete for ${selectedIds.size} calendar(s)")
     }
 
     // ── Push ──────────────────────────────────────────────────────────────

@@ -30,15 +30,31 @@ val AccentForeground = Color(0xFF8F4F1C) // hsl(25 60% 35%)
 val AccentDark = Color(0xFF2E2E2E)       // hsl(0 0% 18%)
 
 // ── Sidebar selection ─────────────────────────────────────────────────────────
-// NavigationDrawerItem selected background — clearly visible neutral gray.
-// Used explicitly on each nav item so it doesn't affect other M3 components
-// that also read primaryContainer (chips, FAB tonal variants, etc.).
-val NavSelected     = Color(0xFFE4E4E4)  // light mode: mid-light gray
-// dark mode reuses AccentDark (0xFF2E2E2E) — already correct
+// NavigationDrawerItem selected background. Used explicitly per nav item so it
+// doesn't bleed into theme-level components (chips, FAB, TimePicker).
+val NavSelected = Color(0xFFD8D8D8)  // light mode — matches unified highlight
 
 // ── Secondary / Muted ─────────────────────────────────────────────────────────
 val Secondary = Color(0xFFF5F3F1)        // hsl(25 8% 95%)
 val SecondaryDark = Color(0xFF363636)
+
+// ── Unified selection highlight ───────────────────────────────────────────────
+// Single neutral gray used for ALL selected/highlighted states so everything
+// looks consistent: FAB container, TimePicker boxes, SegmentedButton selected,
+// week-strip day pill, filter chips, and sidebar nav items.
+//
+//   Light #d8d8d8 — clearly visible against white surfaces without being heavy
+//   Dark  #515151 — clearly lighter than all dark surfaces (#1c1c1c / #363636)
+val SelectedHighlightLight   = Color(0xFFD8D8D8)
+val SelectedHighlightDark    = Color(0xFF515151)
+val OnSelectedHighlightDark  = Color(0xFFF2F2F2)  // near-white text/icons on #515151
+
+// Keep alias names that Theme.kt and code files reference:
+val SecondaryContainerGray    = SelectedHighlightLight  // → #d8d8d8
+val OnSecondaryContainerGray  = Color(0xFF1A1A1A)       // near-black on light highlight
+val PrimaryContainerGrayLight = SelectedHighlightLight  // → #d8d8d8
+val PrimaryContainerGrayDark  = SelectedHighlightDark   // → #515151
+val OnPrimaryContainerGrayDark = OnSelectedHighlightDark // → #f2f2f2
 
 // ── Chip selection (neutral, bypasses Material You warm tint) ─────────────────
 // FilterChip selected state in light mode: container = Border gray, text = OnChipSelected.

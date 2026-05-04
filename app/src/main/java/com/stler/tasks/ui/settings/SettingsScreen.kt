@@ -19,7 +19,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.TableChart
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -32,6 +35,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +47,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.stler.tasks.util.toComposeColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,8 +60,13 @@ fun SettingsScreen(
     val files           by viewModel.files.collectAsStateWithLifecycle()
     val loading         by viewModel.loading.collectAsStateWithLifecycle()
     val switching       by viewModel.switching.collectAsStateWithLifecycle()
+    val calendars       by viewModel.calendars.collectAsStateWithLifecycle()
+    val calendarsLoading by viewModel.calendarsLoading.collectAsStateWithLifecycle()
 
     var pickerExpanded by remember { mutableStateOf(false) }
+
+    // Load calendars on first display
+    LaunchedEffect(Unit) { viewModel.loadCalendars() }
 
     Scaffold(
         topBar = {
@@ -79,7 +89,9 @@ fun SettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState()),
         ) {
-            // ── Section label ─────────────────────────────────────────────────
+
+            // ══ SPREADSHEET ════════════════════════════════════════════════════
+
             Text(
                 text = "SPREADSHEET",
                 style = MaterialTheme.typography.labelSmall,
@@ -87,7 +99,6 @@ fun SettingsScreen(
                 modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
             )
 
-            // ── Spreadsheet card ──────────────────────────────────────────────
             OutlinedCard(modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp)
@@ -120,7 +131,6 @@ fun SettingsScreen(
                         )
                     }
 
-                    // Change / Cancel / Switching button
                     OutlinedButton(
                         onClick = {
                             if (!pickerExpanded) viewModel.loadFiles()
@@ -146,7 +156,6 @@ fun SettingsScreen(
                     }
                 }
 
-                // Picker list — expands below the current file row
                 AnimatedVisibility(visible = pickerExpanded) {
                     Column {
                         HorizontalDivider()
@@ -213,6 +222,98 @@ fun SettingsScreen(
                     }
                 }
             }
+
+            // ══ CALENDARS ══════════════════════════════════════════════════════
+
+            Text(
+                text = "CALENDARS",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 4.dp),
+            )
+
+            OutlinedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp),
+            ) {
+                // Header row: title + refresh button
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Google Calendars",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(
+                        onClick = viewModel::loadCalendars,
+                        enabled = !calendarsLoading,
+                    ) {
+                        if (calendarsLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Outlined.Refresh, contentDescription = "Refresh calendars", modifier = Modifier.size(20.dp))
+                        }
+                    }
+                }
+
+                HorizontalDivider()
+
+                when {
+                    calendarsLoading && calendars.isEmpty() -> Row(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        Text("Loading calendars…", style = MaterialTheme.typography.bodySmall)
+                    }
+
+                    calendars.isEmpty() -> Text(
+                        text = "No calendars found. Tap refresh to load.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp),
+                    )
+
+                    else -> Column {
+                        calendars.forEach { calendar ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.toggleCalendar(calendar.id, !calendar.isSelected) }
+                                    .padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.CalendarMonth,
+                                    contentDescription = null,
+                                    tint = calendar.color.toComposeColor(),
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Text(
+                                    text = calendar.summary,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Checkbox(
+                                    checked = calendar.isSelected,
+                                    onCheckedChange = { viewModel.toggleCalendar(calendar.id, it) },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
         }
     }
 }

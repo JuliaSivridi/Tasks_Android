@@ -89,8 +89,10 @@ fun deadlineLabel(date: String, time: String, includeDate: Boolean = true): Stri
             daysUntil == 1L  -> "Tomorrow$timeStr"
             daysUntil in 2L..6L ->
                 deadlineDate.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault()) + timeStr
-            else ->
-                deadlineDate.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault())) + timeStr
+            else -> {
+                val pattern = if (deadlineDate.year > today.year) "d MMM yyyy" else "d MMM"
+                deadlineDate.format(DateTimeFormatter.ofPattern(pattern, Locale.getDefault())) + timeStr
+            }
         }
     } catch (_: Exception) {
         null

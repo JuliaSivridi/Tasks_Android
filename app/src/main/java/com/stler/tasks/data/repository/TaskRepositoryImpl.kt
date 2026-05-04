@@ -276,10 +276,11 @@ class TaskRepositoryImpl @Inject constructor(
         return try {
             val current = LocalDate.parse(entity.deadlineDate, DateTimeFormatter.ISO_LOCAL_DATE)
             val next = when (entity.recurType) {
-                "days" -> current.plusDays(entity.recurValue.toLong())
-                "weeks" -> current.plusWeeks(entity.recurValue.toLong())
+                "days"   -> current.plusDays(entity.recurValue.toLong())
+                "weeks"  -> current.plusWeeks(entity.recurValue.toLong())
                 "months" -> current.plusMonths(entity.recurValue.toLong())
-                else -> current.plusDays(1)
+                "years"  -> current.plusYears(entity.recurValue.toLong())
+                else     -> current.plusDays(1)
             }
             entity.copy(deadlineDate = next.format(DateTimeFormatter.ISO_LOCAL_DATE), updatedAt = now)
         } catch (_: Exception) {

@@ -1,7 +1,7 @@
 # Stler Tasks Android — Task Decomposition
 
-**Updated:** 2026-04-21
-**Spec:** `docs/architecture-spec.md`
+**Updated:** 2026-04-27
+**Spec:** `docs/architecture-spec.md` · `docs/architecture-cal-spec.md`
 **Source reference:** PWA at `D:\Projects\Tasks` (scanned for full UI parity)
 
 **Status keys:** `[ ]` not started · `[~]` in progress · `[x]` done
@@ -244,8 +244,8 @@ _Identified by static codebase analysis after Stage 9b._
 - [x] 10.2 Priority and deadline colors: confirmed correct (Urgent #F87171, Important #FB923C, Normal #9CA3AF; Overdue #F87171, Today #16A34A, Tomorrow #FB923C, ThisWeek #A78BFA). Eliminated duplicate definitions — `TaskColors.kt` now imports from `Color.kt` (single source of truth). SidebarMenu and WidgetTaskRow hardcodes replaced with named constants. ✅ Done (session 7).
 - [x] 10.3 All icons: audit confirmed every icon uses `Icons.Outlined.*`. No `Icons.Filled.*` found anywhere. ✅ Done (session 7).
 - [x] 10.4 Error handling: `BaseViewModel.safeLaunch` now forwards exceptions to a `Channel<String>` (`uiError` flow). `LocalSnackbarHostState` CompositionLocal + `ErrorSnackbarEffect` helper wired to all 6 task screens; single `SnackbarHost` in `MainScreen` Scaffold surfaces messages to the user. ✅ Done (session 7).
-- [ ] 10.5 Build debug APK: `./gradlew assembleDebug`
-- [ ] 10.6 Run verification checklist from spec §17
+- [x] 10.5 Build debug APK: `./gradlew assembleDebug`
+- [x] 10.6 Run verification checklist from spec §17
 
 ## Stage 11 — UX Improvements
 
@@ -258,4 +258,146 @@ _Identified by static codebase analysis after Stage 9b._
 
 ---
 
-*To continue in a new session: read this file and `docs/architecture-spec.md`, find the first `[~]` or first `[ ]` item and continue from there.*
+*To continue in a new session: read this file and `docs/architecture-spec.md` / `docs/architecture-cal-spec.md`, find the first `[~]` or first `[ ]` item and continue from there.*
+
+---
+
+## Stage 12 — Google Calendar Integration
+
+_Branch: `feature/google-calendar`. Base: `main` (v2.0, Settings screen present)._
+_Spec: `docs/architecture-cal-spec.md`_
+
+### 12.0 Preparation (manual)
+- [x] 12.0.1 Google Cloud Console → enable Google Calendar API
+- [x] 12.0.2 Add `https://www.googleapis.com/auth/calendar` scope to consent screen
+- [x] 12.0.3 Add Calendar scope to `GoogleAuthRepository.buildAuthRequest()`
+
+### 12.1 Domain models & data layer (foundation)
+- [x] 12.1.1 `CalendarItem.kt`, `CalendarEvent.kt` domain models
+- [x] 12.1.2 `ListItem.kt` sealed class (TaskItem / EventItem)
+- [x] 12.1.3 `CalendarEventEntity.kt` + `CalendarEventDao.kt`
+- [x] 12.1.4 `TaskDatabase.kt` — version 4 → 5; `MIGRATION_4_5` SQL; `addMigrations()`
+- [x] 12.1.5 `AuthPreferences.kt` — add `selected_calendar_ids` (stringSetPreferencesKey) + `selectedCalendarIds` Flow + `saveSelectedCalendarIds()`; extend `clearAll()`
+- [x] 12.1.6 `CalendarDtos.kt` — all Calendar API DTOs
+- [x] 12.1.7 `CalendarApi.kt` — Retrofit interface (`listCalendars`, `listEvents`, `createEvent`)
+- [x] 12.1.8 `CalendarMapper.kt` — DTO → domain/entity conversions; RFC3339 parse helpers
+- [x] 12.1.9 `CalendarRepository.kt` interface + `CalendarRepositoryImpl.kt`
+- [x] 12.1.10 `CalendarModule.kt` — Hilt module; Calendar Retrofit instance (base `https://www.googleapis.com/`); expose OkHttpClient from NetworkModule
+- [x] 12.1.11 Inject `CalendarRepository` into `SyncWorker` — fetch events for selected calendars after pull phase (today−1d … today+60d)
+
+### 12.2 Settings — Calendar Selection
+- [x] 12.2.1 `SettingsViewModel.kt` — add `loadCalendars()`, `toggleCalendar()`, `calendars` / `calendarsLoading` StateFlows
+- [x] 12.2.2 `SettingsScreen.kt` — add "CALENDARS" section: calendar icon (tinted with calendar color) + name + Checkbox per calendar; CircularProgressIndicator while loading
+
+### 12.3 Sidebar & Navigation
+- [x] 12.3.1 `Screen.kt` — add `CALENDAR = "calendar/{calendarId}"` + `calendarRoute()` helper
+- [x] 12.3.2 `SidebarPreferences.kt` / `SidebarState` — add `calendarsOpen: Boolean`
+- [x] 12.3.3 `SidebarMenu.kt` — add collapsible "Calendars" section (selected calendars only, calendar icon tinted with calendar color + name)
+- [x] 12.3.4 `MainViewModel.kt` — expose `selectedCalendars: StateFlow<List<CalendarItem>>`
+- [x] 12.3.5 `MainScreen.kt` — add `composable(Screen.CALENDAR)` → CalendarScreen; pass `selectedCalendars` and `currentCalendarId` to SidebarMenu
+
+### 12.4 CalendarScreen
+- [x] 12.4.1 `CalendarEventItem.kt` — standalone composable (title row + date/time + calendar icon tinted with calendar color + name; no checkbox)
+- [x] 12.4.2 `CalendarViewModel.kt` — groups events by date (Overdue/Today/Tomorrow/This Week/Later); isLoading StateFlow
+- [x] 12.4.3 `CalendarScreen.kt` — ShimmerTaskList / EmptyState / LazyColumn with date headers; reuse existing DateHeader
+
+### 12.5 Upcoming & AllTasks — events in list
+- [x] 12.5.1 `UpcomingViewModel.kt` — inject CalendarRepository; merge tasks + events into `Map<LocalDate, List<ListItem>>`
+- [x] 12.5.2 `UpcomingScreen.kt` — render `ListItem.EventItem` → `CalendarEventItem`
+- [x] 12.5.3 `AllTasksViewModel.kt` — same merge
+- [x] 12.5.4 `AllTasksScreen.kt` — render `ListItem.EventItem` → `CalendarEventItem`
+
+### 12.6 TaskFormSheet — Task / Event mode redesign
+- [x] 12.6.1 `FormMode.kt` — `enum class FormMode { TASK, EVENT }`
+- [x] 12.6.2 `CalendarDtos.kt` — add `recurrence: List<String>? = null` to `CalendarEventRequest`
+- [x] 12.6.3 `TaskFormViewModel.kt` — extend `BaseViewModel`; inject `CalendarRepository`; add `formMode`, `endTime`, `selectedCalendarId`, `customRRule` state; `loadCalendars()`, `createEvent()`, `eventCreated` SharedFlow
+- [x] 12.6.4 `EndTimePickerDialog.kt` — new: `TimePicker` wrapper for event end time
+- [x] 12.6.5 `CustomRecurrenceSheet.kt` — new: RRULE builder (DAILY/WEEKLY/MONTHLY/YEARLY, Ends: Never/On/After); opens from TaskFormSheet in EVENT mode
+- [x] 12.6.6 `TaskFormSheet.kt` — add TASK/EVENT segmented toggle; restructure TASK field order (Folder → Labels → Priority); replace inline label creator with `LabelPickerSheet`; add EVENT fields (3-chip deadline row, calendar picker); validation + `ErrorSnackbarEffect`
+
+### 12.7 Bug fixes (post-alpha.1)
+- [x] 12.7.1 Don't show past calendar events — `from = LocalDate.now()` in Upcoming/AllTasks/CalendarViewModel
+- [x] 12.7.2 `CalendarEventItem` — left padding + leading CalendarMonth icon (18 dp, calendar color) in checkbox position; matches TaskItem layout
+- [x] 12.7.3 AllTasks — events sorted chronologically together with tasks; tasks without deadlines go last
+- [x] 12.7.4 Upcoming — "All day" text suppressed in grouped-by-date view (date header is sufficient)
+- [x] 12.7.5 `MainViewModel` — reactive sidebar: `collect` on selectedCalendarIds instead of one-shot `first`; re-fetches calendar metadata when new IDs are added while app is running
+- [x] 12.7.6 `Screen.calendarRoute()` — URL-encode calendar ID via `Uri.encode()` so IDs with `#` / `@` (holiday calendars) route correctly to CalendarScreen
+- [x] 12.7.7 `CalendarEventItem` — restructure to match TaskItem exactly: Column > Row1 + Row2; icon 20 dp in 40 dp box; meta row `start=54 dp`, `bodyMedium`, icon 14 dp; no new hardcoded sizes
+- [x] 12.7.8 Calendar event fetch depth: `plusDays(60)` → `plusDays(366)` in all ViewModels and SyncWorker
+
+### 12.8 Bug fixes & improvements (post-alpha.3)
+- [x] 12.8.1 `TaskItem.kt` — remove green highlight on checkbox click; keep only swipe-right green flash (remove `pendingComplete` state, `completeBgColor` animation, and the wrapping `Box`)
+- [x] 12.8.2 `AllTasksViewModel` / `UpcomingViewModel` — calendar events are hidden when any task filter (priority / label / folder) is active; they are not subject to those filter fields
+- [x] 12.8.3 `AllTasksViewModel` / `UpcomingViewModel` — add `_calendarFilter: MutableStateFlow<Set<String>>`, `calendarsInEvents: StateFlow<List<CalendarItem>>` (derived from eventsFlow, no network call), `toggleCalendarFilter()`, cleared by `clearAllFilters()`
+- [x] 12.8.4 `FilterBar` — add calendar chip (CalendarMonth icon); shows distinct calendars from current events; hides when no events loaded; toggling a calendar entry filters events by `calendarId`; compatible with existing callers (new params have defaults)
+- [x] 12.8.5 `UpcomingScreen` / `AllTasksScreen` — pass `calendarsInEvents` and `calendarFilter` to `FilterBar`
+- [x] 12.8.6 `WidgetTaskRow` — row 2: add "↻" recurring indicator before deadline text (when `task.isRecurring`); add "○ N" pending child count after folder (when `pendingChildCount > 0`)
+- [x] 12.8.7 `FolderWidget` — pass `pendingChildCount` = pending children in loaded task list to each `FolderRow`; displayed in row 2 of parent task rows
+
+---
+
+## Stage 13 — Widget Enhancements & Calendar Widget
+
+_Branch: `feature/widget-calendar`. Base: `main` after Stage 12 merge._
+
+### 13.1 Widget checkbox checkmark
+- [x] 13.1.1 Research Glance state mechanism to show transient "checked" visual between tap and widget refresh
+- [x] 13.1.2 `WidgetTaskRow.kt` — show checkmark inside checkbox box when task ID matches a "pending complete" Glance state key; clear state after widget refreshes
+
+### 13.2 Calendar events on Upcoming widget
+- [x] 13.2.1 `WidgetEntryPoint.kt` — add `calendarRepository(): CalendarRepository` accessor
+- [x] 13.2.2 `UpcomingWidget.kt` — collect `calendarRepository.getSelectedCalendarIds()` + `getEventsForCalendars()` reactively inside `provideGlance`; merge with tasks via unified `TimelineEntry` list; sort by (date, timed-first, time)
+- [x] 13.2.3 Add `UpcomingRow.Event(event: CalendarEvent)` to the sealed class
+- [x] 13.2.4 `WidgetEventRow.kt` (new) — mirrors `WidgetTaskRow` layout; `ic_calendar_month` drawable (tinted with calendar color via `ColorFilter.tint`) in checkbox position; title in row 1; time · calendar name in row 2; identical font sizes (14sp) and divider; `hexToColorProvider` moved to `WidgetColors.kt` as `internal`
+- [x] 13.2.5 Render `UpcomingRow.Event` → `WidgetEventRow(timeOnly=true)` in the `LazyColumn`
+
+### 13.3 Calendar events on List (TaskList) widget
+- [x] 13.3.1 `TaskListWidget.kt` — collect calendar events (same as 13.2.2); merge with tasks; sort by date+time (dated tasks + events interleaved, undated tasks last)
+- [x] 13.3.2 Hide events when any task filter (folder / label / priority) is active — mirrors app AllTasks behavior
+- [x] 13.3.3 Render event rows using `WidgetEventRow`
+
+### 13.4 Calendar widget (new)
+- [x] 13.4.1 `WidgetPrefs.kt` — add `getCalendarWidgetIds(appWidgetId)` / `setCalendarWidgetIds()` storing a comma-separated set of selected calendar IDs
+- [x] 13.4.2 `CalendarWidget.kt` — new `GlanceAppWidget`; reads selected calendar IDs from prefs; collects events reactively; groups by date; renders with `DateHeader` + `WidgetEventRow`
+- [x] 13.4.3 `CalendarWidgetReceiver` in same file; register in `AndroidManifest.xml` + `res/xml/calendar_widget_info.xml`
+- [x] 13.4.4 `WidgetConfigActivity.kt` — add `WidgetType.CALENDAR`; config screen shows multiselect checkboxes (not radio buttons) from `calendarRepository.fetchCalendarsAndSave()` filtered to `isSelected`; saves selected IDs via `WidgetPrefs`
+- [x] 13.4.5 `CompleteTaskAction.kt` `refreshAll()` — add `CalendarWidget().updateAll(context)`
+
+### 13.5 List widget — multiselect filters
+- [x] 13.5.1 `WidgetPrefs.kt` — change single `filterFolder` / `filterLabel` / `filterPriority` to comma-separated sets; add migration (old single-value prefs still readable)
+- [x] 13.5.2 `WidgetConfigActivity.kt` `TaskListFilterContent` — replace `SimpleDropdown` with checkbox-based multiselect for folder, label, priority; "Any" = deselected
+- [x] 13.5.3 `TaskListWidget.kt` — update filter application to use `Set<String>` instead of single nullable value
+- [x] 13.5.4 `TaskListWidget.kt` bugfix — when filters active raise row cap to 50 (from 20) so undated tasks from a second selected folder aren't cut off by the Binder-safety cap that only matters for the unfiltered all-tasks + events view
+
+### 13.6 Upcoming & AllTasks UX improvements
+- [x] 13.6.1 `UpcomingScreen.kt` — initial scroll to first date ≥ today on screen open (fixes list showing Tomorrow when today has only all-day calendar events); uses `hasScrolledToInitial` guard that resets each time the composable leaves composition
+- [x] 13.6.2 `AllTasksScreen.kt` — initial scroll to first item with date ≥ today (same fix for flat list; adds `rememberLazyListState`)
+- [x] 13.6.3 `UpcomingScreen.kt` `DayPill` — add `onClick` parameter + `clickable` modifier; tapping a day in the week strip animates the list to that day's section (or nearest future date with content if the tapped day is empty)
+
+---
+
+## Stage 13b — Bug Fixes & Code Quality Improvements (post-v2 review)
+
+_Identified by architecture + UX review agents after Stage 13._
+
+### Architecture / data integrity
+- [x] 13b.1 `moveEvent()` data loss on partial failure — convert `CalendarEventDao` to abstract class; add `@Transaction deleteSeriesAndReplace()` method; use it in `CalendarRepositoryImpl.moveEvent()`
+- [x] 13b.2 `calendarMeta()` extra API calls — add 5-minute in-memory cache in `CalendarRepositoryImpl`; populate from `fetchEventsAndSave()` metadata fetch to avoid extra `listCalendars()` on each event mutation
+- [x] 13b.3 `fetchEventsAndSave` auth errors silently swallowed — remove `runCatching` around `listCalendars()` at top of `fetchEventsAndSave()`; propagate auth failures to caller; per-calendar errors remain best-effort
+- [x] 13b.4 `allEventsForDeepLink.first()` potential UI freeze on cold start — wrap with `withTimeoutOrNull(2_000L)` in `MainScreen` deep link handler
+- [x] 13b.5 Missing Room indices on `CalendarEventEntity` — add `@Index` on `calendarId` and `recurringEventId`; add `MIGRATION_6_7`; `TaskDatabase` version 6 → 7
+
+### UX
+- [x] 13b.6 `TaskFormSheet` — always reset `formMode = TASK` when opening a new form (was only reset for task edits, causing EVENT mode to carry over to subsequent new creates)
+- [x] 13b.7 Recurring event edit — add "Edit this event only / Edit all events in series" `AlertDialog` before saving (mirrors Google Calendar UX); "this event only" calls `updateEvent` with the instance `calendarEvent.id` and `rrule = null`
+- [x] 13b.8 Delete recurring event dialog — increase spacing between buttons (`Arrangement.spacedBy(0.dp)` → `spacedBy(8.dp)`)
+- [x] 13b.9 Event create/update success toast — change `_eventCreated` to `MutableSharedFlow<String>`; emit "Event created"/"Event updated"; `TaskFormSheet` shows snackbar after dismiss
+- [x] 13b.10 End time chip — show `HH:MM *` when start time is set but end time not yet filled (proactive required-field hint)
+- [x] 13b.11 Submit button labels — use "Create" (new items) / "Save" (edits) for both TASK and EVENT modes; remove "Event" suffix
+- [x] 13b.12 Calendar filter chip — show chip when `calendarFilter.isNotEmpty()` even if `calendars.isEmpty()`
+- [x] 13b.13 `DatePicker` week start — force Monday as first day of week; substitute `en-GB` locale when device locale starts on Sunday (`en-US` etc.)
+
+### Already done (previous session)
+- [x] 13b.x `UpcomingScreen` — remove initial scroll-to-today; list always opens at index 0 so Overdue tasks visible first
+- [x] 13b.x `SyncManager.triggerSync()` — add `networkConstraints` (was missing; prevents SyncWorker running offline and retrying 4×)
+- [x] 13b.x `WidgetRefresher` — skip `updateAll()` when no validated internet connection; avoids restarting Glance sessions offline which caused "Inbox / no tasks" flash

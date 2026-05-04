@@ -57,12 +57,13 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.stler.tasks.domain.model.CalendarItem
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.sync.SyncState
 import com.stler.tasks.ui.navigation.Screen
-import com.stler.tasks.ui.theme.AccentDark
 import com.stler.tasks.ui.theme.NavSelected
+import com.stler.tasks.ui.theme.SelectedHighlightDark
 import com.stler.tasks.ui.theme.PriorityImportant
 import com.stler.tasks.ui.theme.PriorityNormal
 import com.stler.tasks.ui.theme.PriorityUrgent
@@ -74,8 +75,10 @@ fun SidebarMenu(
     currentFolderId: String?,
     currentLabelId: String?,
     currentPriority: String?,
+    currentCalendarId: String?,
     folders: List<Folder>,
     labels: List<Label>,
+    selectedCalendars: List<CalendarItem>,
     syncState: SyncState,
     sidebarState: SidebarState,
     onNavigate: (String) -> Unit,
@@ -187,6 +190,37 @@ fun SidebarMenu(
                 }
             }
 
+            // ── Calendars ────────────────────────────────────────────────────
+            if (selectedCalendars.isNotEmpty()) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                SectionHeader(
+                    title = "Calendars",
+                    isOpen = sidebarState.calendarsOpen,
+                    onToggle = { onToggleSection("calendars") },
+                    onAdd = null,
+                )
+                if (sidebarState.calendarsOpen) {
+                    selectedCalendars.forEach { cal ->
+                        NavigationDrawerItem(
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Outlined.CalendarMonth,
+                                    contentDescription = null,
+                                    tint = cal.color.toComposeColor(),
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            },
+                            label = { Text(cal.summary) },
+                            selected = currentRoute == Screen.CALENDAR && currentCalendarId == cal.id,
+                            onClick = { onNavigate(Screen.calendarRoute(cal.id)) },
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                            colors = sidebarItemColors(),
+                        )
+                    }
+                }
+            }
+
             Spacer(Modifier.weight(1f))
             HorizontalDivider()
 
@@ -206,7 +240,7 @@ fun SidebarMenu(
  */
 @Composable
 private fun sidebarItemColors() = NavigationDrawerItemDefaults.colors(
-    selectedContainerColor = if (isSystemInDarkTheme()) AccentDark else NavSelected,
+    selectedContainerColor = if (isSystemInDarkTheme()) SelectedHighlightDark else NavSelected,
 )
 
 // ── Reusable items ─────────────────────────────────────────────────────────────
