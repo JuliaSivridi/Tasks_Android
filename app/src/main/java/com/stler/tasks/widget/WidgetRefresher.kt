@@ -1,6 +1,8 @@
 package com.stler.tasks.widget
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.glance.appwidget.updateAll
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -57,10 +59,26 @@ class WidgetRefresher @Inject constructor(
      * Glance's updateAll() schedules a SessionWorker via WorkManager, which is
      * thread-safe.  No Main-dispatcher requirement — removing withContext(Dispatchers.Main)
      * eliminates the 300-530 ms UI-thread blocks visible in PerfMonitor doFrame logs.
+     *
+     * Skipped when the device has no active network connection.  Widget data comes
+     * from Room (local), so live Glance sessions update automatically via Flow; the
+     * only reason to call updateAll() is to restart a dead session.  Doing so offline
+     * causes the session to start with `initial = emptyList()` and briefly flash
+     * "Inbox / no tasks" before Room emits — restarting dead sessions offline is
+     * therefore avoided.
      */
     private suspend fun doRefresh() {
+        if (!isNetworkAvailable()) return
         UpcomingWidget().updateAll(context)
         FolderWidget().updateAll(context)
         TaskListWidget().updateAll(context)
+    }
+
+    private fun isNetworkAvailable(): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = cm.activeNetwork ?: return false
+        val caps    = cm.getNetworkCapabilities(network) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+               caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 }

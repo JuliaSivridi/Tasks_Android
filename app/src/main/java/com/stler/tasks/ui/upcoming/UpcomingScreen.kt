@@ -1,6 +1,7 @@
 package com.stler.tasks.ui.upcoming
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,7 +29,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
@@ -45,7 +48,7 @@ import com.stler.tasks.domain.model.Priority
 import com.stler.tasks.ui.alltasks.FilterBar
 import com.stler.tasks.ui.calendar.CalendarEventItem
 import com.stler.tasks.ui.task.TaskItem
-import com.stler.tasks.ui.theme.Border
+import com.stler.tasks.ui.theme.SelectedHighlightLight
 import com.stler.tasks.ui.util.ErrorSnackbarEffect
 import com.stler.tasks.ui.util.ShimmerTaskList
 import com.stler.tasks.ui.theme.DeadlineToday
@@ -63,9 +66,11 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UpcomingScreen(
-    onEditTask   : (com.stler.tasks.domain.model.Task) -> Unit = {},
-    onAddSubtask : (com.stler.tasks.domain.model.Task) -> Unit = {},
-    viewModel    : UpcomingViewModel = hiltViewModel(),
+    onEditTask          : (com.stler.tasks.domain.model.Task) -> Unit = {},
+    onAddSubtask        : (com.stler.tasks.domain.model.Task) -> Unit = {},
+    onEditEvent         : (com.stler.tasks.domain.model.CalendarEvent) -> Unit = {},
+    onEditEventSchedule : (com.stler.tasks.domain.model.CalendarEvent) -> Unit = {},
+    viewModel           : UpcomingViewModel = hiltViewModel(),
 ) {
     val allGroupedTasks    by viewModel.allGroupedTasks.collectAsStateWithLifecycle()
     val isLoading          by viewModel.isLoading.collectAsStateWithLifecycle()
@@ -85,7 +90,7 @@ fun UpcomingScreen(
     val listState = rememberLazyListState()
     val scope    = rememberCoroutineScope()
 
-    // Sorted list of dates that have tasks
+    // Sorted list of dates that have tasks/events
     val orderedDates = remember(allGroupedTasks) { allGroupedTasks.keys.toList() }
 
     // Compute the flat item index of a date's header in the LazyColumn
@@ -102,6 +107,10 @@ fun UpcomingScreen(
     // Helper: first date in week starting on [weekMon] that has tasks, or null
     fun firstTaskDateInWeek(weekMon: LocalDate): LocalDate? =
         orderedDates.firstOrNull { it in weekMon..weekMon.plusDays(6) }
+
+    // ── Currently visible date — drives week-strip highlight ──────────────
+    // Initialized to today so the correct pill is highlighted immediately.
+    var selectedDate by remember { mutableStateOf(today) }
 
     // ── Scroll → week strip sync ──────────────────────────────────────────
     // Use rememberUpdatedState so the snapshotFlow always sees fresh data
@@ -128,7 +137,12 @@ fun UpcomingScreen(
             .distinctUntilChanged()
             .debounce(120)
             // LocalDate.MIN is the synthetic overdue group key — skip week-strip sync for it.
-            .collect { date -> if (date != LocalDate.MIN) viewModel.onVisibleDateChanged(date) }
+            .collect { date ->
+                if (date != LocalDate.MIN) {
+                    viewModel.onVisibleDateChanged(date)
+                    selectedDate = date
+                }
+            }
     }
 
     val isCurrentWeek = weekDays.contains(today)
@@ -168,9 +182,25 @@ fun UpcomingScreen(
             ) {
                 weekDays.forEach { date ->
                     DayPill(
-                        date = date,
-                        isToday = date == today,
-                        hasTasks = allGroupedTasks.containsKey(date),
+                        date       = date,
+                        isToday    = date == today,
+                        isSelected = date == selectedDate,
+                        hasTasks   = allGroupedTasks.containsKey(date),
+                        onClick    = {
+                            // Scroll to this day if it has content; otherwise
+                            // scroll to the nearest future date with content.
+                            val target = if (allGroupedTasks.containsKey(date)) {
+                                date
+                            } else {
+                                orderedDates.firstOrNull { it >= date }
+                                    ?: orderedDates.lastOrNull()
+                            }
+                            if (target != null) {
+                                scope.launch {
+                                    listState.animateScrollToItem(itemIndexOf(target))
+                                }
+                            }
+                        },
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -286,7 +316,14 @@ fun UpcomingScreen(
                                 )
                             }
                             is ListItem.EventItem -> {
-                                CalendarEventItem(event = item.event, showDate = false)
+                                CalendarEventItem(
+                                    event          = item.event,
+                                    showDate       = false,
+                                    onEdit         = { onEditEvent(item.event) },
+                                    onEditSchedule = { onEditEventSchedule(item.event) },
+                                    onDelete       = { viewModel.deleteEvent(item.event.calendarId, item.event.id) },
+                                    onDeleteSeries = { viewModel.deleteEventSeries(item.event.calendarId, item.event.recurringEventId) },
+                                )
                             }
                         }
                         HorizontalDivider(
@@ -308,7 +345,8 @@ private fun DayHeader(date: LocalDate, today: LocalDate) {
     val label = if (date == LocalDate.MIN) {
         "Overdue"
     } else {
-        val datePart = date.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
+        val datePattern = if (date.year > today.year) "d MMM yyyy" else "d MMM"
+        val datePart = date.format(DateTimeFormatter.ofPattern(datePattern, Locale.getDefault()))
         val special = when (date) {
             today             -> "Today"
             today.plusDays(1) -> "Tomorrow"
@@ -341,31 +379,36 @@ private fun DayHeader(date: LocalDate, today: LocalDate) {
 
 @Composable
 private fun DayPill(
-    date: LocalDate,
-    isToday: Boolean,
-    hasTasks: Boolean,
-    modifier: Modifier = Modifier,
+    date      : LocalDate,
+    isToday   : Boolean,
+    isSelected: Boolean,
+    hasTasks  : Boolean,
+    onClick   : () -> Unit,
+    modifier  : Modifier = Modifier,
 ) {
-    val todayBg      = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceVariant else Border
-    val todayContent = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else OnChipSelected
+    // Background and text tint follow the currently selected (visible) day,
+    // not today specifically. Today is only distinguished by the dot color.
+    val selBg      = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.primaryContainer else SelectedHighlightLight
+    val selContent = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onPrimaryContainer else OnChipSelected
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(if (isToday) todayBg else Color.Transparent)
+            .clickable(onClick = onClick)
+            .background(if (isSelected) selBg else Color.Transparent)
             .padding(horizontal = 6.dp, vertical = 4.dp),
     ) {
         Text(
             text = date.dayOfMonth.toString(),
             style = MaterialTheme.typography.bodyMedium,
-            fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-            color = if (isToday) todayContent else MaterialTheme.colorScheme.onSurface,
+            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+            color = if (isSelected) selContent else MaterialTheme.colorScheme.onSurface,
         )
         Text(
             text = date.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()),
             style = MaterialTheme.typography.bodySmall,
-            color = if (isToday) todayContent else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (isSelected) selContent else MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Box(
             modifier = Modifier
@@ -373,7 +416,7 @@ private fun DayPill(
                 .clip(CircleShape)
                 .background(
                     when {
-                        isToday  -> DeadlineToday
+                        isToday  -> DeadlineToday               // today always gets a distinct dot
                         hasTasks -> MaterialTheme.colorScheme.primary
                         else     -> Color.Transparent
                     }

@@ -1,5 +1,7 @@
 package com.stler.tasks.widget
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -7,6 +9,8 @@ import androidx.glance.ColorFilter
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.action.clickable
+import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.background
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -58,13 +62,17 @@ fun WidgetEventRow(
         else                     -> WOnSurfaceVariant
     }
 
+    // Build time range string: "HH:MM" or "HH:MM — HH:MM"
+    val timeRange = if (event.endTime.isNotBlank()) "${event.startTime} — ${event.endTime}"
+                   else event.startTime
+
     // Time label: all-day events show nothing in grouped (timeOnly) view;
-    // timed events always show the time.
+    // timed events show the range.
     val timeLabel: String = when {
         event.isAllDay && timeOnly  -> ""
         event.isAllDay && !timeOnly -> formatEventDate(event.startDate)
-        !timeOnly                   -> "${formatEventDate(event.startDate)} · ${event.startTime}"
-        else                        -> event.startTime   // timeOnly, has time
+        !timeOnly                   -> "${formatEventDate(event.startDate)} · $timeRange"
+        else                        -> timeRange   // timeOnly, has time
     }
 
     Column(modifier = GlanceModifier.fillMaxWidth()) {
@@ -86,26 +94,38 @@ fun WidgetEventRow(
 
             Spacer(GlanceModifier.width(6.dp))
 
-            // ── Calendar icon — sits in the same 32dp slot as the checkbox ────
+            // ── Calendar icon — same 36dp slot as the task checkbox ──────────
             Box(
-                modifier = GlanceModifier.size(32.dp),
+                modifier = GlanceModifier.size(36.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Image(
                     provider           = ImageProvider(R.drawable.ic_calendar_month),
                     contentDescription = event.calendarName,
-                    modifier           = GlanceModifier.size(20.dp),
+                    modifier           = GlanceModifier.size(26.dp),
                     colorFilter        = ColorFilter.tint(calColor),
                 )
             }
 
             Spacer(GlanceModifier.width(8.dp))
 
-            // ── Title + row 2 ────────────────────────────────────────────────
+            // ── Title + row 2 — tapping opens the event edit form ────────────
             Column(
                 modifier = GlanceModifier
                     .defaultWeight()
-                    .wrapContentHeight(),
+                    .wrapContentHeight()
+                    .clickable(
+                        actionStartActivity(
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("stlertasks://event/${event.calendarId}/${event.id}"),
+                            ).addFlags(
+                                Intent.FLAG_ACTIVITY_NEW_TASK or
+                                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                                Intent.FLAG_ACTIVITY_CLEAR_TOP,
+                            )
+                        )
+                    ),
             ) {
                 // Row 1: event title
                 Text(
@@ -157,8 +177,9 @@ private fun formatEventDate(dateStr: String): String = try {
     when {
         date == today             -> "Today"
         date == today.plusDays(1) -> "Tomorrow"
-        else                      -> date.format(
-            java.time.format.DateTimeFormatter.ofPattern("d MMM", java.util.Locale.getDefault())
-        )
+        else                      -> {
+            val pattern = if (date.year > today.year) "d MMM yyyy" else "d MMM"
+            date.format(java.time.format.DateTimeFormatter.ofPattern(pattern, java.util.Locale.ENGLISH))
+        }
     }
 } catch (_: Exception) { dateStr }

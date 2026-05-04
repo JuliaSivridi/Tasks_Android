@@ -23,7 +23,7 @@ import com.stler.tasks.data.local.entity.TaskEntity
         SyncQueueEntity::class,
         CalendarEventEntity::class,
     ],
-    version = 5,   // v5: add calendar_events table
+    version = 7,   // v7: add calendarId + recurringEventId indices on calendar_events
     exportSchema = true,
 )
 abstract class TaskDatabase : RoomDatabase() {
@@ -53,6 +53,23 @@ abstract class TaskDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
+            }
+        }
+
+        /** Adds recurringEventId column ('' default — pure cache, no data loss). */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE calendar_events ADD COLUMN recurringEventId TEXT NOT NULL DEFAULT ''"
+                )
+            }
+        }
+
+        /** Adds indices on calendarId and recurringEventId for faster queries. */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_calendar_events_calendarId ON calendar_events(calendarId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_calendar_events_recurringEventId ON calendar_events(recurringEventId)")
             }
         }
     }

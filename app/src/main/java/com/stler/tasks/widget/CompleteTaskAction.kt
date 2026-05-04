@@ -157,4 +157,5 @@ private suspend fun refreshAll(context: Context) {
     UpcomingWidget().updateAll(context)
     FolderWidget().updateAll(context)
     TaskListWidget().updateAll(context)
+    CalendarWidget().updateAll(context)
 }

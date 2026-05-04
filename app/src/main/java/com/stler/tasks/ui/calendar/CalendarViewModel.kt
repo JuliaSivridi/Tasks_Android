@@ -34,6 +34,14 @@ class CalendarViewModel @Inject constructor(
         .map { false }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
+    fun deleteEvent(calendarId: String, eventId: String) = safeLaunch {
+        calendarRepository.deleteEvent(calendarId, eventId).getOrThrow()
+    }
+
+    fun deleteEventSeries(calendarId: String, seriesId: String) = safeLaunch {
+        calendarRepository.deleteEventSeries(calendarId, seriesId).getOrThrow()
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────
 
     private fun groupByDate(events: List<CalendarEvent>): Map<LocalDate, List<CalendarEvent>> {

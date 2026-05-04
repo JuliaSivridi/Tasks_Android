@@ -61,15 +61,17 @@ class SyncManager @Inject constructor(
 
     /**
      * Triggers an immediate one-off sync (manual button or after sign-in).
-     * No network constraint — runs immediately regardless of connection state
-     * (SyncWorker itself returns early if spreadsheetId is blank, and
-     *  Retrofit will fail gracefully if offline).
+     * Requires a network connection — same as the periodic sync — so that
+     * SyncWorker does not run offline, retry repeatedly, and cause Glance
+     * session workers to wake up and briefly flash "Inbox / no tasks".
      */
     fun triggerSync() {
         workManager.enqueueUniqueWork(
             MANUAL_WORK_NAME,
             ExistingWorkPolicy.REPLACE,
-            OneTimeWorkRequestBuilder<SyncWorker>().build(),
+            OneTimeWorkRequestBuilder<SyncWorker>()
+                .setConstraints(networkConstraints)
+                .build(),
         )
     }
 

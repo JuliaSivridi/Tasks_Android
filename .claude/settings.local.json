@@ -49,7 +49,11 @@
       "PowerShell($env:JAVA_HOME = \"C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\"; $env:PATH = \"$env:JAVA_HOME\\\\bin;$env:PATH\"; Set-Location \"D:\\\\Projects\\\\Tasks_android\"; .\\\\gradlew.bat assembleDebug 2>&1 | Select-Object -Last 30)",
       "Bash(cmd /c \"gradlew.bat :app:compileDebugKotlin 2>&1\")",
       "PowerShell($env:JAVA_HOME = \"C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\"; Set-Location \"D:\\\\Projects\\\\Tasks_android\"; .\\\\gradlew.bat :app:compileDebugKotlin 2>&1 | Select-Object -Last 80)",
-      "Bash(JAVA_HOME=\"/c/Program Files/Android/Android Studio/jbr\" ./gradlew :app:compileDebugKotlin)"
+      "Bash(JAVA_HOME=\"/c/Program Files/Android/Android Studio/jbr\" ./gradlew :app:compileDebugKotlin)",
+      "PowerShell(cd D:\\\\Projects\\\\Tasks_android; $env:JAVA_HOME = \"C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\"; .\\\\gradlew assembleDebug 2>&1 | Where-Object { $_ -match \"error:|FAILED|BUILD\" } | Select-Object -First 30)",
+      "Bash(gradlew assembleDebug --no-daemon)",
+      "Bash(./gradlew assembleDebug --no-daemon)",
+      "PowerShell($env:JAVA_HOME = \"C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\"; $env:Path = \"$env:JAVA_HOME\\\\bin;$env:Path\"; cd \"D:\\\\Projects\\\\Tasks_android\"; .\\\\gradlew.bat assembleDebug --no-daemon 2>&1 | Select-Object -Last 80)"
     ]
   }
 }

@@ -74,7 +74,7 @@ class UpcomingWidget : GlanceAppWidget() {
         val labelsFlow : Flow<List<Label>>  = repo.observeLabels()
         val foldersFlow: Flow<List<Folder>> = repo.observeFolders()
 
-        val from = LocalDate.now().minusDays(1)  // include yesterday's overdue events
+        val from = LocalDate.now()                // events start from today (no past events in widget)
         val to   = LocalDate.now().plusDays(7)   // cap event query at 7 days
 
         // Switches to a new Room query whenever the selected calendar IDs change.
@@ -220,7 +220,7 @@ class UpcomingWidget : GlanceAppWidget() {
 // ── Section header ────────────────────────────────────────────────────────────
 
 @Composable
-private fun DateHeader(text: String, isOverdue: Boolean = false) {
+internal fun DateHeader(text: String, isOverdue: Boolean = false) {
     Text(
         text     = text,
         modifier = GlanceModifier
@@ -236,11 +236,11 @@ private fun DateHeader(text: String, isOverdue: Boolean = false) {
 
 // ── Date header text ──────────────────────────────────────────────────────────
 
-private fun formatDateHeader(date: LocalDate, today: LocalDate): String {
+internal fun formatDateHeader(date: LocalDate, today: LocalDate): String {
     return try {
-        val datePart = date.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
+        val datePart = date.format(DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH))
         val weekday  = date.dayOfWeek
-            .getDisplayName(JTextStyle.FULL, Locale.getDefault())
+            .getDisplayName(JTextStyle.FULL, Locale.ENGLISH)
             .replaceFirstChar { it.uppercase() }
         val special = when {
             date < today              -> "Overdue"

@@ -81,19 +81,18 @@ class SyncWorker @AssistedInject constructor(
         }
     }
 
-    // ── Calendar sync (best-effort, does not fail the worker) ────────────
+    // ── Calendar sync ─────────────────────────────────────────────────────
+    // Auth errors from listCalendars() propagate here and bubble up to doWork(),
+    // which returns Result.retry() — allowing WorkManager to retry with back-off.
+    // Per-calendar fetch errors are handled best-effort inside fetchEventsAndSave().
 
     private suspend fun syncCalendars() {
         val selectedIds = authPreferences.selectedCalendarIds.first()
         if (selectedIds.isEmpty()) return
-        runCatching {
-            val from = LocalDate.now().minusDays(1)
-            val to   = LocalDate.now().plusDays(366)
-            calendarRepository.fetchEventsAndSave(selectedIds, from, to)
-            Log.i(TAG, "Calendar sync complete for ${selectedIds.size} calendar(s)")
-        }.onFailure { e ->
-            Log.e(TAG, "Calendar sync failed: ${e.message}", e)
-        }
+        val from = LocalDate.now().minusDays(1)
+        val to   = LocalDate.now().plusDays(366)
+        calendarRepository.fetchEventsAndSave(selectedIds, from, to)
+        Log.i(TAG, "Calendar sync complete for ${selectedIds.size} calendar(s)")
     }
 
     // ── Push ──────────────────────────────────────────────────────────────

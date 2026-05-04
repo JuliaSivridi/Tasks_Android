@@ -27,19 +27,24 @@ import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTimePickerState
+import android.content.res.Configuration
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import com.stler.tasks.domain.model.RecurType
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.time.temporal.WeekFields
 import java.util.Locale
 
 /**
@@ -79,13 +84,24 @@ fun DeadlinePickerDialog(
     var showCalendar   by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
 
-    /** Format "YYYY-MM-DD" → "d MMM" (e.g. "18 Apr"). */
-    fun formatDate(d: String): String =
-        runCatching {
-            LocalDate.parse(d).format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
-        }.getOrDefault(d)
+    /** Format "YYYY-MM-DD" → "d MMM" or "d MMM yyyy" if year > current year. */
+    fun formatDate(d: String): String = runCatching {
+        val date    = LocalDate.parse(d)
+        val pattern = if (date.year > LocalDate.now().year) "d MMM yyyy" else "d MMM"
+        date.format(DateTimeFormatter.ofPattern(pattern, Locale.getDefault()))
+    }.getOrDefault(d)
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // Force Monday as first day of week in DatePicker for locales that default to Sunday
+    val currentConfig = LocalConfiguration.current
+    val mondayLocale = remember(currentConfig.locales) {
+        val loc = currentConfig.locales.get(0)
+        if (WeekFields.of(loc).firstDayOfWeek == DayOfWeek.SUNDAY) Locale("en", "GB") else loc
+    }
+    val mondayConfig = remember(mondayLocale) {
+        Configuration(currentConfig).apply { setLocale(mondayLocale) }
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -100,10 +116,11 @@ fun DeadlinePickerDialog(
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // ── Sheet title ───────────────────────────────────────────────────
+            // ── Sheet title — same style as SectionLabel in TaskFormSheet ───────
             Text(
-                text  = "Set deadline",
-                style = MaterialTheme.typography.titleMedium,
+                text  = "Deadline",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             // ── Row 1: Date chip + Time chip ──────────────────────────────────
@@ -135,7 +152,7 @@ fun DeadlinePickerDialog(
                             )
                             Text(
                                 text  = if (selectedDate.isBlank()) "No date" else formatDate(selectedDate),
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.bodyMedium,
                                 color = dateColor,
                             )
                         }
@@ -163,8 +180,8 @@ fun DeadlinePickerDialog(
                                     tint = timeColor,
                                 )
                                 Text(
-                                    text  = if (selectedTime.isBlank()) "No time" else selectedTime,
-                                    style = MaterialTheme.typography.bodySmall,
+                                    text  = if (selectedTime.isBlank()) "HH:MM" else selectedTime,
+                                    style = MaterialTheme.typography.bodyMedium,
                                     color = timeColor,
                                 )
                             }
@@ -211,6 +228,7 @@ fun DeadlinePickerDialog(
                                     val postponed = when (recurType) {
                                         RecurType.WEEKS  -> base.plusWeeks(n.toLong())
                                         RecurType.MONTHS -> base.plusMonths(n.toLong())
+                                        RecurType.YEARS  -> base.plusYears(n.toLong())
                                         else             -> base.plusDays(n.toLong())
                                     }.toString()
                                     onConfirm(postponed, selectedTime, true, recurType, n)
@@ -249,22 +267,24 @@ fun DeadlinePickerDialog(
             }.getOrNull()
         }
         val dateState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
-        DatePickerDialog(
-            onDismissRequest = { showCalendar = false },
-            confirmButton    = {
-                TextButton(onClick = {
-                    dateState.selectedDateMillis?.let { ms ->
-                        selectedDate = LocalDate
-                            .ofInstant(Instant.ofEpochMilli(ms), ZoneOffset.UTC)
-                            .format(DateTimeFormatter.ISO_LOCAL_DATE)
-                    }
-                    showCalendar = false
-                }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCalendar = false }) { Text("Cancel") }
-            },
-        ) { DatePicker(state = dateState) }
+        CompositionLocalProvider(LocalConfiguration provides mondayConfig) {
+            DatePickerDialog(
+                onDismissRequest = { showCalendar = false },
+                confirmButton    = {
+                    TextButton(onClick = {
+                        dateState.selectedDateMillis?.let { ms ->
+                            selectedDate = LocalDate
+                                .ofInstant(Instant.ofEpochMilli(ms), ZoneOffset.UTC)
+                                .format(DateTimeFormatter.ISO_LOCAL_DATE)
+                        }
+                        showCalendar = false
+                    }) { Text("OK") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showCalendar = false }) { Text("Cancel") }
+                },
+            ) { DatePicker(state = dateState) }
+        }
     }
 
     // ── Time sub-dialog ───────────────────────────────────────────────────────

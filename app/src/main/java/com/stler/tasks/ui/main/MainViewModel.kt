@@ -38,6 +38,10 @@ class MainViewModel @Inject constructor(
     /** All pending tasks at any depth — used for deeplink task lookup. */
     val allTasksForDeepLink: Flow<List<Task>> = taskRepository.observeAllPendingTasks()
 
+    /** All stored calendar events — used for deeplink event lookup. */
+    val allEventsForDeepLink: Flow<List<com.stler.tasks.domain.model.CalendarEvent>> =
+        calendarRepository.getAllEvents()
+
     val folders: StateFlow<List<Folder>> = taskRepository.observeFolders()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 

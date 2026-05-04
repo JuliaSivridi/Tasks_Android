@@ -26,4 +26,4 @@ enum class TaskStatus { PENDING, COMPLETED }
 
 enum class Priority { URGENT, IMPORTANT, NORMAL }
 
-enum class RecurType { NONE, DAYS, WEEKS, MONTHS }
+enum class RecurType { NONE, DAYS, WEEKS, MONTHS, YEARS }

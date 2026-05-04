@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Check
@@ -30,13 +31,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import java.time.LocalDate
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.stler.tasks.domain.model.CalendarItem
@@ -45,8 +49,8 @@ import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.ListItem
 import com.stler.tasks.domain.model.Priority
 import com.stler.tasks.ui.calendar.CalendarEventItem
-import com.stler.tasks.ui.theme.Border
 import com.stler.tasks.ui.theme.OnChipSelected
+import com.stler.tasks.ui.theme.SelectedHighlightLight
 import com.stler.tasks.ui.task.TaskItem
 import com.stler.tasks.ui.util.EmptyState
 import com.stler.tasks.ui.util.ErrorSnackbarEffect
@@ -57,9 +61,11 @@ import com.stler.tasks.util.toComposeColor
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AllTasksScreen(
-    onEditTask   : (com.stler.tasks.domain.model.Task) -> Unit = {},
-    onAddSubtask : (com.stler.tasks.domain.model.Task) -> Unit = {},
-    viewModel    : AllTasksViewModel = hiltViewModel(),
+    onEditTask          : (com.stler.tasks.domain.model.Task) -> Unit = {},
+    onAddSubtask        : (com.stler.tasks.domain.model.Task) -> Unit = {},
+    onEditEvent         : (com.stler.tasks.domain.model.CalendarEvent) -> Unit = {},
+    onEditEventSchedule : (com.stler.tasks.domain.model.CalendarEvent) -> Unit = {},
+    viewModel           : AllTasksViewModel = hiltViewModel(),
 ) {
     val filteredItems      by viewModel.filteredItems.collectAsStateWithLifecycle()
     val isLoading          by viewModel.isLoading.collectAsStateWithLifecycle()
@@ -72,6 +78,37 @@ fun AllTasksScreen(
     val calendarsInEvents  by viewModel.calendarsInEvents.collectAsStateWithLifecycle()
 
     ErrorSnackbarEffect(viewModel)
+
+    val today     = remember { LocalDate.now() }
+    val listState = rememberLazyListState()
+
+    // Find the first item index whose date is today or in the future.
+    // The list is sorted: past/overdue → today → future → undated.
+    val firstTodayIdx = remember(filteredItems) {
+        filteredItems.indexOfFirst { item ->
+            val date = when (item) {
+                is ListItem.TaskItem  -> item.task.deadlineDate
+                    .takeIf { it.isNotBlank() }
+                    ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                is ListItem.EventItem -> runCatching { LocalDate.parse(item.event.startDate) }.getOrNull()
+            }
+            date != null && !date.isBefore(today)
+        }
+    }
+
+    // Scroll to today once when data first loads.
+    // LaunchedEffect restarts when firstTodayIdx changes (tasks arrive before
+    // events, so the index might shift). The delay(200) acts as a debounce:
+    // if events arrive within 200 ms, the old coroutine is cancelled and the
+    // new one re-runs with the updated index that now includes today's events.
+    var hasScrolledToInitial by remember { mutableStateOf(false) }
+    LaunchedEffect(firstTodayIdx) {
+        if (!hasScrolledToInitial && firstTodayIdx >= 0) {
+            delay(200)
+            listState.scrollToItem(firstTodayIdx)
+            hasScrolledToInitial = true
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         FilterBar(
@@ -95,7 +132,7 @@ fun AllTasksScreen(
                 message  = "No tasks",
                 subtitle = "Add a task to get started",
             )
-            else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
+            else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                 items(
                     items = filteredItems,
                     key = { item -> when (item) {
@@ -123,7 +160,14 @@ fun AllTasksScreen(
                             )
                         }
                         is ListItem.EventItem -> {
-                            CalendarEventItem(event = item.event, showDate = true)
+                            CalendarEventItem(
+                                event           = item.event,
+                                showDate        = true,
+                                onEdit          = { onEditEvent(item.event) },
+                                onEditSchedule  = { onEditEventSchedule(item.event) },
+                                onDelete        = { viewModel.deleteEvent(item.event.calendarId, item.event.id) },
+                                onDeleteSeries  = { viewModel.deleteEventSeries(item.event.calendarId, item.event.recurringEventId) },
+                            )
                         }
                     }
                     HorizontalDivider(
@@ -140,9 +184,9 @@ fun AllTasksScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun neutralChipColors() = FilterChipDefaults.filterChipColors(
-    selectedContainerColor   = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceVariant else Border,
-    selectedLeadingIconColor = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else OnChipSelected,
-    selectedLabelColor       = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurfaceVariant else OnChipSelected,
+    selectedContainerColor   = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.primaryContainer else SelectedHighlightLight,
+    selectedLeadingIconColor = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onPrimaryContainer else OnChipSelected,
+    selectedLabelColor       = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onPrimaryContainer else OnChipSelected,
 )
 
 /**
@@ -209,7 +253,7 @@ fun FilterBar(
                 leadingIcon = { Icon(Icons.Outlined.Flag, null, Modifier.size(16.dp)) },
                 label       = {
                     if (priorityFilter.isNotEmpty())
-                        Text(priorityFilter.size.toString(), style = MaterialTheme.typography.labelSmall)
+                        Text(priorityFilter.size.toString(), style = MaterialTheme.typography.bodyMedium)
                 },
                 colors = neutralChipColors(),
             )
@@ -244,7 +288,7 @@ fun FilterBar(
                     leadingIcon = { Icon(Icons.Outlined.Label, null, Modifier.size(16.dp)) },
                     label       = {
                         if (labelFilter.isNotEmpty())
-                            Text(labelFilter.size.toString(), style = MaterialTheme.typography.labelSmall)
+                            Text(labelFilter.size.toString(), style = MaterialTheme.typography.bodyMedium)
                     },
                     colors = neutralChipColors(),
                 )
@@ -279,7 +323,7 @@ fun FilterBar(
                     leadingIcon = { Icon(Icons.Outlined.Folder, null, Modifier.size(16.dp)) },
                     label       = {
                         if (folderFilter.isNotEmpty())
-                            Text(folderFilter.size.toString(), style = MaterialTheme.typography.labelSmall)
+                            Text(folderFilter.size.toString(), style = MaterialTheme.typography.bodyMedium)
                     },
                     colors = neutralChipColors(),
                 )
@@ -305,8 +349,8 @@ fun FilterBar(
             }
         }
 
-        // ── Calendars chip — only visible when events are present ─────────
-        if (calendars.isNotEmpty()) {
+        // ── Calendars chip — visible when events are present OR a filter is active ──
+        if (calendars.isNotEmpty() || calendarFilter.isNotEmpty()) {
             Box {
                 FilterChip(
                     selected    = calendarFilter.isNotEmpty(),
@@ -314,7 +358,7 @@ fun FilterBar(
                     leadingIcon = { Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(16.dp)) },
                     label       = {
                         if (calendarFilter.isNotEmpty())
-                            Text(calendarFilter.size.toString(), style = MaterialTheme.typography.labelSmall)
+                            Text(calendarFilter.size.toString(), style = MaterialTheme.typography.bodyMedium)
                     },
                     colors = neutralChipColors(),
                 )

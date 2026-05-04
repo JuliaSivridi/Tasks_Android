@@ -23,7 +23,7 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): TaskDatabase =
         Room.databaseBuilder(context, TaskDatabase::class.java, "tasks.db")
-            .addMigrations(TaskDatabase.MIGRATION_4_5)
+            .addMigrations(TaskDatabase.MIGRATION_4_5, TaskDatabase.MIGRATION_5_6, TaskDatabase.MIGRATION_6_7)
             .fallbackToDestructiveMigration(dropAllTables = true)  // safety net for unexpected version gaps
             .build()
 

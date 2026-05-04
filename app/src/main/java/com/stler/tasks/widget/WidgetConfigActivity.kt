@@ -16,29 +16,33 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import com.stler.tasks.data.repository.CalendarRepository
 import com.stler.tasks.data.repository.TaskRepository
+import com.stler.tasks.domain.model.CalendarItem
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.ui.theme.TasksTheme
@@ -46,13 +50,16 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-private enum class WidgetType { UPCOMING, FOLDER, TASK_LIST }
+private enum class WidgetType { UPCOMING, FOLDER, TASK_LIST, CALENDAR }
 
 @AndroidEntryPoint
 class WidgetConfigActivity : ComponentActivity() {
 
     @Inject
     lateinit var taskRepository: TaskRepository
+
+    @Inject
+    lateinit var calendarRepository: CalendarRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,7 +74,6 @@ class WidgetConfigActivity : ComponentActivity() {
             return
         }
 
-        // Default result is CANCELED in case user backs out
         setResult(RESULT_CANCELED)
 
         val providerClassName = AppWidgetManager.getInstance(this)
@@ -77,21 +83,20 @@ class WidgetConfigActivity : ComponentActivity() {
             ?: ""
 
         val widgetType = when {
-            providerClassName.contains("FolderWidget") -> WidgetType.FOLDER
-            providerClassName.contains("TaskList") -> WidgetType.TASK_LIST
-            else -> WidgetType.UPCOMING
+            providerClassName.contains("FolderWidget")    -> WidgetType.FOLDER
+            providerClassName.contains("TaskList")        -> WidgetType.TASK_LIST
+            providerClassName.contains("CalendarWidget")  -> WidgetType.CALENDAR
+            else                                          -> WidgetType.UPCOMING
         }
 
-        // For UpcomingWidget there's nothing to configure — just confirm immediately
+        // UpcomingWidget needs no config — mark configured and show immediately
         if (widgetType == WidgetType.UPCOMING) {
             lifecycleScope.launch {
+                WidgetPrefs.setConfigured(this@WidgetConfigActivity, appWidgetId)
                 val glanceId = GlanceAppWidgetManager(this@WidgetConfigActivity)
                     .getGlanceIdBy(appWidgetId)
                 UpcomingWidget().update(this@WidgetConfigActivity, glanceId)
-                setResult(
-                    RESULT_OK,
-                    Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId),
-                )
+                setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
                 finish()
             }
             return
@@ -105,37 +110,43 @@ class WidgetConfigActivity : ComponentActivity() {
                     .collectAsStateWithLifecycle(initialValue = emptyList())
 
                 WidgetConfigScreen(
-                    widgetType = widgetType,
-                    folders = folders,
-                    labels = labels,
-                    onConfirm = { selectedFolder, selectedLabel, selectedPriority ->
+                    widgetType         = widgetType,
+                    folders            = folders,
+                    labels             = labels,
+                    calendarRepository = calendarRepository,
+                    onConfirmFolder    = { folderId ->
                         lifecycleScope.launch {
-                            // Save config keyed by raw appWidgetId — same key the widget reads
-                            // via GlanceAppWidgetManager(context).getAppWidgetId(id)
-                            if (widgetType == WidgetType.FOLDER) {
-                                WidgetPrefs.setFolderId(
-                                    this@WidgetConfigActivity, appWidgetId,
-                                    selectedFolder ?: "fld-inbox",
-                                )
-                            } else {
-                                WidgetPrefs.setFilterFolder(this@WidgetConfigActivity, appWidgetId, selectedFolder)
-                                WidgetPrefs.setFilterLabel(this@WidgetConfigActivity, appWidgetId, selectedLabel)
-                                WidgetPrefs.setFilterPriority(this@WidgetConfigActivity, appWidgetId, selectedPriority)
-                            }
-
-                            // Trigger first render (getGlanceIdBy only needed for update())
+                            WidgetPrefs.setFolderId(this@WidgetConfigActivity, appWidgetId, folderId)
+                            WidgetPrefs.setConfigured(this@WidgetConfigActivity, appWidgetId)
                             val glanceId = GlanceAppWidgetManager(this@WidgetConfigActivity)
                                 .getGlanceIdBy(appWidgetId)
-                            when (widgetType) {
-                                WidgetType.FOLDER    -> FolderWidget().update(this@WidgetConfigActivity, glanceId)
-                                WidgetType.TASK_LIST -> TaskListWidget().update(this@WidgetConfigActivity, glanceId)
-                                else -> Unit
-                            }
-
-                            setResult(
-                                RESULT_OK,
-                                Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId),
-                            )
+                            FolderWidget().update(this@WidgetConfigActivity, glanceId)
+                            setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
+                            finish()
+                        }
+                    },
+                    onConfirmTaskList  = { folderIds, labelIds, priorityIds ->
+                        lifecycleScope.launch {
+                            WidgetPrefs.setFilterFolders(this@WidgetConfigActivity, appWidgetId, folderIds)
+                            WidgetPrefs.setFilterLabels(this@WidgetConfigActivity, appWidgetId, labelIds)
+                            WidgetPrefs.setFilterPriorities(this@WidgetConfigActivity, appWidgetId, priorityIds)
+                            WidgetPrefs.setConfigured(this@WidgetConfigActivity, appWidgetId)
+                            val glanceId = GlanceAppWidgetManager(this@WidgetConfigActivity)
+                                .getGlanceIdBy(appWidgetId)
+                            TaskListWidget().update(this@WidgetConfigActivity, glanceId)
+                            setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
+                            finish()
+                        }
+                    },
+                    onConfirmCalendar  = { selectedIds, displayName ->
+                        lifecycleScope.launch {
+                            WidgetPrefs.setCalendarWidgetIds(this@WidgetConfigActivity, appWidgetId, selectedIds)
+                            WidgetPrefs.setCalendarWidgetName(this@WidgetConfigActivity, appWidgetId, displayName)
+                            WidgetPrefs.setConfigured(this@WidgetConfigActivity, appWidgetId)
+                            val glanceId = GlanceAppWidgetManager(this@WidgetConfigActivity)
+                                .getGlanceIdBy(appWidgetId)
+                            CalendarWidget().update(this@WidgetConfigActivity, glanceId)
+                            setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId))
                             finish()
                         }
                     },
@@ -146,28 +157,30 @@ class WidgetConfigActivity : ComponentActivity() {
     }
 }
 
+// ── Screen dispatcher ─────────────────────────────────────────────────────────
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WidgetConfigScreen(
-    widgetType: WidgetType,
-    folders: List<Folder>,
-    labels: List<Label>,
-    onConfirm: (selectedFolder: String?, selectedLabel: String?, selectedPriority: String?) -> Unit,
-    onCancel: () -> Unit,
+    widgetType        : WidgetType,
+    folders           : List<Folder>,
+    labels            : List<Label>,
+    calendarRepository: CalendarRepository,
+    onConfirmFolder   : (folderId: String) -> Unit,
+    onConfirmTaskList : (folderIds: Set<String>, labelIds: Set<String>, priorityIds: Set<String>) -> Unit,
+    onConfirmCalendar : (selectedIds: Set<String>, displayName: String) -> Unit,
+    onCancel          : () -> Unit,
 ) {
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = when (widgetType) {
-                            WidgetType.FOLDER -> "Choose Folder"
-                            WidgetType.TASK_LIST -> "Configure Widget"
-                            else -> "Widget Setup"
-                        }
-                    )
-                }
-            )
+            TopAppBar(title = {
+                Text(text = when (widgetType) {
+                    WidgetType.FOLDER    -> "Choose Folder"
+                    WidgetType.TASK_LIST -> "Configure Filters"
+                    WidgetType.CALENDAR  -> "Choose Calendars"
+                    else                 -> "Widget Setup"
+                })
+            })
         }
     ) { innerPadding ->
         Column(
@@ -178,16 +191,21 @@ private fun WidgetConfigScreen(
                 .verticalScroll(rememberScrollState()),
         ) {
             when (widgetType) {
-                WidgetType.FOLDER -> FolderSelectorContent(
-                    folders = folders,
-                    onConfirm = { folderId -> onConfirm(folderId, null, null) },
-                    onCancel = onCancel,
+                WidgetType.FOLDER    -> FolderSelectorContent(
+                    folders   = folders,
+                    onConfirm = onConfirmFolder,
+                    onCancel  = onCancel,
                 )
                 WidgetType.TASK_LIST -> TaskListFilterContent(
-                    folders = folders,
-                    labels = labels,
-                    onConfirm = onConfirm,
-                    onCancel = onCancel,
+                    folders   = folders,
+                    labels    = labels,
+                    onConfirm = onConfirmTaskList,
+                    onCancel  = onCancel,
+                )
+                WidgetType.CALENDAR  -> CalendarSelectorContent(
+                    calendarRepository = calendarRepository,
+                    onConfirm          = onConfirmCalendar,
+                    onCancel           = onCancel,
                 )
                 else -> Unit
             }
@@ -195,11 +213,13 @@ private fun WidgetConfigScreen(
     }
 }
 
+// ── Folder widget — single-select radio list ──────────────────────────────────
+
 @Composable
 private fun FolderSelectorContent(
-    folders: List<Folder>,
+    folders  : List<Folder>,
     onConfirm: (folderId: String) -> Unit,
-    onCancel: () -> Unit,
+    onCancel : () -> Unit,
 ) {
     var selectedFolderId by remember { mutableStateOf(folders.firstOrNull()?.id ?: "fld-inbox") }
 
@@ -215,122 +235,220 @@ private fun FolderSelectorContent(
         ) {
             RadioButton(
                 selected = selectedFolderId == folder.id,
-                onClick = { selectedFolderId = folder.id },
+                onClick  = { selectedFolderId = folder.id },
             )
-            Text(
-                text = folder.name,
-                modifier = Modifier.padding(start = 8.dp),
-            )
+            Text(text = folder.name, modifier = Modifier.padding(start = 8.dp))
         }
     }
 
     Spacer(modifier = Modifier.height(24.dp))
-    ActionButtons(
-        onConfirm = { onConfirm(selectedFolderId) },
-        onCancel = onCancel,
-    )
+    ActionButtons(onConfirm = { onConfirm(selectedFolderId) }, onCancel = onCancel)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+// ── TaskList widget — multi-select filter UI ──────────────────────────────────
+
+private val PRIORITY_OPTIONS = listOf(
+    "urgent"    to "Urgent (!1)",
+    "important" to "Important (!2)",
+    "normal"    to "Normal (!3)",
+)
+
 @Composable
 private fun TaskListFilterContent(
-    folders: List<Folder>,
-    labels: List<Label>,
-    onConfirm: (selectedFolder: String?, selectedLabel: String?, selectedPriority: String?) -> Unit,
-    onCancel: () -> Unit,
+    folders  : List<Folder>,
+    labels   : List<Label>,
+    onConfirm: (folderIds: Set<String>, labelIds: Set<String>, priorityIds: Set<String>) -> Unit,
+    onCancel : () -> Unit,
 ) {
-    var selectedFolder by remember { mutableStateOf<String?>(null) }
-    var selectedLabel by remember { mutableStateOf<String?>(null) }
-    var selectedPriority by remember { mutableStateOf<String?>(null) }
+    val selectedFolderIds   = remember { mutableStateListOf<String>() }
+    val selectedLabelIds    = remember { mutableStateListOf<String>() }
+    val selectedPriorityIds = remember { mutableStateListOf<String>() }
 
-    Text("Filter tasks (all optional):", style = MaterialTheme.typography.titleMedium)
-    Spacer(modifier = Modifier.height(12.dp))
-
-    // Folder filter
-    Text("Folder", style = MaterialTheme.typography.labelLarge)
-    Spacer(modifier = Modifier.height(4.dp))
-    val folderOptions = listOf(null to "All Folders") + folders.map { it.id to it.name }
-    SimpleDropdown(
-        options = folderOptions,
-        selected = selectedFolder,
-        onSelected = { selectedFolder = it },
+    Text(
+        text  = "Choose filters (leave all unchecked to show everything):",
+        style = MaterialTheme.typography.titleMedium,
     )
+    Spacer(modifier = Modifier.height(16.dp))
 
-    Spacer(modifier = Modifier.height(12.dp))
+    // ── Folders ───────────────────────────────────────────────────────────────
+    if (folders.isNotEmpty()) {
+        FilterSectionHeader(
+            title = "Folder",
+            hint  = if (selectedFolderIds.isEmpty()) "Any" else "${selectedFolderIds.size} selected",
+        )
+        folders.forEach { folder ->
+            val checked = folder.id in selectedFolderIds
+            CheckboxRow(
+                label   = "@${folder.name}",
+                checked = checked,
+                onToggle = {
+                    if (checked) selectedFolderIds.remove(folder.id)
+                    else         selectedFolderIds.add(folder.id)
+                },
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+    }
 
-    // Label filter
-    Text("Label", style = MaterialTheme.typography.labelLarge)
-    Spacer(modifier = Modifier.height(4.dp))
-    val labelOptions = listOf(null to "All Labels") + labels.map { it.id to it.name }
-    SimpleDropdown(
-        options = labelOptions,
-        selected = selectedLabel,
-        onSelected = { selectedLabel = it },
+    // ── Labels ────────────────────────────────────────────────────────────────
+    if (labels.isNotEmpty()) {
+        FilterSectionHeader(
+            title = "Label",
+            hint  = if (selectedLabelIds.isEmpty()) "Any" else "${selectedLabelIds.size} selected",
+        )
+        labels.forEach { label ->
+            val checked = label.id in selectedLabelIds
+            CheckboxRow(
+                label   = "#${label.name}",
+                checked = checked,
+                onToggle = {
+                    if (checked) selectedLabelIds.remove(label.id)
+                    else         selectedLabelIds.add(label.id)
+                },
+            )
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+    }
+
+    // ── Priority ──────────────────────────────────────────────────────────────
+    FilterSectionHeader(
+        title = "Priority",
+        hint  = if (selectedPriorityIds.isEmpty()) "Any" else "${selectedPriorityIds.size} selected",
     )
-
-    Spacer(modifier = Modifier.height(12.dp))
-
-    // Priority filter
-    Text("Priority", style = MaterialTheme.typography.labelLarge)
-    Spacer(modifier = Modifier.height(4.dp))
-    val priorityOptions = listOf(
-        null to "All Priorities",
-        "urgent" to "Urgent",
-        "important" to "Important",
-        "normal" to "Normal",
-    )
-    SimpleDropdown(
-        options = priorityOptions,
-        selected = selectedPriority,
-        onSelected = { selectedPriority = it },
-    )
+    PRIORITY_OPTIONS.forEach { (value, label) ->
+        val checked = value in selectedPriorityIds
+        CheckboxRow(
+            label   = label,
+            checked = checked,
+            onToggle = {
+                if (checked) selectedPriorityIds.remove(value)
+                else         selectedPriorityIds.add(value)
+            },
+        )
+    }
 
     Spacer(modifier = Modifier.height(24.dp))
     ActionButtons(
-        onConfirm = { onConfirm(selectedFolder, selectedLabel, selectedPriority) },
+        onConfirm = {
+            onConfirm(
+                selectedFolderIds.toSet(),
+                selectedLabelIds.toSet(),
+                selectedPriorityIds.toSet(),
+            )
+        },
         onCancel = onCancel,
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SimpleDropdown(
-    options: List<Pair<String?, String>>,
-    selected: String?,
-    onSelected: (String?) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val displayText = options.find { it.first == selected }?.second ?: options.firstOrNull()?.second ?: ""
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = !expanded },
+private fun FilterSectionHeader(title: String, hint: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        TextField(
-            value = displayText,
-            onValueChange = {},
-            readOnly = true,
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor(),
+        Text(
+            text  = title,
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
         )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            options.forEach { (value, label) ->
-                DropdownMenuItem(
-                    text = { Text(label) },
-                    onClick = {
-                        onSelected(value)
-                        expanded = false
-                    },
-                )
-            }
-        }
+        Text(
+            text  = hint,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    HorizontalDivider(modifier = Modifier.padding(bottom = 4.dp))
+}
+
+@Composable
+private fun CheckboxRow(label: String, checked: Boolean, onToggle: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(checked = checked, onCheckedChange = { onToggle() })
+        Text(
+            text     = label,
+            modifier = Modifier.padding(start = 8.dp),
+            style    = MaterialTheme.typography.bodyMedium,
+        )
     }
 }
+
+// ── Calendar widget — multi-select checkbox list ──────────────────────────────
+
+@Composable
+private fun CalendarSelectorContent(
+    calendarRepository: CalendarRepository,
+    onConfirm         : (selectedIds: Set<String>, displayName: String) -> Unit,
+    onCancel          : () -> Unit,
+) {
+    var calendars by remember { mutableStateOf<List<CalendarItem>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(true) }
+    val selectedIds = remember { mutableStateListOf<String>() }
+
+    LaunchedEffect(Unit) {
+        isLoading = true
+        try {
+            val fetched = calendarRepository.fetchCalendarsAndSave()
+            calendars = fetched
+            fetched.filter { it.isSelected }.forEach { cal ->
+                if (cal.id !in selectedIds) selectedIds.add(cal.id)
+            }
+        } catch (_: Exception) { /* leave empty */ } finally {
+            isLoading = false
+        }
+    }
+
+    Text("Select calendars to show in the widget:", style = MaterialTheme.typography.titleMedium)
+    Spacer(modifier = Modifier.height(12.dp))
+
+    when {
+        isLoading -> Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+            horizontalArrangement = Arrangement.Center,
+        ) { CircularProgressIndicator() }
+
+        calendars.isEmpty() -> Text(
+            text  = "No calendars found. Make sure you are signed in and calendar access is enabled.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+
+        else -> calendars.forEach { cal ->
+            val isChecked = cal.id in selectedIds
+            CheckboxRow(
+                label   = cal.summary,
+                checked = isChecked,
+                onToggle = {
+                    if (isChecked) selectedIds.remove(cal.id)
+                    else           selectedIds.add(cal.id)
+                },
+            )
+        }
+    }
+
+    Spacer(modifier = Modifier.height(24.dp))
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+    ) {
+        OutlinedButton(onClick = onCancel) { Text("Cancel") }
+        Button(onClick = {
+            val ids = selectedIds.toSet()
+            val name = when (ids.size) {
+                1    -> calendars.find { it.id in ids }?.summary ?: "Calendar"
+                0    -> "Calendar"
+                else -> "Calendars"
+            }
+            onConfirm(ids, name)
+        }) { Text("Add Widget") }
+    }
+}
+
+// ── Shared ────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun ActionButtons(onConfirm: () -> Unit, onCancel: () -> Unit) {
@@ -338,11 +456,7 @@ private fun ActionButtons(onConfirm: () -> Unit, onCancel: () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
     ) {
-        OutlinedButton(onClick = onCancel) {
-            Text("Cancel")
-        }
-        Button(onClick = onConfirm) {
-            Text("Add Widget")
-        }
+        OutlinedButton(onClick = onCancel) { Text("Cancel") }
+        Button(onClick = onConfirm) { Text("Add Widget") }
     }
 }

@@ -1,5 +1,6 @@
 package com.stler.tasks.ui.calendar
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,11 +12,25 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -29,83 +44,171 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * Read-only row for a [CalendarEvent] — mirrors the two-row structure of TaskItem:
+ * Row for a [CalendarEvent]. When [onEdit] / [onDelete] are provided, shows action buttons:
+ *  - Schedule icon → [onEdit]
+ *  - MoreHoriz icon → ModalBottomSheet with Edit / Delete entries
  *
- *  Row 1 [padding start=0 end=4 top=4 bottom=2]:
- *    [40dp expand placeholder] [6dp] [40dp CalendarMonth icon at 20dp] [8dp] [title bodyMedium]
- *
- *  Row 2 [padding start=54 end=8 bottom=4]:
- *    [time text bodyMedium]  [14dp CalendarMonth icon]  [calendar name bodyMedium onSurfaceVariant]
- *
- * [showDate] = false in date-grouped lists (Upcoming, CalendarScreen): only the
- * time portion is shown, and "All day" is suppressed (the section header carries the date).
- * [showDate] = true in flat lists (AllTasks): shows "d MMM · HH:MM" or "Today" etc.
+ * When [event.recurringEventId] is non-blank, the Delete entry triggers a choice dialog:
+ * "Delete this event only" ([onDelete]) vs "Delete all in series" ([onDeleteSeries]).
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarEventItem(
-    event: CalendarEvent,
-    showDate: Boolean = true,
-    modifier: Modifier = Modifier,
+    event           : CalendarEvent,
+    showDate        : Boolean = true,
+    onEdit          : (() -> Unit)? = null,
+    onEditSchedule  : (() -> Unit)? = null,   // Schedule icon — lightweight date/time edit
+    onDelete        : (() -> Unit)? = null,
+    onDeleteSeries  : (() -> Unit)? = null,
+    modifier        : Modifier = Modifier,
 ) {
-    val today     = remember { LocalDate.now() }
+    val today    = remember { LocalDate.now() }
     val timeLabel = formatEventTime(event, today, showDate)
     val calColor  = event.calendarColor.toComposeColor()
 
-    Column(modifier = modifier.fillMaxWidth()) {
+    var showMenu          by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
 
-        // ── Row 1: leading icon + title ────────────────────────────────────
-        Row(
-            modifier = Modifier.padding(
-                start  = 0.dp,
-                end    = 4.dp,
-                top    = 4.dp,
-                bottom = 2.dp,
-            ),
-            verticalAlignment = Alignment.CenterVertically,
+    val isRecurring = event.recurringEventId.isNotBlank()
+
+    // ── Delete confirmation ────────────────────────────────────────────────────
+    if (showDeleteConfirm) {
+        if (isRecurring && onDeleteSeries != null) {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                title = { Text("Delete recurring event?") },
+                text  = { Text("\"${event.title}\"") },
+                confirmButton = {
+                    // All three buttons in a full-width Column — each on its own row
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        TextButton(onClick = { showDeleteConfirm = false; onDelete?.invoke() }) {
+                            Text("Delete this event only")
+                        }
+                        TextButton(onClick = { showDeleteConfirm = false; onDeleteSeries() }) {
+                            Text("Delete all events in series",
+                                color = MaterialTheme.colorScheme.error)
+                        }
+                        TextButton(onClick = { showDeleteConfirm = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                },
+                dismissButton = null,
+            )
+        } else {
+            AlertDialog(
+                onDismissRequest = { showDeleteConfirm = false },
+                title = { Text("Delete event?") },
+                text  = { Text("\"${event.title}\" will be permanently deleted from Google Calendar.") },
+                confirmButton = {
+                    TextButton(onClick = { showDeleteConfirm = false; onDelete?.invoke() }) {
+                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteConfirm = false }) { Text("Cancel") }
+                },
+            )
+        }
+    }
+
+    // ── More-options bottom sheet ──────────────────────────────────────────────
+    if (showMenu) {
+        ModalBottomSheet(
+            onDismissRequest = { showMenu = false },
+            sheetState       = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         ) {
-            // Expand/collapse placeholder — keeps left alignment identical to TaskItem
-            Box(modifier = Modifier.size(40.dp))
-
-            Spacer(modifier = Modifier.width(6.dp))
-
-            // CalendarMonth icon in the "checkbox" position.
-            // Touch-target Box is 40 dp (same as TaskCheckbox), icon visual is 20 dp
-            // (one step larger than the 18 dp checkbox canvas so it reads at the same weight).
-            Box(
-                modifier = Modifier.size(40.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.CalendarMonth,
-                    contentDescription = null,
-                    tint = calColor,
-                    modifier = Modifier.size(20.dp),
+            if (onEdit != null) {
+                ListItem(
+                    leadingContent  = { Icon(Icons.Outlined.Edit, contentDescription = null) },
+                    headlineContent = { Text("Edit") },
+                    supportingContent = if (isRecurring) {
+                        { Text("All events in series",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    } else null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showMenu = false; onEdit() },
                 )
             }
+            if (onDelete != null) {
+                ListItem(
+                    leadingContent  = {
+                        Icon(Icons.Outlined.Delete, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error)
+                    },
+                    headlineContent = {
+                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showMenu = false; showDeleteConfirm = true },
+                )
+            }
+            Spacer(Modifier.padding(bottom = 16.dp))
+        }
+    }
 
+    // ── Item layout ───────────────────────────────────────────────────────────
+    Column(modifier = modifier.fillMaxWidth()) {
+
+        // Row 1: expand placeholder + calendar icon + title + action buttons
+        Row(
+            modifier = Modifier.padding(start = 0.dp, end = 4.dp, top = 4.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(modifier = Modifier.size(40.dp))   // expand placeholder
+            Spacer(modifier = Modifier.width(6.dp))
+            Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector        = Icons.Outlined.CalendarMonth,
+                    contentDescription = null,
+                    tint               = calColor,
+                    modifier           = Modifier.size(24.dp),
+                )
+            }
             Spacer(modifier = Modifier.width(8.dp))
-
             Text(
                 text     = event.title,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .then(
+                        if (onEdit != null) Modifier.clickable { onEdit() }
+                        else Modifier
+                    ),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 style    = MaterialTheme.typography.bodyMedium,
             )
-
             Spacer(modifier = Modifier.width(4.dp))
+
+            if (onEdit != null || onDelete != null) {
+                IconButton(onClick = { (onEditSchedule ?: onEdit)?.invoke() }) {
+                    Icon(
+                        imageVector        = Icons.Outlined.Schedule,
+                        contentDescription = "Edit schedule",
+                        modifier           = Modifier.size(18.dp),
+                        tint               = deadlineColor(deadlineStatus(event.startDate)),
+                    )
+                }
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(
+                        imageVector        = Icons.Outlined.MoreHoriz,
+                        contentDescription = "More options",
+                        modifier           = Modifier.size(18.dp),
+                        tint               = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
 
-        // ── Row 2: time + calendar name ────────────────────────────────────
-        // Always rendered (at minimum shows the calendar name).
-        // start = 54 dp = expand(40) + spacer(6) + 8 — same formula as TaskItem's
-        // metadata row at depth = 0.
+        // Row 2: time + calendar name
         Row(
-            modifier = Modifier.padding(
-                start  = 54.dp,
-                end    = 8.dp,
-                bottom = 4.dp,
-            ),
+            modifier = Modifier.padding(start = 54.dp, end = 8.dp, bottom = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment     = Alignment.CenterVertically,
         ) {
@@ -116,7 +219,6 @@ fun CalendarEventItem(
                     color = deadlineColor(deadlineStatus(event.startDate)),
                 )
             }
-
             Row(
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalAlignment     = Alignment.CenterVertically,
@@ -139,27 +241,16 @@ fun CalendarEventItem(
     }
 }
 
-/**
- * Formats the event date/time for display.
- *
- * [showDate] = false (grouped-by-date, e.g. Upcoming / CalendarScreen):
- *   - All-day → "" (section header already conveys the date)
- *   - Timed   → "HH:MM"
- *
- * [showDate] = true (flat list, e.g. AllTasks):
- *   - All-day → "Today" / "Tomorrow" / "d MMM"
- *   - Timed   → "d MMM · HH:MM"
- */
 private fun formatEventTime(event: CalendarEvent, today: LocalDate, showDate: Boolean): String {
     return if (event.isAllDay) {
         if (showDate) formatDate(event.startDate, today) else ""
     } else {
+        val timePart = if (event.endTime.isNotBlank()) "${event.startTime} — ${event.endTime}"
+                       else event.startTime
         if (showDate) {
             val datePart = formatDate(event.startDate, today)
-            if (event.startTime.isNotBlank()) "$datePart · ${event.startTime}" else datePart
-        } else {
-            event.startTime
-        }
+            if (timePart.isNotBlank()) "$datePart · $timePart" else datePart
+        } else timePart
     }
 }
 
@@ -168,6 +259,9 @@ private fun formatDate(dateStr: String, today: LocalDate): String = runCatching 
     when (date) {
         today             -> "Today"
         today.plusDays(1) -> "Tomorrow"
-        else              -> date.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
+        else              -> {
+            val pattern = if (date.year > today.year) "d MMM yyyy" else "d MMM"
+            date.format(DateTimeFormatter.ofPattern(pattern, Locale.getDefault()))
+        }
     }
 }.getOrDefault(dateStr)

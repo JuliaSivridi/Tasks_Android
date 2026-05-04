@@ -517,19 +517,51 @@ Same changes as Upcoming, but without the week strip and date grouping — event
 
 ---
 
-## 7. TaskFormSheet — Calendar Event Creation
+## 7. TaskFormSheet — Task / Event Mode
 
-> **Design review required before implementation (task 12.6.1).**
+`TaskFormSheet` supports two modes via a segmented toggle directly below the title field:
 
-Proposed UX: when `deadlineDate` is set, show additional fields below the Deadline row:
+```
+[ ☐ Task ]  [ 📅 Event ]
+```
 
-| Field | Control | Default | Visibility |
-|-------|---------|---------|------------|
-| Duration | `ExposedDropdownMenuBox`: Not set / 15 min / 30 min / 1 h / 2 h / All day | Not set | Always when deadline is set |
-| Add to Calendar | `Switch` | Off | Always when deadline is set |
-| Calendar | `ExposedDropdownMenuBox` (selected calendars only) | first selected | Only when Switch = on |
+Mode is stored as `viewModel.formMode: FormMode` (enum `{ TASK, EVENT }`).
 
-On save: if switch = on → `calendarRepository.createEvent(calendarId, ...)` after task is saved; error → `uiError` snackbar.
+### Common fields (both modes)
+- **Title** — `OutlinedTextField`; placeholder changes to "Event name" in EVENT mode
+- **Deadline** — TASK: date chip + optional time chip. EVENT: date chip + start-time chip `—` end-time chip (`EndTimePickerDialog`)
+- **Repeat** — `RepeatRow` (checkbox + interval + D/W/M chips). EVENT mode only: if repeat is on, shows `"Custom recurrence ›"` link that opens `CustomRecurrenceSheet` (RRULE builder)
+
+### TASK-mode fields (shown only in TASK mode)
+Field order: Deadline → Repeat → **Folder** → **Labels** → **Priority**
+
+- **Folder** — `FilterChip` opening `FolderPickerDialog`
+- **Labels** — tap-to-open row + `FlowRow` of selected label chips with `×` quick-remove; `LabelPickerSheet` ModalBottomSheet for selection (no inline label creation)
+- **Priority** — 3 `FilterChip`s (Urgent / Important / Normal)
+
+### EVENT-mode fields (shown only in EVENT mode)
+- **Calendar** — `ExposedDropdownMenuBox` showing selected calendars (loaded lazily via `loadCalendars()`). Shows error text if none selected. Default: `"primary"`.
+
+### New files
+| File | Description |
+|------|-------------|
+| `ui/task/FormMode.kt` | `enum class FormMode { TASK, EVENT }` |
+| `ui/task/EndTimePickerDialog.kt` | Material3 `TimePicker` wrapper for event end time |
+| `ui/task/CustomRecurrenceSheet.kt` | RRULE builder `ModalBottomSheet` (DAILY/WEEKLY/MONTHLY/YEARLY, ends Never/On/After) |
+
+### ViewModel changes (`TaskFormViewModel`)
+- Extends `BaseViewModel` (was `ViewModel()`) for `safeLaunch` + `uiError`
+- Injects `CalendarRepository`
+- New state: `formMode`, `endTime`, `selectedCalendarId`, `customRRule`, `selectedCalendars` StateFlow, `eventCreated` SharedFlow
+- `loadCalendars()` — lazy, called once when EVENT mode first entered
+- `createEvent(calendarId, title, startDate, startTime, endTime, rrule)` — builds `EventDateTime` with device timezone, calls `calendarRepository.createEvent()`, emits `eventCreated` on success
+- DateTime helpers: all-day → `end.date = startDate + 1 day`; timed, no endTime → `end = start + 1 hour`; timed + endTime → `end = startDate + endTime` (same day)
+
+### `CalendarEventRequest` DTO change
+Added `recurrence: List<String>? = null` to `CalendarDtos.kt` for RRULE support.
+
+### Validation (EVENT mode)
+Title, date, and calendar are required. Empty fields are highlighted; sheet stays open on API error and shows snackbar via `ErrorSnackbarEffect(viewModel)`.
 
 ---
 

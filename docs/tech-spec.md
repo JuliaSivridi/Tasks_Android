@@ -1,22 +1,25 @@
 # Stler Tasks Android — Technical Specification
 
-**Version:** 1.3 (April 2026)  
+**Version:** 1.1 (May 2026)  
 **Repository:** github.com/JuliaSivridi/Tasks_Android  
-**Stack:** Kotlin · Jetpack Compose · Room · Hilt · WorkManager · Glance · Google Sheets API v4  
+**Stack:** Kotlin · Jetpack Compose · Room · Hilt · WorkManager · Glance · Google Sheets API v4 · Google Calendar API v3  
 **Min SDK:** 26 (Android 8.0) · **Target SDK:** 36
 
 ---
 
 ## 1. Overview
 
-Stler Tasks is a personal task manager for Android. It is a native rewrite of a PWA with the same Google Sheets backend, so both apps share one `db_tasks` spreadsheet per user. There is no dedicated backend server — all persistent data lives in Google Sheets, accessed via the Sheets API v4. Room serves as a local cache that makes the app fully functional offline.
+Stler Tasks is a personal task manager for Android. It is a native rewrite of a PWA with the same Google Sheets backend, so both apps share one `db_tasks` spreadsheet per user. There is no dedicated backend server — all persistent task data lives in Google Sheets, accessed via the Sheets API v4. Room serves as a local cache that makes the app fully functional offline.
+
+In addition to tasks, the app integrates with **Google Calendar API v3**: events from selected calendars are fetched, cached in Room, and displayed alongside tasks in the Upcoming screen, Calendar screen, and all three widgets.
 
 **Key design goals:**
-- Google Sheets as the single source of truth — no proprietary cloud service
+- Google Sheets as the single source of truth for tasks — no proprietary cloud service
 - Full offline support via Room + sync queue
 - Reactive UI — all screens observe Room Flows; data updates propagate automatically
 - Clean MVVM + Repository architecture with Hilt DI throughout
 - Glance widgets that react to Room changes without explicit refresh calls
+- Google Calendar events surfaced inline with tasks, unified by date
 
 ---
 
@@ -25,18 +28,20 @@ Stler Tasks is a personal task manager for Android. It is a native rewrite of a 
 | Layer | Library | Version | Notes |
 |---|---|---|---|
 | Language | Kotlin | 2.2.10 | |
-| UI | Jetpack Compose + Material 3 | BOM 2025.x | Compose-only, no XML layouts |
+| UI | Jetpack Compose + Material 3 | BOM 2026.02.01 | Compose-only, no XML layouts |
 | DI | Hilt | 2.59.2 | KSP processor |
-| Local DB | Room | 2.x | version 4, fallbackToDestructiveMigration |
-| Networking | Retrofit + OkHttp | 2.x / 4.x | Bearer token interceptor + 401 Authenticator |
-| Serialization | Gson | 2.x | For Retrofit + SyncQueue payloads |
-| Background | WorkManager (Hilt) | 2.x | Periodic sync (30 min) + one-off |
-| Widgets | Glance | 1.x | All 3 widget types |
-| Auth | CredentialManager + Identity API | latest | Google Sign-In + scope authorization |
-| Preferences | DataStore | 1.x | Token, user info, spreadsheet ID |
-| Image loading | Coil | 2.x | Avatar in TopAppBar |
-| Drag & drop | reorderable (Calvin) | latest | FolderScreen drag-to-reorder |
-| Coroutines | kotlinx.coroutines | 1.x | Android + Play Services variants |
+| Local DB | Room | 2.7.1 | version 7, explicit migrations |
+| Networking | Retrofit + OkHttp | 2.11.0 / 4.12.0 | Bearer token interceptor + 401 Authenticator |
+| Serialization | Gson | 2.11.0 | For Retrofit + SyncQueue payloads |
+| Background | WorkManager (Hilt) | 2.10.1 | Periodic sync (30 min) + one-off |
+| Widgets | Glance | 1.1.0 | 4 widget types |
+| Auth | CredentialManager + Identity API | 21.3.0 / 1.1.1 | Google Sign-In + scope authorization |
+| Preferences | DataStore | 1.1.2 | Token, user info, spreadsheet ID |
+| Image loading | Coil | 2.7.0 | Avatar in TopAppBar |
+| Drag & drop | reorderable (Calvin) | 2.4.3 | FolderScreen drag-to-reorder |
+| Coroutines | kotlinx.coroutines | 1.10.2 | Android + Play Services variants |
+| Navigation | Navigation Compose | 2.9.0 | |
+| Lifecycle | Lifecycle ViewModel/Runtime | 2.9.0 | |
 
 **Build:** AGP 9.1.1 · KSP 2.2.10-2.0.2 · JVM toolchain 11
 
@@ -56,11 +61,14 @@ Repository (Singleton)
 Local DB (Room)            SyncWorker (background push + pull)
                                ↕ Retrofit / OkHttp
                            Google Sheets API v4
+                           Google Calendar API v3
 ```
 
-**Write path:** Every mutation → Room write (instant, triggers UI recomposition) + SyncQueue INSERT. SyncWorker drains the queue on next sync.
+**Write path (tasks):** Every mutation → Room write (instant, triggers UI recomposition) + SyncQueue INSERT. SyncWorker drains the queue on next sync.
 
-**Read path:** Room Flow → ViewModel StateFlow → Composable. Sheets data is only read during sync pull (`fetchAllAndSave`), which upserts into Room.
+**Write path (calendar events):** Mutations (create / update / delete) go directly to the Calendar API via `CalendarRepository`. On success, Room is updated in place (no SyncQueue — Calendar events are not routed through Google Sheets).
+
+**Read path:** Room Flow → ViewModel StateFlow → Composable. Sheets data is only read during sync pull (`fetchAllAndSave`); Calendar events are fetched by `SyncWorker` after the Sheets pull step.
 
 **Error handling:** `BaseViewModel.safeLaunch` wraps all `viewModelScope.launch` calls, catches exceptions, and emits to a `Channel<String>` (`uiError` Flow). `ErrorSnackbarEffect` in each screen subscribes and shows a Snackbar via `LocalSnackbarHostState`.
 
@@ -79,40 +87,59 @@ com.stler.tasks/
 │
 ├── data/
 │   ├── local/
-│   │   ├── dao/                  TaskDao, FolderDao, LabelDao, SyncQueueDao
-│   │   ├── entity/               TaskEntity, FolderEntity, LabelEntity, SyncQueueEntity
-│   │   └── TaskDatabase.kt       Room DB (version 4)
+│   │   ├── dao/                  TaskDao, FolderDao, LabelDao, SyncQueueDao,
+│   │   │                         CalendarEventDao
+│   │   ├── entity/               TaskEntity, FolderEntity, LabelEntity,
+│   │   │                         SyncQueueEntity, CalendarEventEntity
+│   │   └── TaskDatabase.kt       Room DB (version 7, 5 tables)
 │   ├── remote/
-│   │   ├── dto/                  BatchValuesResponse, ValuesBody, DriveFilesResponse, …
+│   │   ├── dto/                  BatchValuesResponse, ValuesBody, DriveFilesResponse,
+│   │   │                         CalendarDtos (CalendarListResponse, CalendarEventDto,
+│   │   │                         EventDateTime, CalendarEventRequest)
+│   │   ├── CalendarApi.kt        Calendar API v3 endpoints (list, events, create, update,
+│   │   │                         delete, move)
+│   │   ├── CalendarMapper.kt     CalendarEventDto ↔ CalendarEventEntity conversion
 │   │   ├── NetworkModule.kt      Hilt: OkHttpClient (interceptor + authenticator) + Retrofit
 │   │   ├── SheetsApi.kt          batchGet / append / batchUpdate / clear
 │   │   ├── SheetsMapper.kt       row ↔ entity bidirectional conversion
 │   │   └── TokenProvider.kt      interface for token retrieval
 │   └── repository/
-│       ├── TaskRepository.kt     interface
-│       └── TaskRepositoryImpl.kt full implementation (CRUD, Flows, fetchAllAndSave)
+│       ├── CalendarRepository.kt     interface
+│       ├── CalendarRepositoryImpl.kt fetchCalendarsAndSave, getEventsForCalendars,
+│       │                             createEvent, updateEvent, deleteEvent, moveEvent,
+│       │                             getBaseEvent, getSelectedCalendarIds
+│       ├── TaskRepository.kt         interface
+│       └── TaskRepositoryImpl.kt     full implementation (CRUD, Flows, fetchAllAndSave)
 │
 ├── di/
 │   ├── AuthModule.kt             provides GoogleAuthRepository as TokenProvider
+│   ├── CalendarModule.kt         provides Calendar-specific Retrofit (custom EventDateTime
+│   │                             TypeAdapter), CalendarApi, CalendarRepository
 │   ├── DatabaseModule.kt         provides Room DB + all DAOs
 │   └── RepositoryModule.kt       binds TaskRepositoryImpl
 │
 ├── domain/model/
-│   ├── Task.kt                   domain model
+│   ├── CalendarEvent.kt          domain model (id, calendarId, calendarName, calendarColor,
+│   │                             title, startDate, startTime, endTime, isAllDay, recurringEventId,
+│   │                             seriesId, computed isRecurring)
+│   ├── CalendarItem.kt           calendar list entry (id, summary, color, isSelected, accessRole)
 │   ├── Folder.kt
 │   ├── Label.kt
+│   ├── ListItem.kt               sealed class for mixed task/event lists
 │   ├── Priority.kt               enum: URGENT, IMPORTANT, NORMAL
 │   ├── RecurType.kt              enum: DAILY, WEEKLY, MONTHLY
+│   ├── Task.kt                   domain model
 │   └── TaskStatus.kt             enum: PENDING, COMPLETED
 │
 ├── sync/
 │   ├── NetworkObserver.kt        callbackFlow wrapping ConnectivityManager
 │   ├── SyncManager.kt            schedules periodic + one-off WorkManager requests
 │   ├── SyncState.kt              sealed class: Idle / Syncing / Pending(count)
-│   └── SyncWorker.kt             @HiltWorker: push queue → pull all
+│   └── SyncWorker.kt             @HiltWorker: push queue → pull Sheets → pull Calendar
 │
 ├── ui/
 │   ├── alltasks/                 AllTasksScreen + AllTasksViewModel
+│   ├── calendar/                 CalendarScreen, CalendarViewModel, CalendarEventItem
 │   ├── completed/                CompletedScreen + CompletedViewModel
 │   ├── folder/                   FolderScreen + FolderViewModel + DisplayNode
 │   ├── label/                    LabelScreen + LabelViewModel
@@ -120,9 +147,11 @@ com.stler.tasks/
 │   │                             SidebarPreferences, SidebarState, TasksTopAppBar
 │   ├── navigation/               Screen.kt (route constants + helper functions)
 │   ├── priority/                 PriorityScreen + PriorityViewModel
-│   ├── task/                     TaskItem, TaskCheckbox, TaskFormSheet,
-│   │                             DeadlinePickerDialog, PriorityPickerSheet,
-│   │                             LabelPickerSheet, TaskColors, TaskMobileMenu
+│   ├── task/                     TaskItem, TaskCheckbox, TaskFormSheet, TaskFormViewModel,
+│   │                             DeadlinePickerDialog, EndTimePickerDialog,
+│   │                             CustomRecurrenceSheet, PriorityPickerSheet,
+│   │                             LabelPickerSheet, TaskColors, TaskMobileMenu,
+│   │                             FormMode (TASK / EVENT)
 │   ├── theme/                    Color.kt, Theme.kt, Typography.kt
 │   ├── upcoming/                 UpcomingScreen + UpcomingViewModel
 │   └── util/                     BaseViewModel, EmptyState, ShimmerTaskList,
@@ -132,18 +161,19 @@ com.stler.tasks/
 │   └── ColorExtensions.kt        String.toComposeColor(), etc.
 │
 └── widget/
+    ├── CalendarWidget.kt         upcoming tasks + events mixed timeline (4th widget type)
     ├── CompleteTaskAction.kt     GlanceActionCallback: complete task + queue + widget refresh
     ├── FolderWidget.kt           hierarchical folder task list
-    ├── FolderWidgetReceiver.kt
     ├── TaskListWidget.kt         flat filtered list (folder / label / priority)
-    ├── TaskListWidgetReceiver.kt
     ├── ToggleExpandAction.kt     GlanceActionCallback: toggle subtask visibility
-    ├── UpcomingWidget.kt         tasks with deadline ≤ 7 days, grouped by date
-    ├── UpcomingWidgetReceiver.kt
+    ├── UpcomingWidget.kt         tasks + calendar events ≤ 7 days, grouped by date
     ├── WidgetColors.kt           named ColorProvider constants
-    ├── WidgetConfigActivity.kt   configuration screen for all 3 widget types
+    ├── WidgetConfigActivity.kt   configuration screen for all widget types
     ├── WidgetEntryPoint.kt       Hilt entry point for widget actions
+    ├── WidgetEventRow.kt         calendar event row (icon + title + time + calendar name)
     ├── WidgetHeader.kt           shared widget header (title + "+" button)
+    ├── WidgetPrefs.kt            Glance state keys
+    ├── WidgetRefresher.kt        updateAll() helper for all widget types
     └── WidgetTaskRow.kt          shared task row (checkbox + title + deadline/labels)
 ```
 
@@ -156,7 +186,7 @@ com.stler.tasks/
 #### Task
 | Field | Type | Description |
 |---|---|---|
-| id | String | UUID (e.g. `tsk-xxxxxxxx`) |
+| id | String | `"tsk_xxxxxxxx"` (8 hex chars) |
 | parentId | String | Parent task ID, `""` for root tasks |
 | folderId | String | Folder ID, defaults to `"fld-inbox"` |
 | title | String | Task title |
@@ -173,6 +203,7 @@ com.stler.tasks/
 | updatedAt | String | ISO instant |
 | completedAt | String | ISO instant or `""` |
 | isExpanded | Boolean | Whether subtasks are shown (not synced to `updatedAt`) |
+| isRoot | Boolean (computed) | `parentId.isBlank()` |
 
 **Recurring task completion:** When `isRecurring` is true, completing the task does NOT set `status = COMPLETED`. Instead, `deadlineDate` advances by `recurValue × recurType` and `completedAt` is cleared. The task remains in `PENDING` state with a new deadline.
 
@@ -190,12 +221,58 @@ com.stler.tasks/
 #### Label
 | Field | Type | Description |
 |---|---|---|
-| id | String | `"lbl-xxxxxxxx"` |
+| id | String | `"lbl_xxxxxxxx"` |
 | name | String | Display name |
 | color | String | Hex color `"#rrggbb"` |
 | sortOrder | Int | Position in sidebar |
 
-### 5.2 SyncQueue Entry
+#### CalendarEvent
+| Field | Type | Description |
+|---|---|---|
+| id | String | Google Calendar event ID |
+| calendarId | String | Google Calendar ID (e.g. `"primary"`) |
+| calendarName | String | Human-readable calendar name |
+| calendarColor | String | Calendar hex color (e.g. `"#039be5"`) |
+| title | String | Event summary |
+| startDate | String | `"YYYY-MM-DD"` |
+| startTime | String | `"HH:MM"` or `""` for all-day |
+| endTime | String | `"HH:MM"` or `""` |
+| isAllDay | Boolean | True when only `start.date` is set (no `dateTime`) |
+| recurringEventId | String? | Series base event ID (non-null for recurring instances) |
+| seriesId | String? | Alias for recurringEventId |
+| isRecurring | Boolean (computed) | `recurringEventId != null` |
+
+#### CalendarItem
+| Field | Type | Description |
+|---|---|---|
+| id | String | Calendar ID |
+| summary | String | Display name |
+| color | String | Hex color |
+| isSelected | Boolean | Whether user has selected this calendar for display |
+| accessRole | String | `"owner"`, `"writer"`, `"reader"`, `"freeBusyReader"` |
+
+### 5.2 Room Database (version 7)
+
+5 tables: `tasks`, `folders`, `labels`, `sync_queue`, `calendar_events`.
+
+Migration path: v4 → v5 (added `calendar_events`), v5 → v6 (added `series_id` column), v6 → v7 (added `calendar_color` column). Schema JSON files stored in `app/schemas/`.
+
+#### Table: `calendar_events`
+| Column | Type | Notes |
+|---|---|---|
+| id | TEXT PK | Google event ID |
+| calendar_id | TEXT | |
+| calendar_name | TEXT | |
+| calendar_color | TEXT | |
+| title | TEXT | |
+| start_date | TEXT | `"YYYY-MM-DD"` |
+| start_time | TEXT | `"HH:MM"` or `""` |
+| end_time | TEXT | `"HH:MM"` or `""` |
+| is_all_day | INTEGER | 0/1 |
+| recurring_event_id | TEXT | nullable |
+| series_id | TEXT | nullable |
+
+### 5.3 SyncQueue Entry
 | Field | Type | Description |
 |---|---|---|
 | id | Long (autoincrement) | |
@@ -205,7 +282,7 @@ com.stler.tasks/
 | payloadJson | String | Full entity serialized as JSON (Gson) |
 | retryCount | Int | Incremented on failure; items removed after 5 failures |
 
-### 5.3 Google Sheets Schema
+### 5.4 Google Sheets Schema
 
 **Spreadsheet name:** `db_tasks`  
 **Read mode:** `UNFORMATTED_VALUE` (dates come back as serial numbers — converted by `dateStr()`)  
@@ -258,10 +335,11 @@ com.stler.tasks/
 ### 6.1 OAuth Scopes
 - `https://www.googleapis.com/auth/spreadsheets` — full Sheets read/write + create
 - `https://www.googleapis.com/auth/drive.metadata.readonly` — search Drive for existing spreadsheet
+- `https://www.googleapis.com/auth/calendar` — read/write Google Calendar events
 
 ### 6.2 Sign-In Flow (GoogleAuthRepository.signIn)
 1. **CredentialManager** → shows Google account picker → returns `GoogleIdTokenCredential` with user email, display name, avatar URL
-2. **Identity.getAuthorizationClient** → requests Sheets + Drive scopes → may return a `PendingIntent` if user hasn't approved scopes yet
+2. **Identity.getAuthorizationClient** → requests Sheets + Drive + Calendar scopes → may return a `PendingIntent` if user hasn't approved scopes yet
 3. If `hasResolution()` → return `SignInStep.NeedsAuthorization(pendingIntent)` → `AuthScreen` launches the intent → `finalizeAuth()` called on result
 4. **findOrCreateSpreadsheet(token)** → Drive API search for `name='db_tasks'` → if not found, create new spreadsheet (see §6.3)
 5. **Save to DataStore:** accessToken, tokenExpiry (+1 h), spreadsheetId, userEmail, userName, userAvatarUrl
@@ -276,13 +354,13 @@ When no `db_tasks` spreadsheet is found in the user's Drive, `createSpreadsheet(
 `refreshToken()` calls `Identity.getAuthorizationClient.authorize()` silently (no Activity needed). Token is considered stale if it expires within 5 minutes. The `NetworkModule` 401 Authenticator calls `refreshToken()` automatically on HTTP 401.
 
 ### 6.5 Sign-Out
-Clears all DataStore keys + deletes all Room tables (tasks, folders, labels, sync_queue).
+Clears all DataStore keys + deletes all Room tables (tasks, folders, labels, sync_queue, calendar_events).
 
 ---
 
 ## 7. Synchronization
 
-### 7.1 SyncWorker (push → pull)
+### 7.1 SyncWorker (push → pull Sheets → pull Calendar)
 Triggered by WorkManager. Execution order:
 1. **Push** — drain `SyncQueue` ordered by insertion:
    - `INSERT` → `SheetsApi.append(range = "sheet!A:lastCol")`
@@ -292,17 +370,30 @@ Triggered by WorkManager. Execution order:
    - On failure: `syncQueueDao.incrementRetry(item.id)`
    - After all items: `syncQueueDao.deleteExhausted()` (removes items with retryCount ≥ 5)
 2. **Delay** — if there were pending items: `delay(1_000 ms)` to let Sheets process writes before reading
-3. **Pull** — `taskRepository.fetchAllAndSave(spreadsheetId)`:
+3. **Pull Sheets** — `taskRepository.fetchAllAndSave(spreadsheetId)`:
    - `SheetsApi.batchGet(["tasks", "folders", "labels"])`
    - All three upserted inside a single Room transaction (`db.withTransaction`)
-4. Retry: up to 4 attempts (`WorkManager` exponential backoff); returns `Result.failure()` after 5th
+4. **Pull Calendar** — `calendarRepository.fetchEventsAndSave()`:
+   - Fetches selected calendar IDs from DataStore
+   - For each selected calendar: `CalendarApi.listEvents(calendarId, from=today, to=today+30d)`
+   - Upserts all events to `calendar_events` table; deletes stale events from same calendars
+5. Retry: up to 4 attempts (`WorkManager` exponential backoff); returns `Result.failure()` after 5th
 
-### 7.2 SyncManager
+### 7.2 Calendar Event Write Path
+Calendar event mutations (create / update / delete) bypass the SyncQueue entirely and go directly to the Calendar API:
+- **Create:** `CalendarRepository.createEvent(calendarId, CalendarEventRequest)` → `PUT` to `events` endpoint → on success, fetches and upserts new event to Room
+- **Update:** `CalendarRepository.updateEvent(calendarId, eventId, CalendarEventRequest)` → `PUT` (replaces entire event, avoids residual fields from PATCH merge)
+- **Delete:** `CalendarRepository.deleteEvent(calendarId, eventId)` → `DELETE` → removes from Room
+- **Move calendar:** `CalendarRepository.moveEvent(fromCalendarId, toCalendarId, eventId)` → `POST .../move` endpoint
+
+**EventDateTime serialization:** A custom Gson `TypeAdapter` (`EventDateTimeAdapter`) is registered in `CalendarModule`. It omits null fields by default (Gson `serializeNulls=false`), ensuring only `date` or only `dateTime` is sent — never both. The `timeZone` field (IANA name, e.g. `"Europe/Helsinki"`) is included for timed events and required by the Calendar API for recurring timed events.
+
+### 7.3 SyncManager
 - **Periodic:** `PeriodicWorkRequest` every 30 min, constraint `CONNECTED`
 - **One-off:** `triggerSync()` enqueues an immediate `OneTimeWorkRequest` (CONNECTED), replaces existing with `KEEP` policy
 - **Initialized** in `TasksApplication.onCreate()`
 
-### 7.3 SyncState
+### 7.4 SyncState
 `StateFlow<SyncState>` combining WorkManager `WorkInfo` + `SyncQueueDao.countAll()`:
 - `Idle` — no running worker, queue empty
 - `Syncing` — worker is RUNNING
@@ -310,7 +401,7 @@ Triggered by WorkManager. Execution order:
 
 Displayed in the sidebar footer (count badge + spinning icon when Syncing).
 
-### 7.4 NetworkObserver
+### 7.5 NetworkObserver
 `callbackFlow` wrapping `ConnectivityManager.registerNetworkCallback`. Emits `true`/`false`, `distinctUntilChanged`. Used in `MainViewModel` to trigger sync on reconnect.
 
 ---
@@ -319,14 +410,14 @@ Displayed in the sidebar footer (count badge + spinning icon when Syncing).
 
 ### 8.1 Upcoming
 **ViewModel:** `UpcomingViewModel`  
-**Data:** Root `PENDING` tasks with a deadline, grouped by `deadlineDate`  
+**Data:** Root `PENDING` tasks + calendar events, all within 7 days; grouped by `deadlineDate`/`startDate`  
 **Features:**
 - Horizontal date strip (7 day-pills: date number + weekday letter + orange dot if tasks exist)
 - Left/right navigation arrows to shift the visible week
 - "Today" button (primary border when on the current week)
 - Filter pills: priority chips + label chips + folder chip
-- Tasks grouped by date under day headers (`"16 Apr · Thursday · Today"`)
-- **Overdue section** — all past-due tasks collapsed into one group above the date strip's first day
+- Tasks and calendar events unified into a date-grouped timeline (`"16 Apr · Thursday · Today"`)
+- **Overdue section** — all past-due tasks/events collapsed into one group above the date strip
 - `showDateInDeadline = false` on `TaskItem` (date shown in section header, only time shown in row 2)
 - `isLoading` StateFlow → shimmer skeleton on first load
 
@@ -347,7 +438,7 @@ Displayed in the sidebar footer (count badge + spinning icon when Syncing).
 
 ### 8.4 Folder
 **ViewModel:** `FolderViewModel`  
-**Data:** All tasks in a folder (any status? — pending only + recursive subtrees)  
+**Data:** All pending tasks in a folder, including recursive subtrees  
 **Features:**
 - Hierarchical display: `DisplayNode(task, depth, childCount, completedChildCount)`
 - `isExpanded` controls subtask visibility — toggling persists to Room + Sheets
@@ -360,7 +451,7 @@ Displayed in the sidebar footer (count badge + spinning icon when Syncing).
 **ViewModel:** `LabelViewModel`  
 **Data:** Root `PENDING` tasks with the selected label ID; sort: priority → deadline → createdAt  
 **Features:**
-- Priority filter chip (no label or folder filter — already filtered by label)
+- Priority filter chip
 - EmptyState
 
 ### 8.6 Priority
@@ -370,6 +461,16 @@ Displayed in the sidebar footer (count badge + spinning icon when Syncing).
 - Tabs: Urgent / Important / Normal
 - Sort: deadline → createdAt
 - EmptyState per tab
+
+### 8.7 Calendar
+**ViewModel:** `CalendarViewModel`  
+**Data:** `calendar_events` from Room; filtered to selected calendars and current month  
+**Features:**
+- Month grid (6×7 day cells) with event dots
+- Day selection shows event list below the grid
+- `CalendarEventItem` composable: calendar color icon + title + time range
+- Tapping an event opens the event edit form (via `stlertasks://event/{calendarId}/{id}` deeplink)
+- FAB creates a new calendar event (opens `TaskFormSheet` in EVENT mode)
 
 ---
 
@@ -435,27 +536,68 @@ Indented by `depth × 20 + 54dp`
 
 ---
 
-## 10. TaskFormSheet (Create / Edit)
+## 10. TaskFormSheet (Create / Edit Tasks and Events)
 
-Single bottom sheet for both create and edit mode (`task != null` = edit).
+Single bottom sheet for task creation, task editing, and calendar event creation/editing. Mode is set by `TaskFormViewModel.formMode` (a `mutableStateOf<FormMode>`).
 
-**Fields (in order):** Title → Labels → Priority → Deadline (date + optional time) → Repeat → Folder
+### 10.1 Form Modes
 
-**Smart parsing in title field:** `@FolderName` sets folder (stripped from title); `#LabelName` adds label (stripped from title)
+**TASK mode** (default): Title → Deadline (date + optional time) → Repeat → Folder → Labels → Priority  
+**EVENT mode**: Title → Date → Start time / End time → Repeat → Calendar picker
 
-**Repeat row:** Checkbox + "Every [N] [days/weeks/months]" — hidden until a deadline date is selected
+Mode toggle: `SingleChoiceSegmentedButtonRow` with Task / Event segments, shown at the top of the sheet.
 
-**Folder selector:** Scrollable popup, single select; pre-filled from current screen context
+### 10.2 TASK mode
+**Fields (in order):** Title → Deadline → Repeat → Folder → Labels → Priority
 
-**Edit extras:** Delete task button (destructive, confirm dialog)
+**Smart parsing in title field:** `@FolderName` sets folder (stripped from title); `#LabelName` adds label (stripped from title). Only applied in TASK mode.
 
-**Deeplink create:** `stlertasks://create` opens create form. `stlertasks://task/{id}` opens edit form for the task.
+**Repeat row:** Checkbox + "Every [N] [days/weeks/months]" — hidden until a deadline date is selected.
+
+**Folder selector:** Scrollable popup, single select; pre-filled from current screen context.
+
+**Labels:** Opens `LabelPickerSheet` bottom sheet on tap; selected labels shown as chips below the row.
+
+**Edit extras:** Delete task button (destructive, confirm dialog).
+
+### 10.3 EVENT mode
+**Fields (in order):** Title → Date chip → Start time chip — End time chip → Repeat → Custom RRULE → Calendar dropdown
+
+**End time picker:** `EndTimePickerDialog` (Material3 TimePicker wrapper). Clear button removes the end time.
+
+**Custom recurrence:** `CustomRecurrenceSheet` bottom sheet. Builds a full RRULE string:
+- Frequency: Daily / Weekly / Monthly / Yearly
+- Interval: 1–99
+- Weekly: BYDAY (multi-select Mon–Sun)
+- Monthly: by day-of-month / by ordinal weekday / by last weekday
+- Ends: Never / On date / After N occurrences
+
+**Calendar dropdown:** `ExposedDropdownMenuBox` listing only calendars the user has write access to (accessRole `writer` or `owner`). Calendars loaded once via `loadCalendars()` guard.
+
+**Submit:** Calls `TaskFormViewModel.createEvent()` or `updateEvent()`. On success, `_eventCreated` SharedFlow emits → sheet closes.
+
+**Editing recurring events:** Moving to EVENT edit opens `loadBaseEvent()` to fetch the series base event data (title, start, recurrence) and pre-fills the form with those values.
+
+### 10.4 TaskFormViewModel
+Extends `BaseViewModel`. Injected: `TaskRepository`, `CalendarRepository`.
+
+| State | Type | Description |
+|---|---|---|
+| formMode | FormMode | TASK / EVENT |
+| endTime | String | Event end time `"HH:MM"` or `""` |
+| selectedCalendarId | String | Target calendar for event creation |
+| baseEventLoading | Boolean | True while fetching series base event |
+| selectedCalendars | StateFlow\<List\<CalendarItem\>\> | Writable calendars for dropdown |
+| calendarsLoading | StateFlow\<Boolean\> | Loading spinner for dropdown |
+| eventCreated | SharedFlow\<String\> | Emitted on successful event create/update |
+
+**Recurrence state** (persists between form openings): `crsByDay`, `crsMonthlyIdx`, `crsEnds`, `crsEndDate`, `crsAfterCountStr`.
 
 ---
 
 ## 11. Widgets
 
-All widgets use Jetpack Glance. Data is fetched inside `provideContent` using `collectAsState()` from Room Flows, so widgets react to Room changes automatically (no explicit `updateAll()` call needed after Room writes).
+All widgets use Jetpack Glance. Data is fetched inside `provideContent` using `collectAsState()` from Room Flows, so widgets react to Room changes automatically. Widget locale is explicitly set to English for day names and month abbreviations (independent of device locale).
 
 ### 11.1 Shared Components
 
@@ -463,18 +605,25 @@ All widgets use Jetpack Glance. Data is fetched inside `provideContent` using `c
 
 **WidgetTaskRow:** Shared task row composable:
 - Optional chevron (28dp) — expand/collapse subtasks via `ToggleExpandAction`
-- Checkbox (32dp touch, 20dp visual) — priority-colored border + surface fill → `CompleteTaskAction`
+- Checkbox (36dp slot) — priority-colored border + surface fill → `CompleteTaskAction`
+  - Pending-complete transient state: checkbox shows checkmark immediately via `PreferencesGlanceStateDefinition` key, before Room confirms
 - Title (2-line max) → opens `stlertasks://task/{id}` deeplink
 - Row 2: deadline · #labels · folder (each with its own color)
-- `timeOnly: Boolean` parameter — when true shows only time (for UpcomingWidget where date is in section header)
+- `timeOnly: Boolean` — when true shows only time (Upcoming/Calendar widget where date is in section header)
 - `showExpandSpace: Boolean` — when false omits the 28dp chevron spacer (TaskListWidget)
 
-**CompleteTaskAction:** Marks task complete in Room + enqueues UPDATE in SyncQueue + calls `WidgetRefresher.refreshAll()`.
+**WidgetEventRow:** Calendar event row:
+- Same 36dp icon slot as checkbox — shows calendar icon tinted with calendar color
+- Title (2-line max) → opens `stlertasks://event/{calendarId}/{id}` deeplink
+- Row 2: time range · calendar name
+- `timeOnly: Boolean` — when true hides date (already shown in section header)
 
-**ToggleExpandAction:** Toggles `isExpanded` in Room (no sync queue entry — expanded state doesn't trigger `updatedAt`).
+**CompleteTaskAction:** Marks task complete in Room + enqueues UPDATE in SyncQueue + stores pending ID in Glance state + calls `WidgetRefresher.refreshAll()`.
+
+**ToggleExpandAction:** Toggles `isExpanded` in Room (no sync queue entry).
 
 ### 11.2 Upcoming Widget
-Root pending tasks, `deadlineDate ≤ today + 7 days`, grouped by date (including Overdue section). `timeOnly = true` on WidgetTaskRow.
+Root pending tasks + calendar events, `deadlineDate/startDate ≤ today + 7 days`, unified timeline sorted by date → timed-before-allday → time string. Grouped by date with `DateHeader` (e.g. `"16 Apr · Thursday · Today"`). Overdue section at top. `timeOnly = true`.
 
 ### 11.3 Folder Widget
 Hierarchical: root tasks + expanded children (indented by `depth × 16dp`). Uses `isExpanded` from Room. `showExpandSpace = true`.
@@ -482,48 +631,55 @@ Hierarchical: root tasks + expanded children (indented by `depth × 16dp`). Uses
 ### 11.4 Task List Widget
 Flat, root tasks only. Supports optional filter: folder / label / priority (configured per widget instance). `showExpandSpace = false`.
 
-### 11.5 Widget Configuration (WidgetConfigActivity)
+### 11.5 Calendar Widget
+Mixed timeline of tasks + calendar events for the next 7 days (same logic as UpcomingWidget), rendered as a standalone fourth widget type. Configured in `WidgetConfigActivity` (auto-confirms, no config needed).
+
+### 11.6 Widget Configuration (WidgetConfigActivity)
 - Detects widget type via `AppWidgetManager.getAppWidgetInfo`
-- **Upcoming:** auto-confirms immediately (no config needed)
+- **Upcoming / Calendar:** auto-confirms immediately (no config needed)
 - **Folder:** RadioButton list of all folders
 - **Task List:** 3 `ExposedDropdownMenuBox` filters (folder / label / priority)
 - Saves config via `updateAppWidgetState(PreferencesGlanceStateDefinition)`
 
-### 11.6 Widget Colors
-All colors are named `ColorProvider` constants in `WidgetColors.kt`, backed by XML color resources in `res/values/colors.xml` and `res/values-night/colors.xml` (same values in both — explicit palette, not Material You dynamic color).
+### 11.7 Widget Colors
+All colors are named `ColorProvider` constants in `WidgetColors.kt`, backed by XML color resources in `res/values/colors.xml` and `res/values-night/colors.xml`.
 
-| Constant | Hex |
-|---|---|
-| WPrimary | #e07e38 |
-| WSurface | light: #FFFFFF / dark: #1C1C1E |
-| WOnSurface | light: #1C1C1E / dark: #F2F2F7 |
-| WOnSurfaceVariant | #8E8E93 |
-| WDivider | #3C3C43 @ 18% opacity |
-| WPriorityUrgent | #F87171 |
-| WPriorityImportant | #FB923C |
-| WPriorityNormal | #9CA3AF |
-| WDeadlineOverdue | #F87171 |
-| WDeadlineToday | #16A34A |
-| WDeadlineTomorrow | #FB923C |
-| WDeadlineThisWeek | #A78BFA |
+| Constant | Light | Dark |
+|---|---|---|
+| WPrimary | #e07e38 | #e07e38 |
+| WSurface | #FFFFFF | #1C1C1E |
+| WOnSurface | #1C1C1E | #F2F2F7 |
+| WOnSurfaceVariant | #8E8E93 | #8E8E93 |
+| WDivider | #3C3C43 @18% | #3C3C43 @18% |
+| WError | #F87171 | #F87171 |
+| WPriorityUrgent | #F87171 | #F87171 |
+| WPriorityImportant | #FB923C | #FB923C |
+| WPriorityNormal | #9CA3AF | #9CA3AF |
+| WDeadlineOverdue | #F87171 | #F87171 |
+| WDeadlineToday | #16A34A | #16A34A |
+| WDeadlineTomorrow | #FB923C | #FB923C |
+| WDeadlineThisWeek | #A78BFA | #A78BFA |
 
 ---
 
 ## 12. Theme & Colors
 
 ### 12.1 App Colors (Color.kt)
-| Constant | Hex | Usage |
-|---|---|---|
-| Primary | #e07e38 | Brand orange — buttons, active elements |
-| PriorityUrgent | #F87171 | Urgent priority |
-| PriorityImportant | #FB923C | Important priority |
-| PriorityNormal | #9CA3AF | Normal priority |
-| DeadlineOverdue | #F87171 | Past-due deadline |
-| DeadlineToday | #16A34A | Due today |
-| DeadlineTomorrow | #FB923C | Due tomorrow |
-| DeadlineThisWeek | #A78BFA | Due this week |
-| NavSelected | #E4E4E4 | Sidebar selected item (light mode) |
-| AccentDark | #3A3A3C | Sidebar selected item (dark mode) |
+
+| Constant | Light | Dark | Usage |
+|---|---|---|---|
+| Primary | #e07e38 | #e07e38 | Brand orange — buttons, active elements |
+| PriorityUrgent | #F87171 | #F87171 | Urgent priority |
+| PriorityImportant | #FB923C | #FB923C | Important priority |
+| PriorityNormal | #9CA3AF | #9CA3AF | Normal priority |
+| DeadlineOverdue | #F87171 | #F87171 | Past-due deadline |
+| DeadlineToday | #16A34A | #16A34A | Due today |
+| DeadlineTomorrow | #FB923C | #FB923C | Due tomorrow |
+| DeadlineThisWeek | #A78BFA | #A78BFA | Due this week |
+| SelectedHighlightLight | #D8D8D8 | — | Selected chip/item background (light) |
+| SelectedHighlightDark | — | #515151 | Selected chip/item background (dark) |
+
+**Unified highlight system:** `primaryContainer` in `Theme.kt` maps to `SelectedHighlightLight` (light) and `SelectedHighlightDark` (dark). This single slot controls: TimePicker selected boxes, FAB container, day-pill selection in Upcoming, filter chip selection in AllTasks, and sidebar selected item highlight.
 
 ### 12.2 Deadline Status Logic (TaskColors.kt)
 ```
@@ -556,6 +712,7 @@ Material 3 default typography scale. No custom fonts.
 | `folder/{folderId}` | Folder task list |
 | `label/{labelId}` | Label task list |
 | `priority/{priority}` | Priority task list (`urgent`/`important`/`normal`) |
+| `calendar` | Calendar screen (month grid + event list) |
 
 Navigation is handled by Compose Navigation (`NavHost` in `MainScreen`). The sidebar `ModalNavigationDrawer` calls `onNavigate(route)` → `navController.navigate(route)`.
 
@@ -564,8 +721,10 @@ Navigation is handled by Compose Navigation (`NavHost` in `MainScreen`). The sid
 |---|---|
 | `stlertasks://task/{taskId}` | Open edit form for the task |
 | `stlertasks://create` | Open create form (Inbox, default priority) |
+| `stlertasks://event/{calendarId}/{eventId}` | Open event edit form |
+| `stlertasks://upcoming` | Navigate to Upcoming screen |
 
-Declared in `AndroidManifest.xml`. `MainActivity` receives the intent and passes the URI to `MainScreen`, where a `LaunchedEffect` routes to the correct action. Guard: if already on the target route, does not re-navigate.
+Declared in `AndroidManifest.xml`. `MainActivity` receives the intent and passes the URI to `MainScreen`, where a `LaunchedEffect` routes to the correct action.
 
 ---
 
@@ -585,7 +744,7 @@ Declared in `AndroidManifest.xml`. `MainActivity` receives the intent and passes
 ## 15. CI/CD
 
 **Workflow:** `.github/workflows/release.yml`  
-**Trigger:** Push of a tag matching `v*` (e.g. `v1.3`)
+**Trigger:** Push of a tag matching `v*` (e.g. `v1.1`)
 
 **Steps:**
 1. Checkout code
@@ -604,10 +763,11 @@ Declared in `AndroidManifest.xml`. `MainActivity` receives the intent and passes
 1. Clone the repository
 2. In Google Cloud Console:
    - Create (or reuse) a project
-   - Enable **Google Sheets API** and **Google Drive API**
+   - Enable **Google Sheets API**, **Google Drive API**, and **Google Calendar API**
    - Create **OAuth 2.0 Web Client ID** → copy to `app/src/main/res/values/strings.xml` as `google_web_client_id`
    - Create **OAuth 2.0 Android Client ID** (package `com.stler.tasks`, SHA-1 of debug keystore)
    - Set OAuth consent screen to **Production** (so any Google account can sign in)
+   - Add scopes: `spreadsheets`, `drive.metadata.readonly`, `calendar`
 3. Run on device/emulator from Android Studio
 4. Sign in — the app will find or create the `db_tasks` spreadsheet automatically
 
@@ -643,3 +803,28 @@ if (task.isRecurring) {
 - `pendingReorder` object (not `mutableStateOf` — no recomposition on intermediate frames): stores `parentId`, `fromIdx`, `toIdx`
 - `onMove` callback: updates `localList` + updates `pendingReorder`
 - `LaunchedEffect(isDragging)`: when `isDragging → false`, calls `viewModel.reorderSiblings(parentId, from, to)` → single batch Room write + sync queue entry
+
+### Upcoming / Widget Timeline Merge
+Tasks and calendar events are merged into a unified `TimelineEntry` list:
+```
+TimelineEntry(date, hasTime, time, row: UpcomingRow)
+```
+Sorted by: `date` → `if (hasTime) 0 else 1` → `time` string.
+Grouped by date with a `Header` row inserted before each group.
+
+### EventDateTime Serialization
+Calendar API requires exactly one of `date` or `dateTime` per event boundary (never both):
+```
+All-day:  EventDateTime(date = "YYYY-MM-DD")
+Timed:    EventDateTime(dateTime = "2026-05-04T14:00:00+03:00", timeZone = "Europe/Helsinki")
+```
+The custom `EventDateTimeAdapter` serializes with `serializeNulls=false` so absent fields are omitted from the JSON body, satisfying both regular and recurring event requirements.
+
+### RRULE Builder (CustomRecurrenceSheet)
+```
+RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR;COUNT=10
+RRULE:FREQ=MONTHLY;INTERVAL=1;BYDAY=2TU        (2nd Tuesday)
+RRULE:FREQ=MONTHLY;INTERVAL=1;BYDAY=-1SA       (last Saturday)
+RRULE:FREQ=DAILY;INTERVAL=1;UNTIL=20261231T235959Z
+```
+Ordinal prefix: `ceil(dayOfMonth / 7.0).toInt()` for 1st–4th; `-1` when the day can fall in the last position (dayOfMonth > 21 and day would overflow next month).

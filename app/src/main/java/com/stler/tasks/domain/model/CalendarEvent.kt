@@ -11,4 +11,8 @@ data class CalendarEvent(
     val endDate: String,
     val endTime: String,
     val isAllDay: Boolean,
-)
+    /** The series base event ID when this is a recurring instance; blank for one-off events. */
+    val recurringEventId: String = "",
+) {
+    val isRecurring: Boolean get() = recurringEventId.isNotBlank()
+}

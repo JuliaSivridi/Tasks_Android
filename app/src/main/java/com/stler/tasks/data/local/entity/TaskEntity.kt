@@ -52,10 +52,11 @@ fun TaskEntity.toDomain() = Task(
     deadlineTime = deadlineTime,
     isRecurring = isRecurring,
     recurType = when (recurType) {
-        "days" -> RecurType.DAYS
-        "weeks" -> RecurType.WEEKS
+        "days"   -> RecurType.DAYS
+        "weeks"  -> RecurType.WEEKS
         "months" -> RecurType.MONTHS
-        else -> RecurType.NONE
+        "years"  -> RecurType.YEARS
+        else     -> RecurType.NONE
     },
     recurValue = recurValue,
     labels = if (labels.isBlank()) emptyList() else labels.split(",").map { it.trim() },

@@ -10,14 +10,10 @@ import com.stler.tasks.domain.model.Priority
 import com.stler.tasks.domain.model.Task
 import com.stler.tasks.ui.BaseViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
 @HiltViewModel
@@ -42,25 +38,12 @@ class LabelViewModel @Inject constructor(
     val folders: StateFlow<List<Folder>> = repository.observeFolders()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _priorityFilter = MutableStateFlow<Set<Priority>>(emptySet())
-    val priorityFilter: StateFlow<Set<Priority>> = _priorityFilter.asStateFlow()
+    val filteredTasks: StateFlow<List<Task>> = tasks
 
-    val filteredTasks: StateFlow<List<Task>> = combine(tasks, _priorityFilter) { list, pf ->
-        if (pf.isEmpty()) list else list.filter { it.priority in pf }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    /** True until the first emission from [filteredTasks], then false. */
-    val isLoading: StateFlow<Boolean> = filteredTasks
+    /** True until the first emission from [tasks], then false. */
+    val isLoading: StateFlow<Boolean> = tasks
         .map { false }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
-
-    fun togglePriorityFilter(p: Priority) {
-        _priorityFilter.update { if (p in it) it - p else it + p }
-    }
-
-    fun clearAllFilters() {
-        _priorityFilter.value = emptySet()
-    }
 
     fun completeTask(id: String) = safeLaunch { repository.completeTask(id) }
 

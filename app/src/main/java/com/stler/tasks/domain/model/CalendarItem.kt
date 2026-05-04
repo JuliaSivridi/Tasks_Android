@@ -5,4 +5,5 @@ data class CalendarItem(
     val summary: String,      // calendar display name
     val color: String,        // hex (backgroundColor from API, e.g. "#4285f4")
     val isSelected: Boolean,  // user preference
+    val accessRole: String = "", // "owner" | "writer" | "reader" | "freeBusyReader"
 )

@@ -26,8 +26,10 @@ import java.util.Locale
 
 @Composable
 fun CalendarScreen(
-    calendarId: String,
-    viewModel: CalendarViewModel = hiltViewModel(),
+    calendarId          : String,
+    onEditEvent         : (com.stler.tasks.domain.model.CalendarEvent) -> Unit = {},
+    onEditEventSchedule : (com.stler.tasks.domain.model.CalendarEvent) -> Unit = {},
+    viewModel           : CalendarViewModel = hiltViewModel(),
 ) {
     val groupedEvents by viewModel.groupedEvents.collectAsStateWithLifecycle()
     val isLoading     by viewModel.isLoading.collectAsStateWithLifecycle()
@@ -53,7 +55,14 @@ fun CalendarScreen(
                 }
 
                 items(events, key = { "event_${it.id}" }) { event ->
-                    CalendarEventItem(event = event, showDate = false)
+                    CalendarEventItem(
+                        event          = event,
+                        showDate       = false,
+                        onEdit         = { onEditEvent(event) },
+                        onEditSchedule = { onEditEventSchedule(event) },
+                        onDelete       = { viewModel.deleteEvent(event.calendarId, event.id) },
+                        onDeleteSeries = { viewModel.deleteEventSeries(event.calendarId, event.recurringEventId) },
+                    )
                     HorizontalDivider(
                         thickness = 0.5.dp,
                         color = MaterialTheme.colorScheme.outlineVariant,
@@ -71,7 +80,8 @@ private fun CalendarDayHeader(date: LocalDate, today: LocalDate) {
     val label = if (date == LocalDate.MIN) {
         "Overdue"
     } else {
-        val datePart    = date.format(DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
+        val datePattern = if (date.year > today.year) "d MMM yyyy" else "d MMM"
+        val datePart    = date.format(DateTimeFormatter.ofPattern(datePattern, Locale.getDefault()))
         val weekdayPart = date.dayOfWeek
             .getDisplayName(TextStyle.FULL, Locale.getDefault())
             .replaceFirstChar { it.uppercase() }

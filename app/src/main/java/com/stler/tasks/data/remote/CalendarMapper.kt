@@ -45,16 +45,17 @@ object CalendarMapper {
         }
 
         return CalendarEventEntity(
-            id            = id,
-            calendarId    = calendarId,
-            calendarName  = calendarName,
-            calendarColor = calendarColor.ifBlank { "#4285f4" },
-            title         = title,
-            startDate     = startDate,
-            startTime     = startTime,
-            endDate       = endDate,
-            endTime       = endTime,
-            isAllDay      = isAllDay,
+            id               = id,
+            calendarId       = calendarId,
+            calendarName     = calendarName,
+            calendarColor    = calendarColor.ifBlank { "#4285f4" },
+            title            = title,
+            startDate        = startDate,
+            startTime        = startTime,
+            endDate          = endDate,
+            endTime          = endTime,
+            isAllDay         = isAllDay,
+            recurringEventId = dto.recurringEventId ?: "",
         )
     }
 

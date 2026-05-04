@@ -146,4 +146,17 @@ private fun MutableList<FolderRow>.addRecursive(
 
 class FolderWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = FolderWidget()
+
+    override fun onUpdate(
+        context: android.content.Context,
+        appWidgetManager: android.appwidget.AppWidgetManager,
+        appWidgetIds: IntArray,
+    ) {
+        // Skip the initial APPWIDGET_UPDATE broadcast for widgets not yet configured
+        // (fires on bind, before WidgetConfigActivity has saved prefs).
+        // isFolderWidgetConfigured also returns true for pre-existing widgets that
+        // have a folder_N pref from before the "configured" flag was added.
+        val ready = appWidgetIds.filter { WidgetPrefs.isFolderWidgetConfigured(context, it) }.toIntArray()
+        if (ready.isNotEmpty()) super.onUpdate(context, appWidgetManager, ready)
+    }
 }

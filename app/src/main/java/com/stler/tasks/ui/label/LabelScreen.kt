@@ -15,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.stler.tasks.ui.alltasks.FilterBar
 import com.stler.tasks.ui.task.TaskItem
 import com.stler.tasks.ui.util.EmptyState
 import com.stler.tasks.ui.util.ErrorSnackbarEffect
@@ -28,24 +27,14 @@ fun LabelScreen(
     onAddSubtask : (com.stler.tasks.domain.model.Task) -> Unit = {},
     viewModel    : LabelViewModel = hiltViewModel(),
 ) {
-    val filteredTasks  by viewModel.filteredTasks.collectAsStateWithLifecycle()
-    val isLoading      by viewModel.isLoading.collectAsStateWithLifecycle()
-    val labels         by viewModel.labels.collectAsStateWithLifecycle()
-    val folders        by viewModel.folders.collectAsStateWithLifecycle()
-    val priorityFilter by viewModel.priorityFilter.collectAsStateWithLifecycle()
+    val filteredTasks by viewModel.filteredTasks.collectAsStateWithLifecycle()
+    val isLoading     by viewModel.isLoading.collectAsStateWithLifecycle()
+    val labels        by viewModel.labels.collectAsStateWithLifecycle()
+    val folders       by viewModel.folders.collectAsStateWithLifecycle()
 
     ErrorSnackbarEffect(viewModel)
 
     Column(modifier = Modifier.fillMaxSize()) {
-        FilterBar(
-            labels          = emptyList(),
-            priorityFilter  = priorityFilter,
-            labelFilter     = emptySet(),
-            onTogglePriority = { viewModel.togglePriorityFilter(it) },
-            onToggleLabel   = {},
-            onClearAll      = { viewModel.clearAllFilters() },
-            showLabelFilter = false,   // label is implicit (we're already inside a label view)
-        )
         when {
             isLoading -> ShimmerTaskList(modifier = Modifier.fillMaxSize())
             filteredTasks.isEmpty() -> EmptyState(

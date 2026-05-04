@@ -222,6 +222,14 @@ class UpcomingViewModel @Inject constructor(
     fun completeTask(id: String) = safeLaunch { repository.completeTask(id) }
     fun deleteTask(id: String)   = safeLaunch { repository.deleteTask(id) }
 
+    fun deleteEvent(calendarId: String, eventId: String) = safeLaunch {
+        calendarRepository.deleteEvent(calendarId, eventId).getOrThrow()
+    }
+
+    fun deleteEventSeries(calendarId: String, seriesId: String) = safeLaunch {
+        calendarRepository.deleteEventSeries(calendarId, seriesId).getOrThrow()
+    }
+
     fun updateDeadline(
         id         : String,
         date       : String,

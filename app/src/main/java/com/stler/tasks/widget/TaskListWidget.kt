@@ -53,10 +53,10 @@ class TaskListWidget : GlanceAppWidget() {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val appWidgetId    = GlanceAppWidgetManager(context).getAppWidgetId(id)
-        val filterFolder   = WidgetPrefs.getFilterFolder(context, appWidgetId)
-        val filterLabel    = WidgetPrefs.getFilterLabel(context, appWidgetId)
-        val filterPriority = WidgetPrefs.getFilterPriority(context, appWidgetId)
+        val appWidgetId      = GlanceAppWidgetManager(context).getAppWidgetId(id)
+        val filterFolders    = WidgetPrefs.getFilterFolders(context, appWidgetId)
+        val filterLabels     = WidgetPrefs.getFilterLabels(context, appWidgetId)
+        val filterPriorities = WidgetPrefs.getFilterPriorities(context, appWidgetId)
 
         val ep   = EntryPointAccessors.fromApplication(context.applicationContext, WidgetEntryPoint::class.java)
         val repo = ep.taskRepository()
@@ -69,7 +69,7 @@ class TaskListWidget : GlanceAppWidget() {
 
         // Events are suppressed entirely when any task filter is active,
         // mirroring the AllTasks screen behavior in the app.
-        val anyFilterActive = filterFolder != null || filterLabel != null || filterPriority != null
+        val anyFilterActive = filterFolders.isNotEmpty() || filterLabels.isNotEmpty() || filterPriorities.isNotEmpty()
         val from = LocalDate.now().minusDays(1)
         val to   = LocalDate.now().plusDays(7)
         val eventsFlow: Flow<List<CalendarEvent>> =
@@ -94,27 +94,29 @@ class TaskListWidget : GlanceAppWidget() {
             val pendingCompleteId = rawPendingId
                 ?.takeIf { System.currentTimeMillis() - pendingTs < 4_000L }
 
-            // Apply task filters
+            // Apply task filters (empty set = no filter for that dimension)
             val tasks = allTasks
-                .let { list -> if (filterFolder   != null) list.filter { it.folderId == filterFolder } else list }
-                .let { list -> if (filterLabel    != null) list.filter { filterLabel in it.labels }    else list }
-                .let { list -> if (filterPriority != null) list.filter { it.priority.name.lowercase() == filterPriority } else list }
+                .let { list -> if (filterFolders.isNotEmpty())    list.filter { it.folderId in filterFolders } else list }
+                .let { list -> if (filterLabels.isNotEmpty())     list.filter { it.labels.any { lid -> lid in filterLabels } } else list }
+                .let { list -> if (filterPriorities.isNotEmpty()) list.filter { it.priority.name.lowercase() in filterPriorities } else list }
 
             val title = buildList {
-                if (filterFolder != null) {
-                    val name = allFolders.find { it.id == filterFolder }?.name ?: "Folder"
-                    add("@$name")
+                if (filterFolders.isNotEmpty()) {
+                    val names = filterFolders.mapNotNull { id -> allFolders.find { it.id == id }?.name }
+                    add("@" + names.joinToString(", ").ifEmpty { "Folder" })
                 }
-                if (filterLabel != null) {
-                    val name = allLabels.find { it.id == filterLabel }?.name ?: "Label"
-                    add("#$name")
+                if (filterLabels.isNotEmpty()) {
+                    val names = filterLabels.mapNotNull { id -> allLabels.find { it.id == id }?.name }
+                    add("#" + names.joinToString(", ").ifEmpty { "Label" })
                 }
-                if (filterPriority != null) {
-                    add(when (filterPriority) {
-                        "urgent"    -> "!1"
-                        "important" -> "!2"
-                        else        -> "!3"
-                    })
+                if (filterPriorities.isNotEmpty()) {
+                    add(filterPriorities.map { p ->
+                        when (p) {
+                            "urgent"    -> "!1"
+                            "important" -> "!2"
+                            else        -> "!3"
+                        }
+                    }.sorted().joinToString(" "))
                 }
             }.joinToString(" ").ifEmpty { "Tasks" }
 
@@ -139,8 +141,8 @@ class TaskListWidget : GlanceAppWidget() {
                             labelItems     = task.labels.mapNotNull { lid ->
                                 allLabels.find { it.id == lid }?.let { lbl -> lbl.name to lbl.color }
                             },
-                            folderName     = if (filterFolder != null) "" else (folder?.name ?: "Inbox"),
-                            folderHexColor = if (filterFolder != null) "" else (folder?.color ?: ""),
+                            folderName     = if (filterFolders.isNotEmpty()) "" else (folder?.name ?: "Inbox"),
+                            folderHexColor = if (filterFolders.isNotEmpty()) "" else (folder?.color ?: ""),
                         ),
                     ))
                 }
@@ -159,6 +161,10 @@ class TaskListWidget : GlanceAppWidget() {
             }
 
             // Primary sort: date. Secondary: timed items (0) before all-day (1). Tertiary: time.
+            // When filters are active the result set is bounded, so a higher cap is safe.
+            // The unfiltered cap (20) guards the Binder 1 MB RemoteViews limit when showing
+            // all tasks + calendar events together.
+            val rowCap = if (anyFilterActive) 50 else 20
             val rows: List<TaskListRow> = sortable
                 .sortedWith(compareBy({ it.date }, { if (it.hasTime) 0 else 1 }, { it.time }))
                 .map { it.row }
@@ -172,7 +178,7 @@ class TaskListWidget : GlanceAppWidget() {
                 ) {
                     WidgetHeader(title = title, screenUri = "stlertasks://all_tasks")
                     LazyColumn(modifier = GlanceModifier.fillMaxSize()) {
-                        items(rows.take(20), itemId = { row ->
+                        items(rows.take(rowCap), itemId = { row ->
                             when (row) {
                                 is TaskListRow.TaskRow  -> "t_${row.task.id}".hashCode().toLong()
                                 is TaskListRow.EventRow -> "e_${row.event.id}".hashCode().toLong()
@@ -203,4 +209,13 @@ class TaskListWidget : GlanceAppWidget() {
 
 class TaskListWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = TaskListWidget()
+
+    override fun onUpdate(
+        context: android.content.Context,
+        appWidgetManager: android.appwidget.AppWidgetManager,
+        appWidgetIds: IntArray,
+    ) {
+        val ready = appWidgetIds.filter { WidgetPrefs.isConfigured(context, it) }.toIntArray()
+        if (ready.isNotEmpty()) super.onUpdate(context, appWidgetManager, ready)
+    }
 }
