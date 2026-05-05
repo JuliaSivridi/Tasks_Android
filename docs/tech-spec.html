@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Stler Tasks Android — Technical Specification v2.1</title>
+<title>Stler Tasks Android — Technical Specification v2.2</title>
 <style>
   @page { margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -227,7 +227,7 @@
   <div class="subtitle">Technical Specification</div>
   <div class="accent-line"></div>
   <div class="meta">
-    <strong>Version:</strong> 2.1 (May 2026)<br>
+    <strong>Version:</strong> 2.2 (May 2026)<br>
     <strong>Repository:</strong> github.com/JuliaSivridi/Tasks_Android<br>
     <strong>Stack:</strong> Kotlin · Jetpack Compose · Room · Hilt · WorkManager · Glance · Google Sheets API v4 · Google Calendar API v3<br>
     <strong>Min SDK:</strong> 26 (Android 8.0) &nbsp;·&nbsp; <strong>Target SDK:</strong> 36
@@ -666,7 +666,13 @@ else {
 </ul>
 
 <h2>7.4 SyncState</h2>
-<p><code>StateFlow&lt;SyncState&gt;</code> combining WorkManager <code>WorkInfo</code> + <code>SyncQueueDao.countAll()</code>: <code>Idle</code> / <code>Syncing</code> / <code>Pending(count)</code>. Displayed in the sidebar footer.</p>
+<p><code>StateFlow&lt;SyncState&gt;</code> combining WorkManager <code>WorkInfo</code> + <code>SyncQueueDao.countAll()</code>: <code>Idle</code> / <code>Syncing</code> / <code>Pending(count)</code>.</p>
+<p><strong>Displayed in <code>TasksTopAppBar</code> as a sync icon button (three visual states):</strong></p>
+<ul>
+  <li><code>Idle</code> → <code>CloudDone</code> icon (tinted <code>onSurfaceVariant</code>)</li>
+  <li><code>Pending(count)</code> → <code>CloudUpload</code> icon with a muted counter badge; badge uses <code>Color.Transparent</code> container + <code>onSurfaceVariant</code> content color (matches the icon — not the default red)</li>
+  <li><code>Syncing</code> → <code>Sync</code> icon with infinite rotation animation (1 s, <code>LinearEasing</code>)</li>
+</ul>
 
 <!-- ─── 8. Screens ─────────────────────────────────────────────────────────── -->
 <h1 id="screens">8. UI Screens</h1>
@@ -717,14 +723,15 @@ shown events = if (calFiltersActive)  → events filtered by calendarId ∈ cale
 
 <p><strong>Sorting within <code>filteredItems</code>:</strong></p>
 <ol>
-  <li>Tasks with a valid <code>deadlineDate</code> and calendar events are mixed together, sorted by:
+  <li>Tasks with a valid <code>deadlineDate</code> and calendar events are mixed together into <code>combinedDated</code>, sorted by:
     <ul>
+      <li>Priority weight ascending: URGENT=0, IMPORTANT=1, NORMAL=2; <strong>calendar events count as NORMAL (2)</strong> so they interleave chronologically with same-priority tasks</li>
       <li><code>deadlineDate</code>/<code>startDate</code> string ascending (ISO format → sorts correctly)</li>
       <li>Timed items (<code>deadlineTime != ""</code> / <code>startTime != ""</code>) sort before all-day within the same date (0 vs 1)</li>
       <li>Time string ascending within same date+timed group</li>
     </ul>
   </li>
-  <li>Tasks WITHOUT a deadline (<code>deadlineDate.isBlank()</code>) are appended <strong>after</strong> all dated items, in their original (Room-observed) order</li>
+  <li>Tasks WITHOUT a deadline (<code>deadlineDate.isBlank()</code>) are appended <strong>after</strong> all dated items, sorted by priority weight only</li>
 </ol>
 
 <p><strong>Initial scroll-to-today:</strong> On first load, <code>LaunchedEffect(firstTodayIdx)</code> with a 200 ms debounce delay scrolls the list to the first item whose date ≥ today. The debounce handles events arriving slightly after tasks and re-centering the scroll.</p>
@@ -913,18 +920,27 @@ shown events = if (calFiltersActive)  → events filtered by calendarId ∈ cale
 </ul>
 
 <h2 id="s8-8">8.8 CalendarEventItem</h2>
-<p>Shared composable for displaying a single calendar event — used in <code>CalendarScreen</code>, <code>AllTasksScreen</code>, and <code>UpcomingScreen</code>.</p>
-<p><strong>Row 1:</strong> <code>[40dp placeholder] [40dp: CalendarMonth icon 24dp, tinted calColor] [title weight=1] [Schedule btn] [MoreHoriz btn]</code></p>
+<p>Shared composable for displaying a single calendar event — used in <code>CalendarScreen</code>, <code>AllTasksScreen</code>, and <code>UpcomingScreen</code>. Layout mirrors <code>TaskItem</code>.</p>
+<pre>Row(start=8dp, end=4dp, top=4dp, bottom=4dp) {
+    Box(40dp) { CalendarMonth icon 24dp, tinted calColor }
+    Spacer(8dp)
+    Column(weight=1f) {
+        Text(title, maxLines=2, ellipsis)
+        FlowRow {
+            Row(defaultMinSize 20dp, CenterVertically) { [Autorenew 14dp?] [timeLabel?] }
+            Row { [CalendarMonth 14dp, tinted] [calendar name] }
+        }
+    }
+    Spacer(4dp)
+    Box(40dp, clickable) { Schedule 18dp }   // only when onEdit/onDelete non-null
+    Box(40dp, clickable) { MoreHoriz 18dp }  // only when onEdit/onDelete non-null
+}</pre>
 <ul>
-  <li><code>CalendarMonth</code> icon (24dp) tinted with <code>event.calendarColor</code> — identifies which calendar the event belongs to</li>
-  <li>Title: clickable when <code>onEdit</code> is non-null; 2-line max</li>
+  <li><strong>Recurring icon</strong> (<code>Autorenew</code>, 14dp, muted): shown when <code>event.recurringEventId.isNotBlank()</code>; grouped with <code>timeLabel</code> in a <code>Row(defaultMinSize(minHeight=20dp))</code> for consistent vertical alignment</li>
+  <li><code>timeLabel</code> colored with <code>deadlineColor(deadlineStatus(startDate))</code>: timed → <code>"HH:MM — HH:MM"</code> or <code>"HH:MM"</code>; all-day + <code>showDate=true</code> → <code>"d MMM"</code> / <code>"Today"</code> / <code>"Tomorrow"</code>; all-day + <code>showDate=false</code> → empty</li>
+  <li>Calendar name row: <code>CalendarMonth</code> 14dp (tinted) + calendar name text — wraps naturally (no ellipsis)</li>
   <li><strong>Schedule</strong> (<code>Icons.Outlined.Schedule</code>, 18dp, <code>deadlineColor</code> tint): quick schedule edit → <code>onEditSchedule</code></li>
   <li><strong>MoreHoriz</strong> (18dp): opens <code>ModalBottomSheet</code> with Edit and Delete items</li>
-</ul>
-<p><strong>Row 2</strong> (54dp indent): <code>[time label?] [CalendarMonth icon 14dp, tinted] [calendar name]</code></p>
-<ul>
-  <li><code>CalendarMonth</code> icon 14dp tinted with <code>calColor</code> before the calendar name (not a dot or badge — it is the icon)</li>
-  <li><code>timeLabel</code>: timed → <code>"HH:MM — HH:MM"</code> or <code>"HH:MM"</code>; all-day + <code>showDate=true</code> → <code>"d MMM"</code> / <code>"Today"</code> / <code>"Tomorrow"</code>; all-day + <code>showDate=false</code> → empty</li>
 </ul>
 <p><strong>Deletion:</strong> non-recurring — <code>AlertDialog</code> "Delete event?"; recurring — three-button <code>AlertDialog</code>: "Delete this event only" / "Delete all events in series" (error color) / "Cancel".</p>
 <table>
@@ -1005,14 +1021,8 @@ shown events = if (calFiltersActive)  → events filtered by calendarId ∈ cale
       <li>No "+" button (calendars are managed in Settings)</li>
     </ul>
   </li>
-  <li><strong>Sync footer</strong> — bottom of sidebar:
-    <ul>
-      <li><code>SyncState.Idle</code>: static text</li>
-      <li><code>SyncState.Syncing</code>: <code>Sync</code> icon with infinite rotation animation + "Syncing..."</li>
-      <li><code>SyncState.Pending(count)</code>: <code>Sync</code> icon + "$count pending"</li>
-    </ul>
-  </li>
 </ol>
+<div class="note"><strong>Sync status</strong> is shown in <code>TasksTopAppBar</code>, not in the sidebar. See §7.4 for the three sync icon states.</div>
 
 <p><strong>Selected item highlight:</strong> <code>NavigationDrawerItem</code> uses <code>sidebarItemColors()</code> — overrides Material You default (<code>primaryContainer</code>) with <code>NavSelected</code> in light mode and <code>SelectedHighlightDark</code> in dark mode for clearer active item visibility.</p>
 
@@ -1025,25 +1035,41 @@ shown events = if (calFiltersActive)  → events filtered by calendarId ∈ cale
 
 <p>Single shared task row used across all screens.</p>
 
-<h2>9.1 Layout</h2>
-<pre>Row 1: [expand 40dp] [checkbox 40dp] [title weight=1] [deadline btn] [more btn]
-Row 2: [recurring?] [deadline label?] [label chips?] [folder?] [subtask count?]
-       (indented by depth×20 + 54dp)</pre>
+<h2>9.1 Parameters (key additions)</h2>
+<table>
+  <thead><tr><th>Parameter</th><th>Default</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>showExpandSlot</code></td><td><code>false</code></td><td>Reserve a 32dp placeholder slot even for leaf tasks (FolderScreen passes <code>true</code> so all rows stay aligned)</td></tr>
+    <tr><td><code>hasChildren</code></td><td><code>false</code></td><td>Show expand/collapse chevron; if <code>false</code> and <code>showExpandSlot=false</code>, no slot is rendered</td></tr>
+    <tr><td><code>depth</code></td><td><code>0</code></td><td>Indent level — multiplied by 20dp</td></tr>
+    <tr><td><code>showFolder</code></td><td><code>false</code></td><td>Show folder name in row 2</td></tr>
+    <tr><td><code>showLabels</code></td><td><code>true</code></td><td>Show label chips in row 2</td></tr>
+    <tr><td><code>enableSwipe</code></td><td><code>true</code></td><td>False in CompletedScreen</td></tr>
+  </tbody>
+</table>
+
+<h2>9.2 Layout</h2>
+<pre>Row 1: [expand 32dp?] [checkbox 40dp] [title weight=1] [schedule btn 40dp] [more btn 40dp]
+Row 2: FlowRow { [recurring+deadline grouped] [label chips?] [folder?] [subtask count?] }
+       (indented by depth×20 + expand-slot-width dp)</pre>
 
 <ul>
+  <li><strong>Expand slot:</strong> 32dp <code>Box</code>. Rendered when <code>showExpandSlot=true</code> <em>or</em> <code>hasChildren=true</code>. Clickable with <code>ChevronRight</code>/<code>ExpandMore</code> (24dp) when <code>hasChildren=true</code>; empty placeholder otherwise. No spacer between expand and checkbox.</li>
   <li><strong>Checkbox:</strong> <code>TaskCheckbox</code> — Canvas-drawn, priority-colored border/fill, 40dp touch target, 18dp visual; white checkmark when checked</li>
+  <li><strong>Action buttons:</strong> <code>Box(Modifier.size(40.dp).clickable) { Icon(18dp) }</code> — tighter than <code>IconButton</code> (48dp min)</li>
   <li><strong>Title:</strong> tappable → opens edit form; strikethrough + 70% alpha when completed</li>
-  <li><strong>When completed:</strong> Restore + Delete buttons replace deadline/more</li>
+  <li><strong>When completed:</strong> Restore + Delete buttons replace schedule/more</li>
+  <li><strong>Row 2 metadata:</strong> <code>FlowRow(spacedBy(6dp), spacedBy(2dp))</code> — recurring icon + deadline label are grouped in <code>Row(defaultMinSize(minHeight=20dp), CenterVertically)</code> so the 14dp icon stays vertically centered regardless of whether deadline text is present; wraps to next line instead of truncating</li>
 </ul>
 
-<h2>9.2 Swipe Gestures</h2>
+<h2>9.3 Swipe Gestures</h2>
 <p><code>SwipeToDismissBox</code> wrapped in <code>key(task.id, task.deadlineDate)</code>:</p>
 <ul>
   <li><strong>Swipe right:</strong> green background + checkmark → 500 ms → <code>onCheckedChange(true)</code></li>
   <li><strong>Swipe left:</strong> blue background + schedule icon → snaps back → opens <code>DeadlinePickerDialog</code></li>
 </ul>
 
-<h2>9.3 Dialogs / Sheets</h2>
+<h2>9.4 Dialogs / Sheets</h2>
 <ul>
   <li><code>DeadlinePickerDialog</code> — date + time chips + repeat checkbox + Postpone</li>
   <li><code>PriorityPickerSheet</code> — 3 options</li>

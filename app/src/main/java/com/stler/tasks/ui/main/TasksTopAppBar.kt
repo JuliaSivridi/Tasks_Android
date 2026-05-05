@@ -13,9 +13,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.CloudDone
+import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Sync
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,6 +28,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,18 +75,44 @@ fun TasksTopAppBar(
             }
         },
         actions = {
-            // Sync icon — spins while syncing, static otherwise
+            // Sync icon:
+            //   Idle    → cloud with checkmark
+            //   Pending → cloud-upload with muted counter badge (same colour as icon)
+            //   Syncing → spinning arrows
             IconButton(onClick = onSyncClick) {
-                val isSyncing = syncState is SyncState.Syncing
-                Icon(
-                    imageVector = Icons.Outlined.Sync,
-                    contentDescription = when (syncState) {
-                        SyncState.Idle       -> "Sync"
-                        SyncState.Syncing    -> "Syncing…"
-                        is SyncState.Pending -> "Sync (pending)"
-                    },
-                    modifier = Modifier.rotate(if (isSyncing) syncRotation else 0f),
-                )
+                val iconTint = MaterialTheme.colorScheme.onSurfaceVariant
+                when (syncState) {
+                    SyncState.Idle -> Icon(
+                        imageVector        = Icons.Outlined.CloudDone,
+                        contentDescription = "Synced",
+                        tint               = iconTint,
+                    )
+                    is SyncState.Pending -> BadgedBox(
+                        badge = {
+                            Badge(
+                                containerColor = Color.Transparent,
+                                contentColor   = iconTint,
+                            ) {
+                                Text(
+                                    text  = "${syncState.count}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector        = Icons.Outlined.CloudUpload,
+                            contentDescription = "Sync — ${syncState.count} pending",
+                            tint               = iconTint,
+                        )
+                    }
+                    SyncState.Syncing -> Icon(
+                        imageVector        = Icons.Outlined.Sync,
+                        contentDescription = "Syncing…",
+                        modifier           = Modifier.rotate(syncRotation),
+                        tint               = iconTint,
+                    )
+                }
             }
 
             // Avatar → user dropdown

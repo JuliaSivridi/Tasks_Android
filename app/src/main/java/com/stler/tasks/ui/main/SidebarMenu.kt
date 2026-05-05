@@ -1,11 +1,5 @@
 package com.stler.tasks.ui.main
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -33,7 +27,6 @@ import androidx.compose.material.icons.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material.icons.outlined.MoreVert
-import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.Button
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.DropdownMenu
@@ -60,7 +53,6 @@ import androidx.compose.ui.unit.dp
 import com.stler.tasks.domain.model.CalendarItem
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
-import com.stler.tasks.sync.SyncState
 import com.stler.tasks.ui.navigation.Screen
 import com.stler.tasks.ui.theme.NavSelected
 import com.stler.tasks.ui.theme.SelectedHighlightDark
@@ -79,7 +71,6 @@ fun SidebarMenu(
     folders: List<Folder>,
     labels: List<Label>,
     selectedCalendars: List<CalendarItem>,
-    syncState: SyncState,
     sidebarState: SidebarState,
     onNavigate: (String) -> Unit,
     onToggleSection: (String) -> Unit,
@@ -222,10 +213,6 @@ fun SidebarMenu(
             }
 
             Spacer(Modifier.weight(1f))
-            HorizontalDivider()
-
-            // ── Sync footer ─────────────────────────────────────────────────
-            SyncFooter(syncState = syncState)
         }
     }
 }
@@ -397,45 +384,5 @@ private fun SectionHeader(
                 Icon(Icons.Outlined.Add, contentDescription = "Add", modifier = Modifier.size(18.dp))
             }
         }
-    }
-}
-
-@Composable
-private fun SyncFooter(syncState: SyncState) {
-    val infiniteTransition = rememberInfiniteTransition(label = "footer_sync")
-    val rotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1_000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "footerRotation",
-    )
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Sync,
-            contentDescription = null,
-            modifier = Modifier
-                .size(16.dp)
-                .rotate(if (syncState is SyncState.Syncing) rotation else 0f),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = when (syncState) {
-                SyncState.Idle       -> "Synced"
-                SyncState.Syncing    -> "Syncing…"
-                is SyncState.Pending -> "${syncState.count} changes pending"
-            },
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }

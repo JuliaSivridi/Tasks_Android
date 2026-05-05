@@ -4,13 +4,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Autorenew
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
@@ -19,7 +23,6 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -53,7 +56,7 @@ import java.util.Locale
  * When [event.recurringEventId] is non-blank, the Delete entry triggers a choice dialog:
  * "Delete this event only" ([onDelete]) vs "Delete all in series" ([onDeleteSeries]).
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CalendarEventItem(
     event           : CalendarEvent,
@@ -155,88 +158,105 @@ fun CalendarEventItem(
         }
     }
 
-    // ── Item layout ───────────────────────────────────────────────────────────
-    Column(modifier = modifier.fillMaxWidth()) {
+    // ── Item layout — mirrors TaskItem: single Row with Column { title; metadata } ──
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        // Calendar icon — occupies the same 40dp slot as the task checkbox
+        Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector        = Icons.Outlined.CalendarMonth,
+                contentDescription = null,
+                tint               = calColor,
+                modifier           = Modifier.size(24.dp),
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
 
-        // Row 1: expand placeholder + calendar icon + title + action buttons
-        Row(
-            modifier = Modifier.padding(start = 0.dp, end = 4.dp, top = 4.dp, bottom = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(modifier = Modifier.size(40.dp))   // expand placeholder
-            Spacer(modifier = Modifier.width(6.dp))
-            Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector        = Icons.Outlined.CalendarMonth,
-                    contentDescription = null,
-                    tint               = calColor,
-                    modifier           = Modifier.size(24.dp),
-                )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
+        // Title + metadata in a Column, same as TaskItem
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text     = event.title,
-                modifier = Modifier
-                    .weight(1f)
-                    .then(
-                        if (onEdit != null) Modifier.clickable { onEdit() }
-                        else Modifier
-                    ),
+                modifier = if (onEdit != null) Modifier.clickable { onEdit() } else Modifier,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 style    = MaterialTheme.typography.bodyMedium,
             )
-            Spacer(modifier = Modifier.width(4.dp))
-
-            if (onEdit != null || onDelete != null) {
-                IconButton(onClick = { (onEditSchedule ?: onEdit)?.invoke() }) {
-                    Icon(
-                        imageVector        = Icons.Outlined.Schedule,
-                        contentDescription = "Edit schedule",
-                        modifier           = Modifier.size(18.dp),
-                        tint               = deadlineColor(deadlineStatus(event.startDate)),
-                    )
+            // Metadata: recurring icon · time label · calendar name
+            // Mirrors TaskItem's FlowRow structure: recurring+time grouped, calendar name separate
+            FlowRow(
+                modifier              = Modifier.padding(top = 2.dp, end = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement   = Arrangement.spacedBy(2.dp),
+            ) {
+                if (isRecurring || timeLabel.isNotBlank()) {
+                    Row(
+                        modifier              = Modifier.defaultMinSize(minHeight = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment     = Alignment.CenterVertically,
+                    ) {
+                        if (isRecurring) {
+                            Icon(
+                                imageVector        = Icons.Outlined.Autorenew,
+                                contentDescription = "Recurring",
+                                modifier           = Modifier.size(14.dp),
+                                tint               = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            )
+                        }
+                        if (timeLabel.isNotBlank()) {
+                            Text(
+                                text  = timeLabel,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = deadlineColor(deadlineStatus(event.startDate)),
+                            )
+                        }
+                    }
                 }
-                IconButton(onClick = { showMenu = true }) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalAlignment     = Alignment.CenterVertically,
+                ) {
                     Icon(
-                        imageVector        = Icons.Outlined.MoreHoriz,
-                        contentDescription = "More options",
-                        modifier           = Modifier.size(18.dp),
-                        tint               = MaterialTheme.colorScheme.onSurfaceVariant,
+                        imageVector        = Icons.Outlined.CalendarMonth,
+                        contentDescription = null,
+                        tint               = calColor,
+                        modifier           = Modifier.size(14.dp),
+                    )
+                    Text(
+                        text  = event.calendarName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
         }
 
-        // Row 2: time + calendar name
-        Row(
-            modifier = Modifier.padding(start = 54.dp, end = 8.dp, bottom = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment     = Alignment.CenterVertically,
-        ) {
-            if (timeLabel.isNotBlank()) {
-                Text(
-                    text  = timeLabel,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = deadlineColor(deadlineStatus(event.startDate)),
-                )
-            }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                verticalAlignment     = Alignment.CenterVertically,
+        Spacer(modifier = Modifier.width(4.dp))
+
+        if (onEdit != null || onDelete != null) {
+            Box(
+                modifier = Modifier.size(40.dp).clickable { (onEditSchedule ?: onEdit)?.invoke() },
+                contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.CalendarMonth,
-                    contentDescription = null,
-                    tint     = calColor,
-                    modifier = Modifier.size(14.dp),
+                    imageVector        = Icons.Outlined.Schedule,
+                    contentDescription = "Edit schedule",
+                    modifier           = Modifier.size(18.dp),
+                    tint               = deadlineColor(deadlineStatus(event.startDate)),
                 )
-                Text(
-                    text     = event.calendarName,
-                    style    = MaterialTheme.typography.bodyMedium,
-                    color    = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+            }
+            Box(
+                modifier = Modifier.size(40.dp).clickable { showMenu = true },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector        = Icons.Outlined.MoreHoriz,
+                    contentDescription = "More options",
+                    modifier           = Modifier.size(18.dp),
+                    tint               = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

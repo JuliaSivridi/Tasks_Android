@@ -6,6 +6,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,8 +27,8 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.FormatListBulleted
-import androidx.compose.material.icons.outlined.Label
+import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
+import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.Replay
@@ -65,7 +68,7 @@ import com.stler.tasks.domain.model.TaskStatus
 import com.stler.tasks.ui.theme.DeadlineToday
 import com.stler.tasks.util.toComposeColor
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun TaskItem(
     task: Task,
@@ -77,6 +80,7 @@ fun TaskItem(
     showFolder: Boolean = false,
     showLabels: Boolean = true,
     showDateInDeadline: Boolean = true,
+    showExpandSlot: Boolean = false,
     folderName: String? = null,
     folderColor: String? = null,
     onCheckedChange: (Boolean) -> Unit,
@@ -218,33 +222,33 @@ fun TaskItem(
         // eliminating the large gap that appeared when the two rows were separate Column children.
         Row(
             modifier = Modifier.padding(
-                start = (depth * 20).dp,
-                end   = 4.dp,
-                top   = 4.dp,
+                start  = 8.dp + (depth * 20).dp,
+                end    = 4.dp,
+                top    = 4.dp,
                 bottom = 4.dp,
             ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // Expand/collapse — 40dp touch target, 24dp visual icon.
-            Box(
-                modifier = if (hasChildren)
-                    Modifier.size(40.dp).clickable { onExpand() }
-                else
-                    Modifier.size(40.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (hasChildren) {
-                    Icon(
-                        imageVector = if (task.isExpanded) Icons.Outlined.ExpandMore
-                                      else Icons.Outlined.ChevronRight,
-                        contentDescription = if (task.isExpanded) "Collapse" else "Expand",
-                        modifier = Modifier.size(24.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+            // Expand/collapse — shown only when task has children OR caller needs alignment slot.
+            if (showExpandSlot || hasChildren) {
+                Box(
+                    modifier = if (hasChildren)
+                        Modifier.size(32.dp).clickable { onExpand() }
+                    else
+                        Modifier.size(32.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (hasChildren) {
+                        Icon(
+                            imageVector = if (task.isExpanded) Icons.Outlined.ExpandMore
+                                          else Icons.Outlined.ChevronRight,
+                            contentDescription = if (task.isExpanded) "Collapse" else "Expand",
+                            modifier = Modifier.size(24.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
-
-            Spacer(modifier = Modifier.width(6.dp))
 
             TaskCheckbox(
                 checked = isCompleted || pendingComplete,
@@ -278,26 +282,33 @@ fun TaskItem(
                 )
 
                 if (hasMetadata) {
-                    Row(
+                    FlowRow(
                         modifier = Modifier.padding(top = 2.dp, end = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+                        verticalArrangement   = Arrangement.spacedBy(2.dp),
                     ) {
-                        if (task.isRecurring) {
-                            Icon(
-                                imageVector = Icons.Outlined.Autorenew,
-                                contentDescription = "Recurring",
-                                modifier = Modifier.size(14.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            )
-                        }
-
-                        if (dlLabel != null) {
-                            Text(
-                                text = dlLabel,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = deadlineColor(dlStatus),
-                            )
+                        if (task.isRecurring || dlLabel != null) {
+                            Row(
+                                modifier = Modifier.defaultMinSize(minHeight = 20.dp),
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (task.isRecurring) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Autorenew,
+                                        contentDescription = "Recurring",
+                                        modifier = Modifier.size(14.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    )
+                                }
+                                if (dlLabel != null) {
+                                    Text(
+                                        text = dlLabel,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = deadlineColor(dlStatus),
+                                    )
+                                }
+                            }
                         }
 
                         if (showLabels) {
@@ -307,7 +318,7 @@ fun TaskItem(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Outlined.Label,
+                                        imageVector = Icons.AutoMirrored.Outlined.Label,
                                         contentDescription = null,
                                         modifier = Modifier.size(14.dp),
                                         tint = label.color.toComposeColor(),
@@ -316,6 +327,8 @@ fun TaskItem(
                                         text = label.name,
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = label.color.toComposeColor(),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
                                 }
                             }
@@ -338,6 +351,8 @@ fun TaskItem(
                                     text = folderName,
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = fColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         }
@@ -350,7 +365,7 @@ fun TaskItem(
                             ) {
                                 SubtaskStat(Icons.Outlined.Check, completedChildCount)
                                 SubtaskStat(Icons.Outlined.RadioButtonUnchecked, remaining)
-                                SubtaskStat(Icons.Outlined.FormatListBulleted, totalChildCount)
+                                SubtaskStat(Icons.AutoMirrored.Outlined.FormatListBulleted, totalChildCount)
                             }
                         }
                     }
@@ -361,7 +376,10 @@ fun TaskItem(
 
             // ── Action buttons ───────────────────────────────────────────────
             if (isCompleted) {
-                IconButton(onClick = { onCheckedChange(false) }) {
+                Box(
+                    modifier = Modifier.size(40.dp).clickable { onCheckedChange(false) },
+                    contentAlignment = Alignment.Center,
+                ) {
                     Icon(
                         imageVector = Icons.Outlined.Replay,
                         contentDescription = "Restore",
@@ -369,7 +387,10 @@ fun TaskItem(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                IconButton(onClick = { showDeleteConfirm = true }) {
+                Box(
+                    modifier = Modifier.size(40.dp).clickable { showDeleteConfirm = true },
+                    contentAlignment = Alignment.Center,
+                ) {
                     Icon(
                         imageVector = Icons.Outlined.Delete,
                         contentDescription = "Delete",
@@ -380,7 +401,10 @@ fun TaskItem(
             } else {
                 val deadlineTint = if (task.deadlineDate.isNotBlank()) deadlineColor(dlStatus)
                                    else MaterialTheme.colorScheme.onSurfaceVariant
-                IconButton(onClick = { showDeadlinePicker = true }) {
+                Box(
+                    modifier = Modifier.size(40.dp).clickable { showDeadlinePicker = true },
+                    contentAlignment = Alignment.Center,
+                ) {
                     Icon(
                         imageVector = Icons.Outlined.Schedule,
                         contentDescription = "Set deadline",
@@ -388,7 +412,10 @@ fun TaskItem(
                         tint = deadlineTint,
                     )
                 }
-                IconButton(onClick = { showMobileMenu = true }) {
+                Box(
+                    modifier = Modifier.size(40.dp).clickable { showMobileMenu = true },
+                    contentAlignment = Alignment.Center,
+                ) {
                     Icon(
                         imageVector = Icons.Outlined.MoreHoriz,
                         contentDescription = "More options",
@@ -543,7 +570,7 @@ private fun TaskMobileMenu(
             headlineContent = { Text("Labels") },
             leadingContent = {
                 Icon(
-                    imageVector = Icons.Outlined.Label,
+                    imageVector = Icons.AutoMirrored.Outlined.Label,
                     contentDescription = null,
                 )
             },

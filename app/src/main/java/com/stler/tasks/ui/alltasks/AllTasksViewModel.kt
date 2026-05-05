@@ -122,25 +122,39 @@ class AllTasksViewModel @Inject constructor(
         }
 
         // Priority weight: URGENT=0, IMPORTANT=1, NORMAL=2
+        // Calendar events count as NORMAL priority (2) so they interleave with dated tasks.
         val priorityOf = { task: Task ->
             when (task.priority) { Priority.URGENT -> 0; Priority.IMPORTANT -> 1; else -> 2 }
         }
 
-        // Dated tasks: primary sort by priority, then date → timed-before-allday → time
-        val datedTaskItems: List<ListItem> = datedTasks
-            .sortedWith(compareBy(
-                { priorityOf(it) },
-                { it.deadlineDate },
-                { if (it.deadlineTime.isBlank()) 1 else 0 },
-                { it.deadlineTime },
-            ))
-            .map { ListItem.TaskItem(it) }
-
-        // Events: no priority — sorted by date → timed-before-allday → time
-        val sortedEventItems: List<ListItem> = eventItems.sortedWith(compareBy(
-            { (it as? ListItem.EventItem)?.event?.startDate ?: "" },
-            { if ((it as? ListItem.EventItem)?.event?.startTime.isNullOrBlank()) 1 else 0 },
-            { (it as? ListItem.EventItem)?.event?.startTime ?: "" },
+        // Merge dated tasks + events, sorted by priority → date → timed-before-allday → time
+        val combinedDated: List<ListItem> = (
+            datedTasks.map { ListItem.TaskItem(it) } + eventItems
+        ).sortedWith(compareBy(
+            { item: ListItem ->
+                when (item) {
+                    is ListItem.TaskItem  -> priorityOf(item.task)
+                    is ListItem.EventItem -> 2  // treat events as NORMAL priority
+                }
+            },
+            { item: ListItem ->
+                when (item) {
+                    is ListItem.TaskItem  -> item.task.deadlineDate
+                    is ListItem.EventItem -> item.event.startDate
+                }
+            },
+            { item: ListItem ->
+                when (item) {
+                    is ListItem.TaskItem  -> if (item.task.deadlineTime.isBlank()) 1 else 0
+                    is ListItem.EventItem -> if (item.event.startTime.isBlank()) 1 else 0
+                }
+            },
+            { item: ListItem ->
+                when (item) {
+                    is ListItem.TaskItem  -> item.task.deadlineTime
+                    is ListItem.EventItem -> item.event.startTime
+                }
+            },
         ))
 
         // Undated tasks: sorted by priority only
@@ -148,7 +162,7 @@ class AllTasksViewModel @Inject constructor(
             .sortedWith(compareBy { priorityOf(it) })
             .map { ListItem.TaskItem(it) }
 
-        datedTaskItems + sortedEventItems + undatedTaskItems
+        combinedDated + undatedTaskItems
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /** True until the first emission from [filteredItems], then false. */

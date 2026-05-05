@@ -20,10 +20,11 @@ A native Android task manager — the companion app to [Stler Tasks PWA](https:/
 - **Priority** — Urgent / Important / Normal; color-coded flags on every task row
 
 **Views**
-- **Upcoming** — tasks grouped by day with a scrollable week strip; overdue section at the top
-- **All Tasks** — flat list of all pending tasks
-- **Priority** — separate tab per priority level
+- **Upcoming** — tasks + calendar events grouped by day with a scrollable week strip; overdue section at the top
+- **All Tasks** — flat list of all pending tasks and calendar events, interleaved by date and priority
+- **Priority** — separate screen per priority level
 - **Folders / Labels** — dedicated screen per folder or label
+- **Calendar** — event list for each connected calendar
 - **Completed** — archive of done tasks with one-tap restore
 
 **Deadlines**
@@ -35,14 +36,22 @@ A native Android task manager — the companion app to [Stler Tasks PWA](https:/
 - Swipe right → complete (green flash, then task disappears or deadline advances)
 - Swipe left → open deadline picker (snaps back after closing)
 
-**Widgets** — three home screen widgets via Jetpack Glance:
-- **Upcoming** — next 7 days grouped by date
-- **Folder** — any single folder, hierarchical
+**Google Calendar integration**
+- Connect one or more Google Calendars in Settings
+- Calendar events displayed inline with tasks in Upcoming and All Tasks, unified by date
+- Create, edit, and delete events (including recurring) directly from the app
+- Recurring events show a loop icon; delete "this event only" or "all in series"
+
+**Widgets** — four home screen widgets via Jetpack Glance:
+- **Upcoming** — next 7 days of tasks + calendar events grouped by date
+- **Folder** — any single folder, hierarchical with expand/collapse
 - **Task List** — configurable by folder / label / priority
+- **Calendar** — mixed task + event timeline for the next 7 days
 
 **Sync & offline**
 - Full read/write offline via Room (SQLite); sync queue flushes when back online
-- Background sync every 30 minutes via WorkManager; manual sync from the sidebar
+- Background sync every 30 minutes via WorkManager
+- Sync status shown in the top bar: cloud-done (synced) · cloud-upload with counter (pending) · spinning arrows (syncing)
 - First sign-in automatically creates the `db_tasks` spreadsheet — no manual setup
 
 ---
@@ -114,11 +123,11 @@ Row 1 of every sheet is a header row. Deleted rows are cleared (all cells emptie
 
 - Android Studio Hedgehog or newer
 - Google account
-- Google Cloud project with **Google Sheets API** and **Google Drive API** enabled
+- Google Cloud project with **Google Sheets API**, **Google Drive API**, and **Google Calendar API** enabled
 
 ### Google Cloud Console
 
-1. Go to [console.cloud.google.com](https://console.cloud.google.com) and enable **Google Sheets API** and **Google Drive API**
+1. Go to [console.cloud.google.com](https://console.cloud.google.com) and enable **Google Sheets API**, **Google Drive API**, and **Google Calendar API**
 2. Create an OAuth 2.0 Client ID → type **Android**
    - Package name: `com.stler.tasks`
    - SHA-1: run `./gradlew signingReport`

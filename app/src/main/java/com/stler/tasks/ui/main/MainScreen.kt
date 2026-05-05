@@ -269,7 +269,6 @@ fun MainScreen(
                 folders           = folders,
                 labels            = labels,
                 selectedCalendars = selectedCalendars,
-                syncState         = syncState,
                 sidebarState      = sidebarState,
                 onNavigate      = ::navigateTo,
                 onToggleSection = viewModel::toggleSection,

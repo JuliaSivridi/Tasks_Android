@@ -155,6 +155,7 @@ fun FolderScreen(
                         completedChildCount = node.completedChildCount,
                         totalChildCount     = node.childCount + node.completedChildCount,
                         showFolder          = false,
+                        showExpandSlot      = true,
                         onCheckedChange     = { checked -> if (checked) viewModel.completeTask(task.id) },
                         onExpand            = { viewModel.toggleExpanded(task) },
                         onDeadlineChange    = { d, t, isRec, rType, rVal -> viewModel.updateDeadline(task.id, d, t, isRec, rType, rVal) },
