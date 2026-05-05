@@ -212,59 +212,61 @@ fun TaskItem(
         enableDismissFromStartToEnd = enableSwipe && !isCompleted,
         enableDismissFromEndToStart = enableSwipe && !isCompleted,
     ) {
-        Column {
-            // ── Row 1: main task row ──────────────────────────────────────────
-            Row(
-                modifier = Modifier.padding(
-                    start = (depth * 20).dp,
-                    end = 4.dp,
-                    top = 4.dp,
-                    bottom = 2.dp,
-                ),
-                verticalAlignment = Alignment.CenterVertically,
+        // Single row: [expand][checkbox][Column: title + metadata][buttons]
+        // Checkbox is to the left of BOTH title and metadata — same structure as the widget.
+        // The metadata row sits directly under the title with only 2 dp of breathing room,
+        // eliminating the large gap that appeared when the two rows were separate Column children.
+        Row(
+            modifier = Modifier.padding(
+                start = (depth * 20).dp,
+                end   = 4.dp,
+                top   = 4.dp,
+                bottom = 4.dp,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Expand/collapse — 40dp touch target, 24dp visual icon.
+            Box(
+                modifier = if (hasChildren)
+                    Modifier.size(40.dp).clickable { onExpand() }
+                else
+                    Modifier.size(40.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                // Expand/collapse — 40dp touch target, 24dp visual icon.
-                Box(
-                    modifier = if (hasChildren)
-                        Modifier.size(40.dp).clickable { onExpand() }
-                    else
-                        Modifier.size(40.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (hasChildren) {
-                        Icon(
-                            imageVector = if (task.isExpanded) Icons.Outlined.ExpandMore
-                            else Icons.Outlined.ChevronRight,
-                            contentDescription = if (task.isExpanded) "Collapse" else "Expand",
-                            modifier = Modifier.size(24.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                if (hasChildren) {
+                    Icon(
+                        imageVector = if (task.isExpanded) Icons.Outlined.ExpandMore
+                                      else Icons.Outlined.ChevronRight,
+                        contentDescription = if (task.isExpanded) "Collapse" else "Expand",
+                        modifier = Modifier.size(24.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
+            }
 
-                Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
-                TaskCheckbox(
-                    checked = isCompleted || pendingComplete,
-                    onCheckedChange = { newChecked ->
-                        if (newChecked && !isCompleted) {
-                            pendingComplete = true   // show checkmark, delay, then complete
-                        } else {
-                            onCheckedChange(newChecked)
-                        }
-                    },
-                    priority = task.priority,
-                    contentDesc = if (isCompleted) "Mark as incomplete: ${task.title}"
-                                  else "Mark as complete: ${task.title}",
-                )
+            TaskCheckbox(
+                checked = isCompleted || pendingComplete,
+                onCheckedChange = { newChecked ->
+                    if (newChecked && !isCompleted) {
+                        pendingComplete = true   // show checkmark, delay, then complete
+                    } else {
+                        onCheckedChange(newChecked)
+                    }
+                },
+                priority = task.priority,
+                contentDesc = if (isCompleted) "Mark as incomplete: ${task.title}"
+                              else "Mark as complete: ${task.title}",
+            )
 
-                Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(8.dp))
 
+            // ── Title + metadata, aligned together ───────────────────────────
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = task.title,
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { onEdit() },
+                    modifier = Modifier.clickable { onEdit() },
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     style = MaterialTheme.typography.bodyMedium.copy(
@@ -275,134 +277,124 @@ fun TaskItem(
                     ),
                 )
 
-                Spacer(modifier = Modifier.width(4.dp))
+                if (hasMetadata) {
+                    Row(
+                        modifier = Modifier.padding(top = 2.dp, end = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (task.isRecurring) {
+                            Icon(
+                                imageVector = Icons.Outlined.Autorenew,
+                                contentDescription = "Recurring",
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            )
+                        }
 
-                // Action buttons — default IconButton size (48dp touch target, 40dp visual)
-                if (isCompleted) {
-                    IconButton(onClick = { onCheckedChange(false) }) {
-                        Icon(
-                            imageVector = Icons.Outlined.Replay,
-                            contentDescription = "Restore",
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    IconButton(onClick = { showDeleteConfirm = true }) {
-                        Icon(
-                            imageVector = Icons.Outlined.Delete,
-                            contentDescription = "Delete",
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                } else {
-                    // Deadline button
-                    val deadlineTint = if (task.deadlineDate.isNotBlank()) {
-                        deadlineColor(dlStatus)
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                    IconButton(onClick = { showDeadlinePicker = true }) {
-                        Icon(
-                            imageVector = Icons.Outlined.Schedule,
-                            contentDescription = "Set deadline",
-                            modifier = Modifier.size(18.dp),
-                            tint = deadlineTint,
-                        )
-                    }
-                    // More options
-                    IconButton(onClick = { showMobileMenu = true }) {
-                        Icon(
-                            imageVector = Icons.Outlined.MoreHoriz,
-                            contentDescription = "More options",
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
+                        if (dlLabel != null) {
+                            Text(
+                                text = dlLabel,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = deadlineColor(dlStatus),
+                            )
+                        }
 
-            // ── Row 2: metadata chips ─────────────────────────────────────────
-            if (hasMetadata) {
-                Row(
-                    modifier = Modifier.padding(
-                        start = (depth * 20 + 54).dp,
-                        end = 8.dp,
-                        bottom = 4.dp,
-                    ),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (task.isRecurring) {
-                        Icon(
-                            imageVector = Icons.Outlined.Autorenew,
-                            contentDescription = "Recurring",
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        )
-                    }
+                        if (showLabels) {
+                            for (label in taskLabels) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Label,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp),
+                                        tint = label.color.toComposeColor(),
+                                    )
+                                    Text(
+                                        text = label.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = label.color.toComposeColor(),
+                                    )
+                                }
+                            }
+                        }
 
-                    if (dlLabel != null) {
-                        Text(
-                            text = dlLabel,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = deadlineColor(dlStatus),
-                        )
-                    }
-
-                    if (showLabels) {
-                        for (label in taskLabels) {
+                        if (showFolder && folderName != null) {
+                            val fColor = if (folderColor != null) folderColor.toComposeColor()
+                                         else MaterialTheme.colorScheme.onSurfaceVariant
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Icon(
-                                    imageVector = Icons.Outlined.Label,
+                                    imageVector = Icons.Outlined.Folder,
                                     contentDescription = null,
                                     modifier = Modifier.size(14.dp),
-                                    tint = label.color.toComposeColor(),
+                                    tint = fColor,
                                 )
                                 Text(
-                                    text = label.name,
+                                    text = folderName,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = label.color.toComposeColor(),
+                                    color = fColor,
                                 )
                             }
                         }
-                    }
 
-                    if (showFolder && folderName != null) {
-                        val fColor = if (folderColor != null) folderColor.toComposeColor()
-                                     else MaterialTheme.colorScheme.onSurfaceVariant
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Folder,
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = fColor,
-                            )
-                            Text(
-                                text = folderName,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = fColor,
-                            )
+                        if (totalChildCount > 0) {
+                            val remaining = totalChildCount - completedChildCount
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                SubtaskStat(Icons.Outlined.Check, completedChildCount)
+                                SubtaskStat(Icons.Outlined.RadioButtonUnchecked, remaining)
+                                SubtaskStat(Icons.Outlined.FormatListBulleted, totalChildCount)
+                            }
                         }
                     }
+                }
+            }
 
-                    if (totalChildCount > 0) {
-                        val remaining = totalChildCount - completedChildCount
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            SubtaskStat(Icons.Outlined.Check, completedChildCount)
-                            SubtaskStat(Icons.Outlined.RadioButtonUnchecked, remaining)
-                            SubtaskStat(Icons.Outlined.FormatListBulleted, totalChildCount)
-                        }
-                    }
+            Spacer(modifier = Modifier.width(4.dp))
+
+            // ── Action buttons ───────────────────────────────────────────────
+            if (isCompleted) {
+                IconButton(onClick = { onCheckedChange(false) }) {
+                    Icon(
+                        imageVector = Icons.Outlined.Replay,
+                        contentDescription = "Restore",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                IconButton(onClick = { showDeleteConfirm = true }) {
+                    Icon(
+                        imageVector = Icons.Outlined.Delete,
+                        contentDescription = "Delete",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.error,
+                    )
+                }
+            } else {
+                val deadlineTint = if (task.deadlineDate.isNotBlank()) deadlineColor(dlStatus)
+                                   else MaterialTheme.colorScheme.onSurfaceVariant
+                IconButton(onClick = { showDeadlinePicker = true }) {
+                    Icon(
+                        imageVector = Icons.Outlined.Schedule,
+                        contentDescription = "Set deadline",
+                        modifier = Modifier.size(18.dp),
+                        tint = deadlineTint,
+                    )
+                }
+                IconButton(onClick = { showMobileMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Outlined.MoreHoriz,
+                        contentDescription = "More options",
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }

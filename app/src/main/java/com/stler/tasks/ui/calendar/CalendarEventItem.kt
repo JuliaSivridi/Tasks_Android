@@ -41,6 +41,8 @@ import com.stler.tasks.ui.task.deadlineStatus
 import com.stler.tasks.util.toComposeColor
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 /**
@@ -254,12 +256,16 @@ private fun formatEventTime(event: CalendarEvent, today: LocalDate, showDate: Bo
     }
 }
 
+/** Same date-label rules as [deadlineLabel] in TaskColors.kt (without the time suffix). */
 private fun formatDate(dateStr: String, today: LocalDate): String = runCatching {
     val date = LocalDate.parse(dateStr)
-    when (date) {
-        today             -> "Today"
-        today.plusDays(1) -> "Tomorrow"
-        else              -> {
+    val daysUntil = ChronoUnit.DAYS.between(today, date)
+    when {
+        daysUntil == -1L        -> "Yesterday"
+        daysUntil == 0L         -> "Today"
+        daysUntil == 1L         -> "Tomorrow"
+        daysUntil in 2L..6L     -> date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
+        else                    -> {
             val pattern = if (date.year > today.year) "d MMM yyyy" else "d MMM"
             date.format(DateTimeFormatter.ofPattern(pattern, Locale.getDefault()))
         }

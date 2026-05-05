@@ -121,27 +121,34 @@ class AllTasksViewModel @Inject constructor(
             else              -> events.map { ListItem.EventItem(it) }
         }
 
-        val datedItems: List<ListItem> =
-            (datedTasks.map { ListItem.TaskItem(it) } + eventItems)
-                .sortedWith(compareBy(
-                    // Primary: date string (ISO format sorts correctly)
-                    { when (it) {
-                        is ListItem.TaskItem  -> it.task.deadlineDate
-                        is ListItem.EventItem -> it.event.startDate
-                    }},
-                    // Timed items (0) before all-day (1) within the same date
-                    { when (it) {
-                        is ListItem.TaskItem  -> if (it.task.deadlineTime.isBlank()) 1 else 0
-                        is ListItem.EventItem -> if (it.event.startTime.isBlank()) 1 else 0
-                    }},
-                    // Secondary: time string
-                    { when (it) {
-                        is ListItem.TaskItem  -> it.task.deadlineTime
-                        is ListItem.EventItem -> it.event.startTime
-                    }},
-                ))
+        // Priority weight: URGENT=0, IMPORTANT=1, NORMAL=2
+        val priorityOf = { task: Task ->
+            when (task.priority) { Priority.URGENT -> 0; Priority.IMPORTANT -> 1; else -> 2 }
+        }
 
-        datedItems + undatedTasks.map { ListItem.TaskItem(it) }
+        // Dated tasks: primary sort by priority, then date → timed-before-allday → time
+        val datedTaskItems: List<ListItem> = datedTasks
+            .sortedWith(compareBy(
+                { priorityOf(it) },
+                { it.deadlineDate },
+                { if (it.deadlineTime.isBlank()) 1 else 0 },
+                { it.deadlineTime },
+            ))
+            .map { ListItem.TaskItem(it) }
+
+        // Events: no priority — sorted by date → timed-before-allday → time
+        val sortedEventItems: List<ListItem> = eventItems.sortedWith(compareBy(
+            { (it as? ListItem.EventItem)?.event?.startDate ?: "" },
+            { if ((it as? ListItem.EventItem)?.event?.startTime.isNullOrBlank()) 1 else 0 },
+            { (it as? ListItem.EventItem)?.event?.startTime ?: "" },
+        ))
+
+        // Undated tasks: sorted by priority only
+        val undatedTaskItems: List<ListItem> = undatedTasks
+            .sortedWith(compareBy { priorityOf(it) })
+            .map { ListItem.TaskItem(it) }
+
+        datedTaskItems + sortedEventItems + undatedTaskItems
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /** True until the first emission from [filteredItems], then false. */
