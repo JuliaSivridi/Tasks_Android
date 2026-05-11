@@ -171,7 +171,7 @@ fun DeadlinePickerDialog(
                                 // Time chip uses the same status color as the date chip —
                                 // both chips belong to the same deadline.
                                 val timeColor = if (selectedTime.isNotBlank())
-                                    deadlineColor(deadlineStatus(selectedDate))
+                                    deadlineColor(deadlineStatus(selectedDate, selectedTime))
                                 else
                                     MaterialTheme.colorScheme.onSurfaceVariant
                                 Icon(

@@ -53,7 +53,7 @@ fun WidgetEventRow(
 ) {
     val calColor = hexToColorProvider(event.calendarColor) ?: WPrimary
 
-    val dlStatus = deadlineStatus(event.startDate)
+    val dlStatus = deadlineStatus(event.startDate, event.startTime)
     val dlColor  = when (dlStatus) {
         DeadlineStatus.OVERDUE   -> WDeadlineOverdue
         DeadlineStatus.TODAY     -> WDeadlineToday

@@ -210,7 +210,7 @@ fun CalendarEventItem(
                             Text(
                                 text  = timeLabel,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = deadlineColor(deadlineStatus(event.startDate)),
+                                color = deadlineColor(deadlineStatus(event.startDate, event.startTime)),
                             )
                         }
                     }
@@ -245,7 +245,7 @@ fun CalendarEventItem(
                     imageVector        = Icons.Outlined.Schedule,
                     contentDescription = "Edit schedule",
                     modifier           = Modifier.size(18.dp),
-                    tint               = deadlineColor(deadlineStatus(event.startDate)),
+                    tint               = deadlineColor(deadlineStatus(event.startDate, event.startTime)),
                 )
             }
             Box(

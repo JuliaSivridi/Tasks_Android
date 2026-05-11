@@ -11,7 +11,9 @@ import com.stler.tasks.ui.theme.DeadlineTomorrow
 import com.stler.tasks.ui.theme.PriorityImportant
 import com.stler.tasks.ui.theme.PriorityNormal
 import com.stler.tasks.ui.theme.PriorityUrgent
+import java.time.LocalDateTime
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
@@ -35,17 +37,19 @@ enum class DeadlineStatus { NONE, OVERDUE, TODAY, TOMORROW, THIS_WEEK, FUTURE }
  * Parses a "YYYY-MM-DD" string and returns the corresponding [DeadlineStatus]
  * relative to today. Returns [DeadlineStatus.NONE] for blank / unparseable input.
  */
-fun deadlineStatus(deadlineDate: String): DeadlineStatus {
+fun deadlineStatus(deadlineDate: String, deadlineTime: String? = null): DeadlineStatus {
     if (deadlineDate.isBlank()) return DeadlineStatus.NONE
     return try {
         val date = LocalDate.parse(deadlineDate)
-        val today = LocalDate.now()
-        val daysUntil = ChronoUnit.DAYS.between(today, date)
+        val time = if (deadlineTime.isNullOrBlank()) LocalTime.MAX else LocalTime.parse(deadlineTime)
+
+        val deadline = LocalDateTime.of(date, time)
+        val now = LocalDateTime.now()
         when {
-            daysUntil < 0L -> DeadlineStatus.OVERDUE
-            daysUntil == 0L -> DeadlineStatus.TODAY
-            daysUntil == 1L -> DeadlineStatus.TOMORROW
-            daysUntil <= 7L -> DeadlineStatus.THIS_WEEK
+            deadline.isBefore(now) -> DeadlineStatus.OVERDUE
+            deadline.toLocalDate() == now.toLocalDate() -> DeadlineStatus.TODAY
+            deadline.toLocalDate() == now.toLocalDate().plusDays(1) -> DeadlineStatus.TOMORROW
+            deadline.toLocalDate().isBefore(now.toLocalDate().plusDays(8)) -> DeadlineStatus.THIS_WEEK
             else -> DeadlineStatus.FUTURE
         }
     } catch (_: Exception) {

@@ -457,7 +457,7 @@ fun TaskFormSheet(
 
             // ── Deadline ──────────────────────────────────────────────────
             SectionLabel("Deadline")
-            val dlStatus = deadlineStatus(deadlineDate)
+            val dlStatus = deadlineStatus(deadlineDate, deadlineTime)
 
             if (viewModel.formMode == FormMode.EVENT) {
                 // EVENT mode: [ Date ] [ Start time ] — [ End time ]

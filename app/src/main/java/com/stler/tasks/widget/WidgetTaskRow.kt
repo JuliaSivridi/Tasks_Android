@@ -79,7 +79,7 @@ fun WidgetTaskRow(
         Priority.NORMAL    -> WPriorityNormal
     }
 
-    val dlStatus = deadlineStatus(task.deadlineDate)
+    val dlStatus = deadlineStatus(task.deadlineDate, task.deadlineTime)
     val dlLabel  = deadlineLabel(task.deadlineDate, task.deadlineTime, includeDate = !timeOnly)
     val dlColor  = when (dlStatus) {
         DeadlineStatus.OVERDUE   -> WDeadlineOverdue

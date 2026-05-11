@@ -107,7 +107,7 @@ fun TaskItem(
     val isCompleted = task.status == TaskStatus.COMPLETED
 
     // Compute deadline metadata
-    val dlStatus = deadlineStatus(task.deadlineDate)
+    val dlStatus = deadlineStatus(task.deadlineDate, task.deadlineTime)
     val dlLabel = deadlineLabel(task.deadlineDate, task.deadlineTime, includeDate = showDateInDeadline)
 
     // Task labels resolved from IDs
