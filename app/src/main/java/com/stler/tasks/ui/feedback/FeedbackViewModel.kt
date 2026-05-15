@@ -4,10 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.stler.tasks.auth.AuthPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
@@ -27,9 +29,10 @@ class FeedbackViewModel @Inject constructor(
             val email = authPreferences.userEmail.first()
             _sendResult.value = SendResult.Sending
             _sendResult.value = try {
-                post(email = email, message = message)
+                withContext(Dispatchers.IO) { post(email = email, message = message) }
                 SendResult.Success
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "Feedback send failed: ${e.message}", e)
                 SendResult.Error
             }
         }
@@ -49,6 +52,9 @@ class FeedbackViewModel @Inject constructor(
         conn.apply {
             requestMethod = "POST"
             doOutput = true
+            // Don't follow redirect: Apps Script executes on the first POST and returns 302.
+            // Following the redirect converts POST to GET and the script never runs.
+            instanceFollowRedirects = false
             setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
             connectTimeout = 10_000
             readTimeout    = 10_000
@@ -56,9 +62,10 @@ class FeedbackViewModel @Inject constructor(
         conn.outputStream.use { out ->
             OutputStreamWriter(out, "UTF-8").use { it.write(body) }
         }
-        // Google Apps Script always returns 200 even for no-cors; just open the stream to finish the request.
-        conn.inputStream.use { }
+        // 200 or 302 both mean the script received the request successfully.
+        val code = conn.responseCode
         conn.disconnect()
+        if (code !in 200..399) throw Exception("HTTP $code")
     }
 
     sealed interface SendResult {
@@ -68,6 +75,7 @@ class FeedbackViewModel @Inject constructor(
     }
 
     private companion object {
+        const val TAG = "FeedbackViewModel"
         const val FEEDBACK_URL =
             "https://script.google.com/macros/s/AKfycbzpQS6F8V0COZlL6gSBrgUP7YMtzz0djuZp7iNiIcGfmRSjdISvpiz5gzg1bCfGzoBB8A/exec"
     }
