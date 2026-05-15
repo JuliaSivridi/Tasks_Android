@@ -13,6 +13,8 @@ data class CalendarEvent(
     val isAllDay: Boolean,
     /** The series base event ID when this is a recurring instance; blank for one-off events. */
     val recurringEventId: String = "",
+    /** False for calendars where the user only has read access (e.g. holidays, shared calendars). */
+    val isEditable: Boolean = true,
 ) {
     val isRecurring: Boolean get() = recurringEventId.isNotBlank()
 }

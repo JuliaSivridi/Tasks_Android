@@ -25,6 +25,8 @@ data class CalendarEventEntity(
     val isAllDay: Boolean,
     /** Base event ID of the recurring series this instance belongs to, or "" if not recurring. */
     val recurringEventId: String = "",
+    /** False for calendars where the user only has read access (e.g. holidays, shared calendars). */
+    val isEditable: Boolean = true,
 ) {
     fun toDomain() = CalendarEvent(
         id               = id,
@@ -38,5 +40,6 @@ data class CalendarEventEntity(
         endTime          = endTime,
         isAllDay         = isAllDay,
         recurringEventId = recurringEventId,
+        isEditable       = isEditable,
     )
 }

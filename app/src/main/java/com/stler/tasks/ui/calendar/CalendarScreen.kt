@@ -58,10 +58,10 @@ fun CalendarScreen(
                     CalendarEventItem(
                         event          = event,
                         showDate       = false,
-                        onEdit         = { onEditEvent(event) },
-                        onEditSchedule = { onEditEventSchedule(event) },
-                        onDelete       = { viewModel.deleteEvent(event.calendarId, event.id) },
-                        onDeleteSeries = { viewModel.deleteEventSeries(event.calendarId, event.recurringEventId) },
+                        onEdit         = if (event.isEditable) ({ onEditEvent(event) }) else null,
+                        onEditSchedule = if (event.isEditable) ({ onEditEventSchedule(event) }) else null,
+                        onDelete       = if (event.isEditable) ({ viewModel.deleteEvent(event.calendarId, event.id) }) else null,
+                        onDeleteSeries = if (event.isEditable) ({ viewModel.deleteEventSeries(event.calendarId, event.recurringEventId) }) else null,
                     )
                     HorizontalDivider(
                         thickness = 0.5.dp,

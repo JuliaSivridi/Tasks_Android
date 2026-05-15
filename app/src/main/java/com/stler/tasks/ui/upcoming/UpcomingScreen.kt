@@ -316,13 +316,14 @@ fun UpcomingScreen(
                                 )
                             }
                             is ListItem.EventItem -> {
+                                val event = item.event
                                 CalendarEventItem(
-                                    event          = item.event,
+                                    event          = event,
                                     showDate       = false,
-                                    onEdit         = { onEditEvent(item.event) },
-                                    onEditSchedule = { onEditEventSchedule(item.event) },
-                                    onDelete       = { viewModel.deleteEvent(item.event.calendarId, item.event.id) },
-                                    onDeleteSeries = { viewModel.deleteEventSeries(item.event.calendarId, item.event.recurringEventId) },
+                                    onEdit         = if (event.isEditable) ({ onEditEvent(event) }) else null,
+                                    onEditSchedule = if (event.isEditable) ({ onEditEventSchedule(event) }) else null,
+                                    onDelete       = if (event.isEditable) ({ viewModel.deleteEvent(event.calendarId, event.id) }) else null,
+                                    onDeleteSeries = if (event.isEditable) ({ viewModel.deleteEventSeries(event.calendarId, event.recurringEventId) }) else null,
                                 )
                             }
                         }

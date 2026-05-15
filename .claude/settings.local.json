@@ -54,7 +54,10 @@
       "Bash(gradlew assembleDebug --no-daemon)",
       "Bash(./gradlew assembleDebug --no-daemon)",
       "PowerShell($env:JAVA_HOME = \"C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\"; $env:Path = \"$env:JAVA_HOME\\\\bin;$env:Path\"; cd \"D:\\\\Projects\\\\Tasks_android\"; .\\\\gradlew.bat assembleDebug --no-daemon 2>&1 | Select-Object -Last 80)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Read(//d/Projects/Tasks-PWA/src/store/**)",
+      "Read(//d/Projects/Tasks-PWA/src/**)",
+      "Read(//d/Projects/Tasks-PWA/**)"
     ]
   }
 }

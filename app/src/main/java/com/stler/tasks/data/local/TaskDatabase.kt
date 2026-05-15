@@ -23,7 +23,7 @@ import com.stler.tasks.data.local.entity.TaskEntity
         SyncQueueEntity::class,
         CalendarEventEntity::class,
     ],
-    version = 7,   // v7: add calendarId + recurringEventId indices on calendar_events
+    version = 8,   // v8: add isEditable column on calendar_events
     exportSchema = true,
 )
 abstract class TaskDatabase : RoomDatabase() {
@@ -70,6 +70,13 @@ abstract class TaskDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_calendar_events_calendarId ON calendar_events(calendarId)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_calendar_events_recurringEventId ON calendar_events(recurringEventId)")
+            }
+        }
+
+        /** Adds isEditable column (default 1 = editable — safe for existing cached events). */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE calendar_events ADD COLUMN isEditable INTEGER NOT NULL DEFAULT 1")
             }
         }
     }

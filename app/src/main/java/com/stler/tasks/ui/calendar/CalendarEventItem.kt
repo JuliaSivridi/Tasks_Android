@@ -259,6 +259,10 @@ fun CalendarEventItem(
                     tint               = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+        } else {
+            // Reserve the same 80dp that action buttons occupy so text aligns
+            // consistently in mixed lists alongside editable events.
+            Spacer(modifier = Modifier.width(80.dp))
         }
     }
 }

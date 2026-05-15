@@ -19,6 +19,7 @@ object CalendarMapper {
         calendarId: String,
         calendarName: String,
         calendarColor: String,
+        accessRole: String = "owner",
     ): CalendarEventEntity? {
         val id = dto.id.ifBlank { return null }
         val title = dto.summary?.ifBlank { "(No title)" } ?: "(No title)"
@@ -56,6 +57,7 @@ object CalendarMapper {
             endTime          = endTime,
             isAllDay         = isAllDay,
             recurringEventId = dto.recurringEventId ?: "",
+            isEditable       = accessRole == "owner" || accessRole == "writer",
         )
     }
 

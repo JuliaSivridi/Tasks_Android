@@ -26,7 +26,8 @@ class CalendarRepositoryImpl @Inject constructor(
     // ── In-memory calendar metadata cache ────────────────────────────────────
     // Avoids an extra listCalendars() call on every createEvent / updateEvent / moveEvent.
     // TTL: 5 minutes. Populated also by fetchEventsAndSave() which already fetches the list.
-    private var calendarMetaCache: Map<String, Pair<String, String>> = emptyMap()
+    private data class CalMeta(val name: String, val color: String, val accessRole: String = "owner")
+    private var calendarMetaCache: Map<String, CalMeta> = emptyMap()
     private var calendarMetaCacheTime: Long = 0L
 
     override fun getAllEvents(): Flow<List<CalendarEvent>> =
@@ -39,7 +40,7 @@ class CalendarRepositoryImpl @Inject constructor(
     ): Result<CalendarEvent> = runCatching {
         val dto  = calendarApi.moveEvent(fromCalendarId, eventId, toCalendarId)
         val meta = calendarMeta(toCalendarId)
-        val entity = CalendarMapper.dtoToEntity(dto, toCalendarId, meta.first, meta.second)
+        val entity = CalendarMapper.dtoToEntity(dto, toCalendarId, meta.name, meta.color, meta.accessRole)
         // Atomically remove all Room entries for this event/series from the old calendar
         // and insert the moved entity — @Transaction prevents a window with zero events.
         calendarEventDao.deleteSeriesAndReplace(eventId, entity)
@@ -93,12 +94,12 @@ class CalendarRepositoryImpl @Inject constructor(
         val timeMin = CalendarMapper.toRfc3339(from)
         val timeMax = CalendarMapper.toRfc3339(to.plusDays(1))
 
-        // Fetch calendar metadata (name + color).
+        // Fetch calendar metadata (name + color + accessRole).
         // Auth errors (401) propagate to the caller (SyncWorker) so the worker retries.
         // Per-calendar fetch errors are best-effort (logged, not re-thrown).
-        val calendarMetaMap = mutableMapOf<String, Pair<String, String>>()
+        val calendarMetaMap = mutableMapOf<String, CalMeta>()
         calendarApi.listCalendars().items.forEach { entry ->
-            calendarMetaMap[entry.id] = entry.summary to entry.backgroundColor
+            calendarMetaMap[entry.id] = CalMeta(entry.summary, entry.backgroundColor, entry.accessRole)
         }
         // Refresh the metadata cache while we have fresh data
         calendarMetaCache = calendarMetaMap.toMap()
@@ -106,15 +107,15 @@ class CalendarRepositoryImpl @Inject constructor(
 
         for (calendarId in calendarIds) {
             runCatching {
-                val (calName, calColor) = calendarMetaMap[calendarId] ?: (calendarId to "#4285f4")
+                val meta = calendarMetaMap[calendarId] ?: CalMeta(calendarId, "#4285f4")
                 val response = calendarApi.listEvents(calendarId, timeMin, timeMax)
                 val entities = response.items.mapNotNull { dto ->
-                    CalendarMapper.dtoToEntity(dto, calendarId, calName, calColor)
+                    CalendarMapper.dtoToEntity(dto, calendarId, meta.name, meta.color, meta.accessRole)
                 }
                 // Atomically replace: delete old rows AFTER fetch succeeds to avoid
                 // losing data if the network call fails mid-loop.
                 calendarEventDao.deleteAndReplace(calendarId, entities)
-                Log.d(TAG, "Fetched ${entities.size} events for calendar '$calName'")
+                Log.d(TAG, "Fetched ${entities.size} events for calendar '${meta.name}'")
             }.onFailure { e ->
                 Log.e(TAG, "fetchEventsAndSave failed for $calendarId: ${e.message}", e)
             }
@@ -130,8 +131,9 @@ class CalendarRepositoryImpl @Inject constructor(
         val entity = CalendarMapper.dtoToEntity(
             dto           = dto,
             calendarId    = calendarId,
-            calendarName  = meta.first,
-            calendarColor = meta.second,
+            calendarName  = meta.name,
+            calendarColor = meta.color,
+            accessRole    = meta.accessRole,
         ) ?: throw IllegalStateException("Failed to map created event")
         // Upsert first instance immediately for instant UI feedback
         calendarEventDao.upsertAll(listOf(entity))
@@ -155,8 +157,9 @@ class CalendarRepositoryImpl @Inject constructor(
         val entity = CalendarMapper.dtoToEntity(
             dto           = dto,
             calendarId    = calendarId,
-            calendarName  = meta.first,
-            calendarColor = meta.second,
+            calendarName  = meta.name,
+            calendarColor = meta.color,
+            accessRole    = meta.accessRole,
         ) ?: throw IllegalStateException("Failed to map updated event")
         calendarEventDao.upsertAll(listOf(entity))
         // Re-fetch to get all updated recurring instances
@@ -194,7 +197,7 @@ class CalendarRepositoryImpl @Inject constructor(
     ): Result<CalendarEventWithRRule> = runCatching {
         val dto  = calendarApi.getEvent(calendarId, seriesId)
         val meta = calendarMeta(calendarId)
-        val entity = CalendarMapper.dtoToEntity(dto, calendarId, meta.first, meta.second)
+        val entity = CalendarMapper.dtoToEntity(dto, calendarId, meta.name, meta.color, meta.accessRole)
             ?: throw IllegalStateException("Failed to map base event")
         val rrule = dto.recurrence?.firstOrNull { it.startsWith("RRULE:") } ?: ""
         // End time from the base event's end.dateTime
@@ -215,12 +218,12 @@ class CalendarRepositoryImpl @Inject constructor(
     // ── Private helpers ───────────────────────────────────────────────────────
 
     /**
-     * Returns display name + color for [calendarId].
+     * Returns display name + color + accessRole for [calendarId].
      * Uses the in-memory cache (TTL 5 min); falls back to a fresh listCalendars() call
      * only when the cache is stale or empty — avoids one extra API round-trip per
      * event mutation (create / update / move).
      */
-    private suspend fun calendarMeta(calendarId: String): Pair<String, String> {
+    private suspend fun calendarMeta(calendarId: String): CalMeta {
         val now = System.currentTimeMillis()
         if (now - calendarMetaCacheTime < CACHE_TTL_MS) {
             calendarMetaCache[calendarId]?.let { return it }
@@ -228,10 +231,10 @@ class CalendarRepositoryImpl @Inject constructor(
         // Cache miss or stale — fetch and refresh
         return runCatching {
             val items = calendarApi.listCalendars().items
-            calendarMetaCache = items.associate { it.id to (it.summary to it.backgroundColor) }
+            calendarMetaCache = items.associate { it.id to CalMeta(it.summary, it.backgroundColor, it.accessRole) }
             calendarMetaCacheTime = System.currentTimeMillis()
-            calendarMetaCache[calendarId] ?: (calendarId to "#4285f4")
-        }.getOrDefault(calendarId to "#4285f4")
+            calendarMetaCache[calendarId] ?: CalMeta(calendarId, "#4285f4")
+        }.getOrDefault(CalMeta(calendarId, "#4285f4"))
     }
 
     companion object {

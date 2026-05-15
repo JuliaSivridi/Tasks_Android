@@ -15,7 +15,9 @@ import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.CloudUpload
+import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.outlined.Message
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.Badge
@@ -53,6 +55,8 @@ fun TasksTopAppBar(
     onSyncClick: () -> Unit,
     onSignOut: () -> Unit,
     onNavigateToSettings: () -> Unit = {},
+    onNavigateToHelp: () -> Unit = {},
+    onNavigateToFeedback: () -> Unit = {},
 ) {
     var showUserMenu by remember { mutableStateOf(false) }
 
@@ -149,6 +153,20 @@ fun TasksTopAppBar(
                         onClick = { showUserMenu = false; onNavigateToSettings() },
                         leadingIcon = {
                             Icon(Icons.Outlined.Settings, contentDescription = null)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Help") },
+                        onClick = { showUserMenu = false; onNavigateToHelp() },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.HelpOutline, contentDescription = null)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Feedback") },
+                        onClick = { showUserMenu = false; onNavigateToFeedback() },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Message, contentDescription = null)
                         },
                     )
                     DropdownMenuItem(

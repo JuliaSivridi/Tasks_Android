@@ -160,13 +160,14 @@ fun AllTasksScreen(
                             )
                         }
                         is ListItem.EventItem -> {
+                            val event = item.event
                             CalendarEventItem(
-                                event           = item.event,
-                                showDate        = true,
-                                onEdit          = { onEditEvent(item.event) },
-                                onEditSchedule  = { onEditEventSchedule(item.event) },
-                                onDelete        = { viewModel.deleteEvent(item.event.calendarId, item.event.id) },
-                                onDeleteSeries  = { viewModel.deleteEventSeries(item.event.calendarId, item.event.recurringEventId) },
+                                event          = event,
+                                showDate       = true,
+                                onEdit         = if (event.isEditable) ({ onEditEvent(event) }) else null,
+                                onEditSchedule = if (event.isEditable) ({ onEditEventSchedule(event) }) else null,
+                                onDelete       = if (event.isEditable) ({ viewModel.deleteEvent(event.calendarId, event.id) }) else null,
+                                onDeleteSeries = if (event.isEditable) ({ viewModel.deleteEventSeries(event.calendarId, event.recurringEventId) }) else null,
                             )
                         }
                     }

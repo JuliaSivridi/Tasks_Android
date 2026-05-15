@@ -43,6 +43,8 @@ import com.stler.tasks.ui.priority.PriorityScreen
 import com.stler.tasks.ui.task.TaskFormResult
 import com.stler.tasks.ui.task.TaskFormSheet
 import com.stler.tasks.ui.task.TaskFormViewModel
+import com.stler.tasks.ui.feedback.FeedbackScreen
+import com.stler.tasks.ui.help.HelpScreen
 import com.stler.tasks.ui.settings.SettingsScreen
 import com.stler.tasks.ui.upcoming.UpcomingScreen
 import com.stler.tasks.ui.util.LocalSnackbarHostState
@@ -68,10 +70,21 @@ fun MainScreen(
     viewModel: MainViewModel = hiltViewModel(),
     formViewModel: TaskFormViewModel = hiltViewModel(),
 ) {
-    // ── Settings overlay — shown instead of the main content when true ───────
+    // ── Overlay screens — shown instead of the main content when true ────────
     var showSettings by remember { mutableStateOf(false) }
+    var showHelp     by remember { mutableStateOf(false) }
+    var showFeedback by remember { mutableStateOf(false) }
+
     if (showSettings) {
         SettingsScreen(onNavigateBack = { showSettings = false })
+        return
+    }
+    if (showHelp) {
+        HelpScreen(onNavigateBack = { showHelp = false })
+        return
+    }
+    if (showFeedback) {
+        FeedbackScreen(onNavigateBack = { showFeedback = false })
         return
     }
 
@@ -294,6 +307,8 @@ fun MainScreen(
                     onSyncClick          = viewModel::triggerSync,
                     onSignOut            = onSignOut,
                     onNavigateToSettings = { showSettings = true },
+                    onNavigateToHelp     = { showHelp = true },
+                    onNavigateToFeedback = { showFeedback = true },
                 )
             },
             floatingActionButton = {
