@@ -296,9 +296,11 @@ class GoogleAuthRepository @Inject constructor(
                 {
                   "properties": { "title": "db_tasks" },
                   "sheets": [
-                    { "properties": { "title": "tasks",   "index": 0 } },
-                    { "properties": { "title": "folders", "index": 1 } },
-                    { "properties": { "title": "labels",  "index": 2 } }
+                    { "properties": { "title": "tasks",    "index": 0 } },
+                    { "properties": { "title": "folders",  "index": 1 } },
+                    { "properties": { "title": "labels",   "index": 2 } },
+                    { "properties": { "title": "settings", "index": 3 } },
+                    { "properties": { "title": "meta",     "index": 4 } }
                   ]
                 }
             """.trimIndent()
