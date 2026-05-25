@@ -18,6 +18,8 @@ import com.stler.tasks.data.local.dao.LabelDao
 import com.stler.tasks.data.local.dao.SyncQueueDao
 import com.stler.tasks.data.local.dao.TaskDao
 import com.stler.tasks.data.local.entity.FolderEntity
+import com.stler.tasks.data.local.entity.LabelEntity
+import com.stler.tasks.data.local.entity.TaskEntity
 import com.stler.tasks.data.remote.TokenProvider
 import com.stler.tasks.data.remote.dto.DriveFile
 import com.stler.tasks.data.remote.dto.DriveFilesResponse
@@ -35,6 +37,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.time.Instant
+import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -317,7 +320,9 @@ class GoogleAuthRepository @Inject constructor(
                 .getString("spreadsheetId")
             Log.i(TAG, "Created spreadsheet: $spreadsheetId")
 
-            // ── Step 2: write headers + seed Inbox folder ─────────────────────
+            // ── Step 2: write headers + seed all onboarding data ─────────────
+            val now      = Instant.now().toString()
+            val deadline = LocalDate.now().plusDays(5).toString()
             val batchBody = """
                 {
                   "valueInputOption": "RAW",
@@ -330,15 +335,31 @@ class GoogleAuthRepository @Inject constructor(
                                   "completed_at","is_expanded"]]
                     },
                     {
-                      "range": "folders!A1:D2",
+                      "range": "tasks!A2:Q6",
                       "values": [
-                        ["id","name","color","sort_order"],
-                        ["fld-inbox","Inbox","#6b7280","0"]
+                        ["tsk-seed-1","","fld-work","Make important call","pending","important","","","FALSE","","1","","1","$now","$now","","TRUE"],
+                        ["tsk-seed-2","","fld-work","Review project draft","pending","normal","","","FALSE","","1","lbl-review","2","$now","$now","","TRUE"],
+                        ["tsk-seed-3","","fld-personal","Buy groceries","pending","urgent","","","FALSE","","1","","3","$now","$now","","TRUE"],
+                        ["tsk-seed-4","","fld-personal","Schedule dentist appointment","pending","normal","$deadline","","FALSE","","1","","4","$now","$now","","TRUE"],
+                        ["tsk-seed-5","","fld-inbox","Plan the week","pending","normal","","","FALSE","","1","lbl-idea","5","$now","$now","","TRUE"]
                       ]
                     },
                     {
-                      "range": "labels!A1:D1",
-                      "values": [["id","name","color","sort_order"]]
+                      "range": "folders!A1:D4",
+                      "values": [
+                        ["id","name","color","sort_order"],
+                        ["fld-inbox","Inbox","#6b7280","0"],
+                        ["fld-work","Work","#4A90D9","1"],
+                        ["fld-personal","Personal","#7ED321","2"]
+                      ]
+                    },
+                    {
+                      "range": "labels!A1:D3",
+                      "values": [
+                        ["id","name","color","sort_order"],
+                        ["lbl-review","Review","#F5A623","1"],
+                        ["lbl-idea","Idea","#9B59B6","2"]
+                      ]
                     }
                   ]
                 }
@@ -352,9 +373,21 @@ class GoogleAuthRepository @Inject constructor(
                     .build()
             ).execute()
 
-            // ── Step 3: seed Inbox to Room so the app is usable immediately ───
-            folderDao.upsert(FolderEntity(id = "fld-inbox", name = "Inbox", color = "#6b7280", sortOrder = 0))
-            Log.i(TAG, "Seeded Inbox folder to Room")
+            // ── Step 3: seed all onboarding data to Room so the app is usable immediately ───
+            folderDao.upsert(FolderEntity(id = "fld-inbox",    name = "Inbox",    color = "#6b7280", sortOrder = 0))
+            folderDao.upsert(FolderEntity(id = "fld-work",     name = "Work",     color = "#4A90D9", sortOrder = 1))
+            folderDao.upsert(FolderEntity(id = "fld-personal", name = "Personal", color = "#7ED321", sortOrder = 2))
+            labelDao.upsert(LabelEntity(id = "lbl-review", name = "Review", color = "#F5A623", sortOrder = 1))
+            labelDao.upsert(LabelEntity(id = "lbl-idea",   name = "Idea",   color = "#9B59B6", sortOrder = 2))
+            val seedTasks = listOf(
+                TaskEntity(id = "tsk-seed-1", folderId = "fld-work",     title = "Make important call",           priority = "important", sortOrder = 1, isExpanded = true, createdAt = now, updatedAt = now),
+                TaskEntity(id = "tsk-seed-2", folderId = "fld-work",     title = "Review project draft",          priority = "normal",    sortOrder = 2, labels = "lbl-review", isExpanded = true, createdAt = now, updatedAt = now),
+                TaskEntity(id = "tsk-seed-3", folderId = "fld-personal", title = "Buy groceries",                 priority = "urgent",    sortOrder = 3, isExpanded = true, createdAt = now, updatedAt = now),
+                TaskEntity(id = "tsk-seed-4", folderId = "fld-personal", title = "Schedule dentist appointment",  priority = "normal",    sortOrder = 4, deadlineDate = deadline, isExpanded = true, createdAt = now, updatedAt = now),
+                TaskEntity(id = "tsk-seed-5", folderId = "fld-inbox",    title = "Plan the week",                 priority = "normal",    sortOrder = 5, labels = "lbl-idea", isExpanded = true, createdAt = now, updatedAt = now),
+            )
+            seedTasks.forEach { taskDao.upsert(it) }
+            Log.i(TAG, "Seeded onboarding data to Sheets and Room")
 
             spreadsheetId
         }.onFailure { e ->
