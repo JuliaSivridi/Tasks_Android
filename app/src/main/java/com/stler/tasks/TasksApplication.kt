@@ -23,9 +23,11 @@ class TasksApplication : Application(), Configuration.Provider {
         container = AppContainer(this)
         // Schedule the 30-minute periodic sync
         syncManager.initialize()
-        // Re-register Glance sessions after process restart so pending SessionWorker
-        // jobs scheduled by WorkManager can find the sessions and render widget content.
-        widgetRefresher.refreshAll()
+        // Re-register Glance sessions immediately so stale SessionWorker jobs
+        // (persisted by WorkManager across process kill) can find the sessions.
+        // Must use refreshOnStartup() — not refreshAll() — because the debounced
+        // path (400 ms delay) loses the race: stale workers fire at ~1 s after start.
+        widgetRefresher.refreshOnStartup()
     }
 
     /** Hilt injects its WorkerFactory so @HiltWorker classes get their deps. */

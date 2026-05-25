@@ -48,6 +48,19 @@ class WidgetRefresher @Inject constructor(
         }
     }
 
+    /**
+     * Register Glance sessions immediately (no debounce).
+     *
+     * Call once from Application.onCreate() to ensure sessions are in
+     * SessionManagerImpl before WorkManager replays any stale SessionWorker
+     * jobs that were persisted across a process kill.  Those jobs fire at
+     * ~1 s after process start; without this, the debounced refreshAll()
+     * (400 ms delay) races against them and loses by a few dozen ms.
+     */
+    fun refreshOnStartup() {
+        scope.launch { doRefresh() }
+    }
+
     /** Schedule a widget refresh. Calls within 400 ms are coalesced into one. */
     fun refreshAll() {
         trigger.tryEmit(Unit)
