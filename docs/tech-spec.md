@@ -1,6 +1,6 @@
 # Stler Tasks Android — Technical Specification
 
-**Version:** 2.1 (May 2026)  
+**Version:** 2.2 (May 2026)  
 **Repository:** github.com/JuliaSivridi/Tasks_Android  
 **Stack:** Kotlin · Jetpack Compose · Room · Hilt · WorkManager · Glance · Google Sheets API v4 · Google Calendar API v3  
 **Min SDK:** 26 (Android 8.0) · **Target SDK:** 36
@@ -171,7 +171,7 @@ com.stler.tasks/
 
 ## 5. Data Model
 
-### Task
+### 5.1 Task
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -200,7 +200,7 @@ com.stler.tasks/
 - Deleting a task sets `status = "deleted"` and recursively sets descendants to `"deleted"` (soft delete)
 - `deleted` tasks are filtered from all DAO queries (queries check `status = 'pending'` or `status = 'completed'`)
 
-### Folder
+### 5.2 Folder
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -213,7 +213,7 @@ com.stler.tasks/
 - `isInbox = id == "fld-inbox"` — the Inbox folder always appears first in `FolderDao.observeAll()` (SQL `CASE id WHEN 'fld-inbox' THEN 0 ELSE 1 END`)
 - Deleting a folder moves all non-deleted tasks to `fld-inbox` in a single batch
 
-### Label
+### 5.3 Label
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -222,7 +222,7 @@ com.stler.tasks/
 | color | String | — | Hex color string |
 | sortOrder | Int | `0` | Column D in labels sheet |
 
-### CalendarEvent
+### 5.4 CalendarEvent
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -241,7 +241,19 @@ com.stler.tasks/
 
 **Computed:** `isRecurring = recurringEventId.isNotBlank()`
 
-### SyncQueueEntity
+### 5.5 CalendarItem
+
+| Field | Type | Description |
+|---|---|---|
+| id | String | Google Calendar ID |
+| summary | String | Display name |
+| color | String | Hex color string |
+| isSelected | Boolean | Whether the user has enabled this calendar |
+| accessRole | String | `"owner"`, `"writer"`, `"reader"`, `"freeBusyReader"` |
+
+Used in Settings to display the calendar picker list and to determine `isEditable` on events (`owner` or `writer` → editable).
+
+### 5.6 SyncQueue Entry
 
 | Field | Type | Default | Description |
 |---|---|---|---|
@@ -252,14 +264,12 @@ com.stler.tasks/
 | payloadJson | String | — | Gson-serialized entity; empty for DELETE |
 | retryCount | Int | `0` | Incremented on failure; items with `retryCount >= 5` are deleted |
 
----
-
-## 6. Database Schema
+### 5.7 Room Database (version 8)
 
 **Database name:** `tasks.db`  
-**Room version:** 8  
+**Room version:** 8
 
-### Table: `tasks`
+#### Table: `tasks`
 
 | Column | SQLite Type | Notes |
 |---|---|---|
@@ -283,7 +293,7 @@ com.stler.tasks/
 
 **Indices:** `parentId`, `folderId`, `status`, `deadlineDate`
 
-### Table: `folders`
+#### Table: `folders`
 
 | Column | SQLite Type | Notes |
 |---|---|---|
@@ -292,7 +302,7 @@ com.stler.tasks/
 | color | TEXT NOT NULL | hex |
 | sortOrder | INTEGER NOT NULL | Default 0 |
 
-### Table: `labels`
+#### Table: `labels`
 
 | Column | SQLite Type | Notes |
 |---|---|---|
@@ -301,7 +311,7 @@ com.stler.tasks/
 | color | TEXT NOT NULL | hex |
 | sortOrder | INTEGER NOT NULL | Default 0 |
 
-### Table: `sync_queue`
+#### Table: `sync_queue`
 
 | Column | SQLite Type | Notes |
 |---|---|---|
@@ -312,7 +322,7 @@ com.stler.tasks/
 | payloadJson | TEXT NOT NULL | |
 | retryCount | INTEGER NOT NULL | Default 0 |
 
-### Table: `calendar_events`
+#### Table: `calendar_events`
 
 | Column | SQLite Type | Notes |
 |---|---|---|
@@ -331,7 +341,7 @@ com.stler.tasks/
 
 **Indices:** `calendarId`, `recurringEventId`
 
-### Migration History
+#### Migration History
 
 | From→To | Change |
 |---|---|
@@ -342,13 +352,11 @@ com.stler.tasks/
 
 `fallbackToDestructiveMigration(dropAllTables = true)` is set as a safety net for unexpected version gaps.
 
----
-
-## 7. Google Sheets Schema
+### 5.8 Google Sheets Schema
 
 All reads use `valueRenderOption = UNFORMATTED_VALUE`. All writes use `valueInputOption = RAW`. Rows with a blank `id` column (col A) are skipped by `SheetsMapper.rowToTask()` / `rowToFolder()` / `rowToLabel()`.
 
-### Sheet: `tasks` (columns A–Q)
+#### Sheet: `tasks` (columns A–Q)
 
 | Col | Header | Format / Values |
 |---|---|---|
@@ -370,7 +378,7 @@ All reads use `valueRenderOption = UNFORMATTED_VALUE`. All writes use `valueInpu
 | P | completed_at | ISO 8601 instant string or `""` |
 | Q | is_expanded | `"TRUE"` or `"FALSE"` |
 
-### Sheet: `folders` (columns A–D)
+#### Sheet: `folders` (columns A–D)
 
 | Col | Header | Format |
 |---|---|---|
@@ -379,7 +387,7 @@ All reads use `valueRenderOption = UNFORMATTED_VALUE`. All writes use `valueInpu
 | C | color | Hex string e.g. `"#f97316"` |
 | D | sort_order | Integer string |
 
-### Sheet: `labels` (columns A–D)
+#### Sheet: `labels` (columns A–D)
 
 | Col | Header | Format |
 |---|---|---|
@@ -388,11 +396,11 @@ All reads use `valueRenderOption = UNFORMATTED_VALUE`. All writes use `valueInpu
 | C | color | Hex string |
 | D | sort_order | Integer string |
 
-### Sheet: `settings` (index 3)
+#### Sheet: `settings` (index 3)
 
 Present in spreadsheet structure (created at onboarding); not currently read/written by the Android app.
 
-### Sheet: `meta` (index 4)
+#### Sheet: `meta` (index 4)
 
 Present in spreadsheet structure (created at onboarding); not currently read/written by the Android app.
 
@@ -400,9 +408,15 @@ Present in spreadsheet structure (created at onboarding); not currently read/wri
 
 ---
 
-## 8. Authentication & First-Launch Setup
+## 6. Authentication & First-Launch Setup
 
-### Auth Flow (numbered steps)
+### 6.1 OAuth Scopes
+
+- `https://www.googleapis.com/auth/spreadsheets` — full Sheets read/write + create
+- `https://www.googleapis.com/auth/drive.metadata.readonly` — search Drive for existing spreadsheet
+- `https://www.googleapis.com/auth/calendar` — read/write Google Calendar events
+
+### 6.2 Sign-In Flow
 
 1. **`AuthViewModel` init** — reads `GoogleAuthRepository.isSignedIn` (one-shot `first()`). If already signed in, emits `AuthUiState.SignedIn`; otherwise emits `AuthUiState.SignedOut`.
 2. **User taps "Sign in with Google"** → `AuthViewModel.startSignIn(context)` → `GoogleAuthRepository.signIn(context)`.
@@ -411,44 +425,59 @@ Present in spreadsheet structure (created at onboarding); not currently read/wri
 5. **If `hasResolution()` is true** — user has not yet approved the scopes. User info is saved to DataStore (without token/spreadsheetId). `AuthUiState.NeedsAuthorization(pendingIntent)` is emitted. `AuthScreen` launches the intent via `ActivityResultContracts.StartIntentSenderForResult`. On `RESULT_OK`, `AuthViewModel.finalizeAuth(intent)` is called.
 6. **If no resolution needed** (scopes already approved) — `accessToken` is extracted directly. Proceeds to step 7.
 7. **`completeSignIn(token, credential)` / `finalizeAuth(intent)`** — calls `findOrCreateSpreadsheetWithName(token)` → Drive API search. If `db_tasks` found, returns its ID. If not found, calls `createSpreadsheet(token)`.
-8. **`createSpreadsheet(token)`** — via raw OkHttp (avoids circular Hilt dependency):
-   - POST to `https://sheets.googleapis.com/v4/spreadsheets` with body creating 5 sheets: `tasks` (index 0), `folders` (index 1), `labels` (index 2), `settings` (index 3), `meta` (index 4).
-   - POST to `.../values:batchUpdate` writing: header row for tasks (A1:Q1), header row for folders, header row for labels, plus onboarding seed data (see below).
-   - Upserts seed data to Room so the app is immediately usable without waiting for sync.
-9. **`authPreferences.saveAll()`** — persists `accessToken`, `tokenExpiry` (now + 1 hour), `spreadsheetId`, `spreadsheetName`, `userEmail`, `userName`, `userAvatarUrl`.
-10. `AuthUiState.SignedIn` is emitted → `MainActivity` shows `MainScreen`.
+8. **`authPreferences.saveAll()`** — persists `accessToken`, `tokenExpiry` (now + 1 hour), `spreadsheetId`, `spreadsheetName`, `userEmail`, `userName`, `userAvatarUrl`.
+9. `AuthUiState.SignedIn` is emitted → `MainActivity` shows `MainScreen`.
 
-### Onboarding Seed Data
+### 6.3 First-Launch Spreadsheet Creation
 
-Created in both Sheets and Room when a new `db_tasks` spreadsheet is created:
+`createSpreadsheet(token)` — via raw OkHttp (avoids circular Hilt dependency):
+
+1. POST to `https://sheets.googleapis.com/v4/spreadsheets` — creates spreadsheet with **5 named sheets**: `tasks` (index 0), `folders` (index 1), `labels` (index 2), `settings` (index 3), `meta` (index 4).
+2. POST to `.../values:batchUpdate` — writes header rows for tasks, folders, labels **plus full onboarding seed data** (see §6.4).
+3. Upserts all seed folders, labels, and tasks to Room so the app is immediately usable without waiting for the first sync.
+
+### 6.4 Onboarding Seed Data
+
+Created in both Sheets and Room the first time `db_tasks` is created. Matches the PWA seed exactly.
 
 **Folders:**
-- `fld-inbox` / Inbox / `#6b7280` / order 0
-- `fld-work` / Work / `#4A90D9` / order 1
-- `fld-personal` / Personal / `#7ED321` / order 2
+
+| ID | Name | Color | Order |
+|---|---|---|---|
+| `fld-inbox` | Inbox | `#6b7280` | 0 |
+| `fld-work` | Work | `#4A90D9` | 1 |
+| `fld-personal` | Personal | `#7ED321` | 2 |
 
 **Labels:**
-- `lbl-review` / Review / `#F5A623` / order 1
-- `lbl-idea` / Idea / `#9B59B6` / order 2
+
+| ID | Name | Color | Order |
+|---|---|---|---|
+| `lbl-review` | Review | `#F5A623` | 1 |
+| `lbl-idea` | Idea | `#9B59B6` | 2 |
 
 **Tasks (5):**
-- `tsk-seed-1` in Work — "Make important call" — priority: important
-- `tsk-seed-2` in Work — "Review project draft" — priority: normal — label: `lbl-review`
-- `tsk-seed-3` in Personal — "Buy groceries" — priority: urgent
-- `tsk-seed-4` in Personal — "Schedule dentist appointment" — priority: normal — deadline: now + 5 days
-- `tsk-seed-5` in Inbox — "Plan the week" — priority: normal — label: `lbl-idea`
 
-### Token Refresh
+| ID | Folder | Title | Priority | Labels | Deadline |
+|---|---|---|---|---|---|
+| `tsk-seed-1` | Work | Make important call | important | — | — |
+| `tsk-seed-2` | Work | Review project draft | normal | `lbl-review` | — |
+| `tsk-seed-3` | Personal | Buy groceries | urgent | — | — |
+| `tsk-seed-4` | Personal | Schedule dentist appointment | normal | — | now + 5 days |
+| `tsk-seed-5` | Inbox | Plan the week | normal | `lbl-idea` | — |
+
+All seed tasks: `status=pending`, `isExpanded=true`, `isRecurring=false`, `createdAt=updatedAt=Instant.now()`. Deadline format: `YYYY-MM-DD` via `LocalDate.now().plusDays(5)`.
+
+### 6.5 Token Refresh
 
 `isExpiredSoon(expiry)` returns true if `Instant.now()` is within 300 seconds of the stored expiry. Refresh is done via `Identity.getAuthorizationClient(context).authorize(buildAuthRequest())` in `refreshToken()`. If `hasResolution()` is true (interactive re-auth needed), returns null. On success, saves new token with new 1-hour expiry. The OkHttp `Authenticator` calls `refreshToken()` once on 401.
 
-### Sign-Out
+### 6.6 Sign-Out
 
 `GoogleAuthRepository.signOut()`: clears all DataStore prefs, then deletes all rows from `tasks`, `folders`, `labels`, and `sync_queue` tables. Calendar events are NOT explicitly cleared (they are pure cache and contain no user-generated data).
 
 ---
 
-## 9. Synchronization
+## 7. Synchronization
 
 ### SyncState
 
@@ -464,6 +493,8 @@ sealed class SyncState {
 - `WorkManager.getWorkInfosForUniqueWorkFlow(PERIODIC_WORK_NAME)` — running state
 - `WorkManager.getWorkInfosForUniqueWorkFlow(MANUAL_WORK_NAME)` — running state
 - `syncQueueDao.observePendingCount()` — pending item count
+
+Displayed in `TasksTopAppBar` as a sync icon button: `Idle` → `CloudDone` icon; `Pending(count)` → `CloudUpload` with muted counter badge (transparent container, no default red); `Syncing` → `Sync` icon with infinite rotation animation (1 s, LinearEasing).
 
 ### Periodic Sync
 
@@ -497,6 +528,32 @@ sealed class SyncState {
 
 On exception: `Result.retry()` for `runAttemptCount < 4`, else `Result.failure()`.
 
+### Calendar Event Write Path
+
+All methods live in `CalendarRepositoryImpl`. Mutations bypass the SyncQueue entirely and go directly to the Calendar API.
+
+**`createEvent(calendarId, request)`**
+1. POST to Calendar API → receives dto.
+2. Fetch `calendarMeta` (5-min in-memory cache; refreshed from `listCalendars()` if stale) to resolve calendar name + color.
+3. Map dto → entity via `CalendarMapper.dtoToEntity`.
+4. Upsert entity to Room immediately (instant UI feedback).
+5. If `request.recurrence` is non-empty: re-fetch full calendar (today..today+366) to pick up all recurring instances.
+6. Return the mapped domain event.
+
+**`updateEvent(calendarId, eventId, request)`**: PUT to Calendar API → re-fetch `calendarMeta` → upsert updated entity to Room.
+
+**`deleteEvent(calendarId, eventId)`**: DELETE to Calendar API (treats 410 Gone as success) → delete entity from Room.
+
+**`deleteSeries(calendarId, recurringEventId)`**: calls `deleteEvent(calendarId, recurringEventId)` on the base event → deletes all instances with matching `recurringEventId` from Room.
+
+**`calendarMeta` cache**: 5-minute TTL in-memory cache mapping `calendarId → (calendarName, calendarColor)`. Used after create/update/move to label Room entities correctly without extra API calls on every write.
+
+**EventDateTime serialization:** Custom Gson `TypeAdapter` (`EventDateTimeAdapter`) registered in `CalendarModule`:
+- All-day: `EventDateTime(date = "YYYY-MM-DD")` — `dateTime` absent from JSON
+- Timed: `EventDateTime(dateTime = "YYYY-MM-DDTHH:MM:SS+HH:MM", timeZone = "IANA/Zone")` — `date` absent from JSON
+- Null fields silently omitted (`serializeNulls=false`) — sending `"date": null` causes HTTP 400 for recurring timed events
+- `timeZone` is REQUIRED by Google Calendar API v3 for recurring timed events
+
 ### SheetsApi Endpoints
 
 | Operation | HTTP | Path | Notes |
@@ -520,63 +577,44 @@ On exception: `Result.retry()` for `runAttemptCount < 4`, else `Result.failure()
 
 ---
 
-## 10. UI Screens
+## 8. UI Screens
 
 ### AuthScreen
 
 **ViewModel:** `AuthViewModel`  
 **State:** `uiState: StateFlow<AuthUiState>` — sealed: `Loading`, `SignedOut`, `NeedsAuthorization(pendingIntent)`, `SignedIn(userName, userAvatarUrl, spreadsheetId)`, `Error(message)`  
 **Layout:** Centered `Column` — app logo + title row, subtitle text, conditional content per state: `CircularProgressIndicator` (Loading/NeedsAuthorization), "Sign in with Google" button (SignedOut), error text + "Try again" button (Error).  
-**Actions:** `startSignIn(context)`, `finalizeAuth(intent)`, `clearError()`  
-**Note:** No ViewModel parameter needed by the screen — it takes an injected `AuthViewModel` passed from `MainActivity`.
+**Actions:** `startSignIn(context)`, `finalizeAuth(intent)`, `clearError()`
 
 ---
 
-### MainScreen (shell)
-
-**ViewModel:** `MainViewModel`, `TaskFormViewModel`  
-**StateFlows:** `folders`, `labels`, `syncState`, `authData`, `sidebarState`, `selectedCalendars`  
-**Layout:** `ModalNavigationDrawer` + `Scaffold` (TopAppBar, FAB, SnackbarHost) + `NavHost`.  
-**Start destination:** `Screen.UPCOMING`  
-**Overlay screens** (replace entire content rather than navigating): Settings, Help, Feedback — toggled via `showSettings`, `showHelp`, `showFeedback` local state.  
-**Task form:** `TaskFormSheet` shown as overlay when `showForm = true`. Supports create, edit, add-subtask, edit-calendar-event, edit-event-schedule-only modes.  
-**Deep links:** Handled in `LaunchedEffect(initialDeepLinkUri)`. Supported schemes:
-- `stlertasks://task/{taskId}` — opens task edit form
-- `stlertasks://event/{calendarId}/{eventId}` — opens event edit form
-- `stlertasks://create?folderId=` — opens create form
-- `stlertasks://upcoming` — navigates to Upcoming (no-op if already there)
-- `stlertasks://all_tasks` — navigates to All Tasks
-- `stlertasks://folder/{folderId}` — navigates to folder screen
-
----
-
-### UpcomingScreen
+### 8.1 Upcoming
 
 **ViewModel:** `UpcomingViewModel`  
 **Data source:** `repository.observeAllPendingTasksWithDeadline()` + `calendarRepository.getEventsForCalendars(selectedIds, now, now+366)`  
 **StateFlows:** `allGroupedTasks: Map<LocalDate, List<ListItem>>`, `isLoading`, `weekDays`, `weekOffset`, `labels`, `folders`, `priorityFilter`, `labelFilter`, `folderFilter`, `calendarFilter`, `calendarsInEvents`  
 **Sort order within a day:** timed items before all-day, then by time string.  
-**Filter matrix:** calendar-only filter → tasks hidden; task-only filter → events hidden; both active → both filtered; none → all shown.  
 **Overdue group:** Items with `deadlineDate < today` are grouped under key `LocalDate.MIN` (displayed as "Overdue" header in red).  
 **Week strip:** Mon–Sun strip driven by `_weekOffset`. Scroll syncs to strip via `snapshotFlow` + debounce 120ms. Day pills show a dot (orange = today, primary = has tasks). Navigation via chevron buttons or direct tap.  
+**Filter matrix:** calendar-only filter → tasks hidden; task-only filter → events hidden; both active → both filtered; none → all shown.  
 **Empty state:** "No upcoming tasks" centered text.  
 **Actions:** complete task, delete task, delete event, delete event series, update deadline/priority/labels inline.
 
 ---
 
-### AllTasksScreen
+### 8.2 All Tasks
 
 **ViewModel:** `AllTasksViewModel`  
 **Data source:** `repository.observeAllPendingTasks()` + `calendarRepository.getEventsForCalendars(selectedIds, now, now+366)`  
 **StateFlows:** `filteredItems: List<ListItem>`, `isLoading`, `labels`, `folders`, `priorityFilter`, `labelFilter`, `folderFilter`, `calendarFilter`, `calendarsInEvents`  
 **Sort order:** priority (URGENT→IMPORTANT→NORMAL, events count as NORMAL) → deadline date → timed-before-allday → time. Undated tasks appended after all dated items, sorted by priority only.  
 **Scroll-to-today:** On first load, scrolls to the first item whose date is today or future (debounced 200ms).  
-**Filter bar:** `FilterBar` composable (priority, labels, folders, calendars chips).  
+**Filter bar:** `FilterBar` composable — see §8.11.  
 **Empty state:** `EmptyState` with `FormatListBulleted` icon.
 
 ---
 
-### CompletedScreen
+### 8.3 Completed
 
 **ViewModel:** `CompletedViewModel`  
 **Data source:** `repository.observeCompletedTasks()` — ordered by `completedAt DESC` (falls back to `updatedAt`).  
@@ -587,7 +625,7 @@ On exception: `Result.retry()` for `runAttemptCount < 4`, else `Result.failure()
 
 ---
 
-### FolderScreen
+### 8.4 Folder
 
 **ViewModel:** `FolderViewModel` (gets `folderId` from `SavedStateHandle`)  
 **Data source:** `repository.observePendingInFolder(folderId)` + `repository.observeCompletedChildCountsInFolder(folderId)`  
@@ -596,11 +634,12 @@ On exception: `Result.retry()` for `runAttemptCount < 4`, else `Result.failure()
 **Tree building:** `buildDisplayList()` — recursive depth-first traversal, roots sorted by `sortOrder`, children appended only if `task.isExpanded`. Each `TaskNode` carries `task`, `depth`, `childCount`, `completedChildCount`.  
 **Drag-to-reorder:** `onMove` updates local optimistic list and stores pending `fromIdx`/`toIdx`. On `isDragging → false`, calls `reorderSiblings(parentId, fromIdx, toIdx)` (one batch DB write).  
 **Indent/outdent:** Shown in task "…" menu — `reparentTask(taskId, newParentId)`.  
+**`toggleExpanded(task)`:** writes to Room without touching `updatedAt`.  
 **Empty state:** "No tasks in this folder" centered text.
 
 ---
 
-### LabelScreen
+### 8.5 Label
 
 **ViewModel:** `LabelViewModel` (gets `labelId` from `SavedStateHandle`)  
 **Data source:** `repository.observeAllPendingTasks()` filtered by `labelId in task.labels`  
@@ -610,7 +649,7 @@ On exception: `Result.retry()` for `runAttemptCount < 4`, else `Result.failure()
 
 ---
 
-### PriorityScreen
+### 8.6 Priority
 
 **ViewModel:** `PriorityViewModel`  
 **Data source:** `repository.observeAllPendingTasks()` filtered by `_selectedPriority`  
@@ -621,7 +660,7 @@ On exception: `Result.retry()` for `runAttemptCount < 4`, else `Result.failure()
 
 ---
 
-### CalendarScreen
+### 8.7 Calendar
 
 **ViewModel:** `CalendarViewModel` (gets `calendarId` from `SavedStateHandle`)  
 **Data source:** `calendarRepository.getEventsForCalendars(setOf(calendarId), now, now+366)`  
@@ -632,24 +671,78 @@ On exception: `Result.retry()` for `runAttemptCount < 4`, else `Result.failure()
 
 ---
 
-### TaskFormSheet
+### 8.8 CalendarEventItem
 
-**ViewModel:** `TaskFormViewModel`  
-**Mode:** Determined by what is passed — `task != null` = edit task; `calendarEvent != null` = edit/create event; neither = create task. `scheduleOnly = true` restricts the event form to date/time/repeat only.  
-**Fields (task mode):** title (BasicTextField), priority (SegmentedButton), deadline (DatePicker + TimePicker + recurrence), folder (ExposedDropdownMenu), labels (LabelPickerSheet), parent (implicit via `initialParentId`).  
-**Fields (event mode):** title, calendar (ExposedDropdownMenu), start date + time, end time, repeat (recurrence picker with RRULE builder).  
-**Label sentinel:** New labels are encoded as `"__new__:colorHex:name"` — `TaskFormViewModel.resolveLabelSentinels()` creates the label in Room/Sheets and returns the real ID.  
-**Output:** `TaskFormResult(title, folderId, parentId, priority, labelIds, deadlineDate, deadlineTime, isRecurring, recurType, recurValue)` — passed back via `onConfirm` lambda to `MainScreen.handleFormResult()`.
+Shared composable for displaying a single calendar event — used in `CalendarScreen`, `AllTasksScreen`, and `UpcomingScreen`. Layout mirrors `TaskItem`.
+
+```kotlin
+fun CalendarEventItem(
+    event          : CalendarEvent,
+    showDate       : Boolean = true,
+    onEdit         : (() -> Unit)? = null,      // full edit form
+    onEditSchedule : (() -> Unit)? = null,      // schedule-only form
+    onDelete       : (() -> Unit)? = null,
+    onDeleteSeries : (() -> Unit)? = null,
+    modifier       : Modifier = Modifier,
+)
+```
+
+**Internal state:** `showMenu: Boolean`, `showDeleteConfirm: Boolean`  
+**Layout:** `Row` — calendar icon (40dp slot matching TaskItem checkbox), `Column { title; FlowRow{ recurring icon, time label, calendar name icon+text } }`, optional action icons (Schedule + MoreHoriz).  
+**Menu:** `ModalBottomSheet` with Edit + Delete entries. Delete → `AlertDialog`. Recurring event delete → 3-option dialog (this event / all in series / cancel).  
+**Time label:** `formatEventTime()` — all-day events show date when `showDate=true`; timed events show `"HH:MM — HH:MM"` plus optional date prefix.  
+**Deadline color:** uses `deadlineColor(deadlineStatus(startDate, startTime))` from `TaskColors.kt`.  
+**Read-only calendars:** when `event.isEditable == false`, the Edit and Schedule buttons are hidden; only Delete remains.
 
 ---
 
-### SettingsScreen
+### 8.9 MainScreen — Global FAB and Settings
+
+**ViewModel:** `MainViewModel`, `TaskFormViewModel`  
+**StateFlows:** `folders`, `labels`, `syncState`, `authData`, `sidebarState`, `selectedCalendars`  
+**Layout:** `ModalNavigationDrawer` + `Scaffold` (TopAppBar, FAB, SnackbarHost) + `NavHost`.  
+**Start destination:** `Screen.UPCOMING`  
+**Overlay screens** (replace entire content, no NavBackStack entry): Settings, Help, Feedback — toggled via `showSettings`, `showHelp`, `showFeedback` local state.  
+**Task form:** `TaskFormSheet` shown as overlay when `showForm = true`. Supports create, edit, add-subtask, edit-calendar-event, edit-event-schedule-only modes.  
+**Deep links:** Handled in `LaunchedEffect(initialDeepLinkUri)`.
+
+---
+
+### 8.10 Settings Screen
 
 **ViewModel:** `SettingsViewModel`  
 **StateFlows:** `spreadsheetId`, `spreadsheetName`, `files: List<DriveFile>`, `loading`, `switching`, `calendars: List<CalendarItem>`, `calendarsLoading`  
 **Sections:** SPREADSHEET (shows current spreadsheet name; expandable picker listing all Drive spreadsheets), CALENDARS (checkbox list of all Google Calendars; refresh button).  
 **Switch spreadsheet:** saves new ID/name to DataStore, clears all local Room data (tasks/folders/labels/syncQueue), triggers sync.  
 **Toggle calendar:** updates `selectedCalendarIds` in DataStore + optimistically updates UI list.
+
+---
+
+### 8.11 FilterBar
+
+Shared composable defined in `AllTasksScreen.kt`, reused by `AllTasksScreen` and `CompletedScreen`.
+
+```kotlin
+fun FilterBar(
+    labels          : List<Label>,
+    folders         : List<Folder> = emptyList(),
+    priorityFilter  : Set<Priority>,
+    labelFilter     : Set<String>,
+    folderFilter    : Set<String> = emptySet(),
+    calendars       : List<CalendarItem> = emptyList(),
+    calendarFilter  : Set<String> = emptySet(),
+    onTogglePriority: (Priority) -> Unit,
+    onToggleLabel   : (String) -> Unit,
+    onToggleFolder  : (String) -> Unit = {},
+    onToggleCalendar: (String) -> Unit = {},
+    onClearAll      : () -> Unit = {},
+    showLabelFilter : Boolean = true,
+    showFolderFilter: Boolean = true,
+)
+```
+
+**Layout:** `Row` — optional ✕ clear-all button, then icon-only `FilterChip` buttons (priority 🚩, labels 🏷, folders 📁, calendars 📅). Each chip shows a count badge when active. Each chip opens a `DropdownMenu` with multi-select items (checkmark on active).  
+**Neutral chip colors:** overrides Material You warm tint — selected container = `#d8d8d8` (light) / `primaryContainer` (dark).
 
 ---
 
@@ -665,6 +758,65 @@ No ViewModel. Static scrollable content in cards: Getting started, Tasks, Views,
 **State:** `sendResult: StateFlow<SendResult?>` — `null`, `Sending`, `Success`, `Error`  
 **Transport:** HTTP POST to Google Apps Script URL with form-encoded body (`app=Tasks`, `email=...`, `message=...`). `instanceFollowRedirects = false` (Apps Script returns 302 on success; following it converts POST to GET and the script never executes).  
 **Success:** clears message field, shows snackbar.
+
+---
+
+## 9. TaskItem Component
+
+**Location:** `ui/task/TaskItem.kt`
+
+A large composable used in all task list screens and widgets. Key parameters:
+
+| Parameter | Description |
+|---|---|
+| `task` | The `Task` domain model |
+| `labels` | List of all `Label`s for chip rendering |
+| `depth` | Indentation depth (0 = root) |
+| `hasChildren` | Shows expand/collapse toggle |
+| `completedChildCount` / `totalChildCount` | Progress indicator in subtask badge |
+| `showFolder` | Whether to show folder name/color in row 2 |
+| `showLabels` | Whether to show label chips in row 2 |
+| `showExpandSlot` | Reserve space for expand icon even if no children |
+| `showDateInDeadline` | Show date or relative label (e.g. "Tomorrow") |
+| `enableSwipe` | Swipe-to-complete and swipe-to-delete gestures |
+| Callbacks | `onCheckedChange`, `onToggleExpand`, `onDeadlineChange`, `onPriorityChange`, `onLabelChange`, `onAddSubtask`, `onEdit`, `onDelete`, `onIndent`, `onOutdent` |
+
+**Layout:** Two-row card — Row 1: checkbox + title + optional expand button; Row 2: deadline chip + priority chip + folder chip + label chips + more button.
+
+**Swipe gestures:** Left swipe → complete (green checkmark reveal); right swipe → delete (red trash reveal). Completion of a recurring task advances `deadlineDate` instead of changing status.
+
+---
+
+## 10. TaskFormSheet
+
+**ViewModel:** `TaskFormViewModel`  
+**Mode:** Determined by what is passed — `task != null` = edit task; `calendarEvent != null` = edit/create event; neither = create task. `scheduleOnly = true` restricts the event form to date/time/repeat only.  
+**Fields (task mode):** title (BasicTextField), priority (SegmentedButton), deadline (DatePicker + TimePicker + recurrence), folder (ExposedDropdownMenu), labels (LabelPickerSheet), parent (implicit via `initialParentId`).  
+**Fields (event mode):** title, calendar (ExposedDropdownMenu), start date + time, end time, repeat (recurrence picker with RRULE builder).  
+**Label sentinel:** New labels are encoded as `"__new__:colorHex:name"` — `TaskFormViewModel.resolveLabelSentinels()` creates the label in Room/Sheets and returns the real ID.  
+**Output:** `TaskFormResult(title, folderId, parentId, priority, labelIds, deadlineDate, deadlineTime, isRecurring, recurType, recurValue)` — passed back via `onConfirm` lambda to `MainScreen.handleFormResult()`.
+
+**Smart title parsing (TASK mode only):**
+
+| Token | Match rule | Behavior |
+|---|---|---|
+| `@FolderName` | Case-insensitive folder name | Sets `folderId`; stripped from title |
+| `#LabelName` | Case-insensitive label name | Adds to `labelIds`; stripped from title |
+| `!1`, `!2`, `!3` | Literal strings | Sets priority: `!1` → Urgent, `!2` → Important, `!3` → Normal |
+| `today`, `tomorrow`, `mon`…`sun` | Locale-insensitive day names | Sets `deadlineDate`; stripped from title |
+
+**`buildEventDateTime` (in `TaskFormViewModel`):**
+```kotlin
+if (time.isBlank())
+    EventDateTime(date = date)
+else {
+    val zone = ZoneId.systemDefault()
+    val zdt  = ZonedDateTime.of(LocalDate.parse(date), LocalTime.parse(time), zone)
+    EventDateTime(dateTime = zdt.format(ISO_OFFSET_DATE_TIME), timeZone = zone.id)
+}
+```
+
+**`buildEndDateTime`:** All-day → end = next calendar day. Timed → end time defaults to start + 1 h if blank or ≤ start.
 
 ---
 
@@ -705,89 +857,7 @@ All widgets extend `GlanceAppWidget`, use `PreferencesGlanceStateDefinition`, an
 
 ---
 
-## 12. Shared Components
-
-### CalendarEventItem
-
-**Location:** `ui/calendar/CalendarEventItem.kt`  
-**Signature:**
-```kotlin
-fun CalendarEventItem(
-    event          : CalendarEvent,
-    showDate       : Boolean = true,
-    onEdit         : (() -> Unit)? = null,      // full edit form
-    onEditSchedule : (() -> Unit)? = null,      // schedule-only form
-    onDelete       : (() -> Unit)? = null,
-    onDeleteSeries : (() -> Unit)? = null,
-    modifier       : Modifier = Modifier,
-)
-```
-**Internal state:** `showMenu: Boolean`, `showDeleteConfirm: Boolean`  
-**Layout:** `Row` — calendar icon (40dp slot matching TaskItem checkbox), `Column { title; FlowRow{ recurring icon, time label, calendar name icon+text } }`, optional action icons (Schedule + MoreHoriz).  
-**Menu:** `ModalBottomSheet` with Edit + Delete entries. Delete → `AlertDialog`. Recurring event delete → 3-option dialog (this event / all in series / cancel).  
-**Time label:** `formatEventTime()` — all-day events show date when `showDate=true`; timed events show `"HH:MM — HH:MM"` plus optional date prefix.  
-**Deadline color:** uses `deadlineColor(deadlineStatus(startDate, startTime))` from `TaskColors.kt`.
-
-### FilterBar
-
-**Location:** `ui/alltasks/AllTasksScreen.kt`  
-**Signature:**
-```kotlin
-fun FilterBar(
-    labels          : List<Label>,
-    folders         : List<Folder> = emptyList(),
-    priorityFilter  : Set<Priority>,
-    labelFilter     : Set<String>,
-    folderFilter    : Set<String> = emptySet(),
-    calendars       : List<CalendarItem> = emptyList(),
-    calendarFilter  : Set<String> = emptySet(),
-    onTogglePriority: (Priority) -> Unit,
-    onToggleLabel   : (String) -> Unit,
-    onToggleFolder  : (String) -> Unit = {},
-    onToggleCalendar: (String) -> Unit = {},
-    onClearAll      : () -> Unit = {},
-    showLabelFilter : Boolean = true,
-    showFolderFilter: Boolean = true,
-)
-```
-**Internal state:** 4 dropdown-expanded booleans.  
-**Layout:** `Row` — optional ✕ clear-all button, then icon-only `FilterChip` buttons (priority 🚩, labels 🏷, folders 📁, calendars 📅). Each chip shows a count badge when active. Each chip opens a `DropdownMenu` with multi-select items (checkmark on active).  
-**Neutral chip colors:** overrides Material You warm tint — selected container = `#d8d8d8` (light) / `primaryContainer` (dark).
-
-### TaskItem
-
-**Location:** `ui/task/TaskItem.kt`  
-Not documented in detail here as it is a large composable. Key parameters include `task`, `labels`, `depth`, `hasChildren`, `completedChildCount`, `totalChildCount`, `showFolder`, `showLabels`, `showExpandSlot`, `showDateInDeadline`, `enableSwipe`, callbacks for check, expand, deadline change, priority change, label change, add subtask, edit, delete, indent, outdent.
-
----
-
-## 13. Navigation
-
-### Route Constants (`Screen.kt`)
-
-| Constant | Route String | Args |
-|---|---|---|
-| `Screen.UPCOMING` | `"upcoming"` | — |
-| `Screen.ALL_TASKS` | `"all_tasks"` | — |
-| `Screen.COMPLETED` | `"completed"` | — |
-| `Screen.FOLDER` | `"folder/{folderId}"` | `folderId: String` |
-| `Screen.LABEL` | `"label/{labelId}"` | `labelId: String` |
-| `Screen.PRIORITY` | `"priority/{priority}"` | `priority: String` |
-| `Screen.CALENDAR` | `"calendar/{calendarId}"` | `calendarId: String` (URL-encoded) |
-
-Helper functions: `folderRoute(id)`, `labelRoute(id)`, `priorityRoute(priority)`, `calendarRoute(id)`.
-
-### Navigation Behavior
-
-- All navigation uses `popUpTo(graph.startDestinationId) + launchSingleTop = true` to prevent stack buildup when switching sections from the sidebar.
-- The `NavHost` lives inside `MainScreen`. Navigation between screens happens by calling `navController.navigate(route)`.
-- **Overlay screens** (Settings, Help, Feedback) are shown by toggling `showSettings/showHelp/showFeedback` local state in `MainScreen`. They replace the entire content via `return` and do not create NavBackStack entries.
-- The `TaskFormSheet` (ModalBottomSheet) is shown as a local overlay without navigation.
-- Deep links are handled in `MainActivity.onNewIntent()` and passed as `initialDeepLinkUri` to `MainScreen`.
-
----
-
-## 14. Theme & Colors
+## 12. Theme & Colors
 
 Theme is `TasksTheme` wrapping `MaterialTheme`. No dynamic color (Material You). Light and dark color schemes are fully custom.
 
@@ -852,6 +922,53 @@ Widget colors reference XML color resources in `res/values/colors.xml` and `res/
 
 ---
 
+## 13. Navigation
+
+### Route Constants (`Screen.kt`)
+
+| Constant | Route String | Args |
+|---|---|---|
+| `Screen.UPCOMING` | `"upcoming"` | — |
+| `Screen.ALL_TASKS` | `"all_tasks"` | — |
+| `Screen.COMPLETED` | `"completed"` | — |
+| `Screen.FOLDER` | `"folder/{folderId}"` | `folderId: String` |
+| `Screen.LABEL` | `"label/{labelId}"` | `labelId: String` |
+| `Screen.PRIORITY` | `"priority/{priority}"` | `priority: String` |
+| `Screen.CALENDAR` | `"calendar/{calendarId}"` | `calendarId: String` (URL-encoded) |
+
+Helper functions: `folderRoute(id)`, `labelRoute(id)`, `priorityRoute(priority)`, `calendarRoute(id)`.
+
+### Navigation Behavior
+
+- All navigation uses `popUpTo(graph.startDestinationId) + launchSingleTop = true` to prevent stack buildup when switching sections from the sidebar.
+- The `NavHost` lives inside `MainScreen`. Navigation between screens happens by calling `navController.navigate(route)`.
+- **Overlay screens** (Settings, Help, Feedback) are shown by toggling `showSettings/showHelp/showFeedback` local state in `MainScreen`. They replace the entire content via `return` and do not create NavBackStack entries.
+- The `TaskFormSheet` (ModalBottomSheet) is shown as a local overlay without navigation.
+- Deep links are handled in `MainActivity.onNewIntent()` and passed as `initialDeepLinkUri` to `MainScreen`.
+
+### Deeplinks (`stlertasks://`)
+
+| URI | Action |
+|---|---|
+| `stlertasks://task/{taskId}` | Open edit form for the task |
+| `stlertasks://create` | Open create form (Inbox, default priority) |
+| `stlertasks://event/{calendarId}/{eventId}` | Open event edit form |
+| `stlertasks://upcoming` | Navigate to Upcoming screen |
+
+---
+
+## 14. Loading & Empty States
+
+### ShimmerTaskList
+
+`isLoading: StateFlow<Boolean>` in every ViewModel: `filteredTasks.map { false }.stateIn(..., initialValue = true)`. While `isLoading = true`, pulsing skeleton rows are displayed (alpha 0.25↔0.6, 900 ms, LinearEasing, Reverse). 6 rows per screen.
+
+### EmptyState
+
+Centered `Column`: 64dp icon (40% opacity) + message (`titleMedium`) + optional subtitle (`bodyMedium`, muted). Used in AllTasks, Completed, Priority, Label, Calendar screens.
+
+---
+
 ## 15. CI/CD & Build
 
 ### GitHub Actions Workflow (`release.yml`)
@@ -876,7 +993,22 @@ No signing config is created when `KEYSTORE_PATH` is blank — debug builds use 
 
 ---
 
-## 16. Key Algorithms
+## 16. First-Time Setup (New Developer)
+
+1. Clone the repository.
+2. In Google Cloud Console:
+   - Enable **Google Sheets API**, **Google Drive API**, **Google Calendar API**.
+   - Create **OAuth 2.0 Web Client ID** → copy to `res/values/strings.xml` as `google_web_client_id`.
+   - Create **OAuth 2.0 Android Client ID** (package `com.stler.tasks`, SHA-1 of debug keystore).
+   - Set OAuth consent screen to **Production** and add all three scopes.
+3. Run on device/emulator from Android Studio.
+4. Sign in — the app will find or create the `db_tasks` spreadsheet automatically.
+
+**For release builds:** Create a keystore, base64-encode it, add GitHub secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`. Push a `v*` tag to trigger the build.
+
+---
+
+## 17. Key Algorithms
 
 ### Recursive Tree Build (FolderViewModel + FolderWidget)
 
@@ -967,3 +1099,32 @@ function findSpreadsheetId(accessToken):
     response = Drive.files.list(q=query, fields="files(id,name)")
     return response.files.firstOrNull()?.id ?? ""
 ```
+
+### Recurring Task Completion
+
+```kotlin
+if (task.isRecurring) {
+    val newDate = when (task.recurType) {
+        DAYS   -> LocalDate.parse(deadlineDate).plusDays(recurValue.toLong())
+        WEEKS  -> LocalDate.parse(deadlineDate).plusWeeks(recurValue.toLong())
+        MONTHS -> LocalDate.parse(deadlineDate).plusMonths(recurValue.toLong())
+        YEARS  -> LocalDate.parse(deadlineDate).plusYears(recurValue.toLong())
+        else   -> return  // NONE — treat as non-recurring
+    }
+    // update deadlineDate only; status stays PENDING; completedAt = ""
+} else {
+    // set status = COMPLETED, completedAt = now
+    // recursively complete all descendants
+}
+```
+
+### RRULE Builder (CustomRecurrenceSheet)
+
+```
+RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR;COUNT=10
+RRULE:FREQ=MONTHLY;INTERVAL=1;BYDAY=2TU        // 2nd Tuesday
+RRULE:FREQ=MONTHLY;INTERVAL=1;BYDAY=-1SA       // last Saturday
+RRULE:FREQ=DAILY;INTERVAL=1;UNTIL=20261231T235959Z
+```
+
+Ordinal prefix: `ceil(dayOfMonth / 7.0).toInt()` for 1st–4th; `-1` when the day can fall in the last position (`dayOfMonth > 21`).
