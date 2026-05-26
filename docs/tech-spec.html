@@ -293,7 +293,7 @@
   <tr><td>Language</td><td>Kotlin</td><td>2.2.10</td><td></td></tr>
   <tr><td>UI</td><td>Jetpack Compose + Material 3</td><td>BOM 2026.02.01</td><td>Compose-only, no XML layouts</td></tr>
   <tr><td>DI</td><td>Hilt</td><td>2.59.2</td><td>KSP processor</td></tr>
-  <tr><td>Local DB</td><td>Room</td><td>2.7.1</td><td>version 7, explicit migrations</td></tr>
+  <tr><td>Local DB</td><td>Room</td><td>2.7.1</td><td>version 8; explicit migrations 4→5→6→7→8</td></tr>
   <tr><td>Networking</td><td>Retrofit + OkHttp</td><td>2.11.0 / 4.12.0</td><td>Bearer token interceptor + 401 Authenticator</td></tr>
   <tr><td>Serialization</td><td>Gson</td><td>2.11.0</td><td>For Retrofit + SyncQueue payloads</td></tr>
   <tr><td>Background</td><td>WorkManager (Hilt)</td><td>2.10.1</td><td>Periodic sync (30 min) + one-off</td></tr>
@@ -349,7 +349,7 @@ com.stler.tasks/<br>
 │   ├── local/<br>
 │   │   ├── dao/                  <span class="dim">TaskDao, FolderDao, LabelDao, SyncQueueDao, CalendarEventDao</span><br>
 │   │   ├── entity/               <span class="dim">TaskEntity, FolderEntity, LabelEntity, SyncQueueEntity, CalendarEventEntity</span><br>
-│   │   └── TaskDatabase.kt       <span class="dim">Room DB (version 7, 5 tables)</span><br>
+│   │   └── TaskDatabase.kt       <span class="dim">RoomDatabase v8, migration objects</span><br>
 │   ├── remote/<br>
 │   │   ├── dto/                  <span class="dim">CalendarDtos, BatchValuesResponse, ValuesBody, …</span><br>
 │   │   ├── CalendarApi.kt        <span class="dim">Calendar API v3 endpoints</span><br>
@@ -463,24 +463,25 @@ com.stler.tasks/<br>
   <tr><td><code>accessRole</code></td><td>String</td><td><code>"owner"</code>, <code>"writer"</code>, <code>"reader"</code>, <code>"freeBusyReader"</code></td></tr>
 </table>
 
-<h2>5.4 Room Database (version 7)</h2>
+<h2>5.4 Room Database (version 8)</h2>
 <p>5 tables: <code>tasks</code>, <code>folders</code>, <code>labels</code>, <code>sync_queue</code>, <code>calendar_events</code>.</p>
-<p>Migration path: v4→v5 (add <code>calendar_events</code>) → v5→v6 (add <code>series_id</code>) → v6→v7 (add <code>calendar_color</code>). Schema JSON files stored in <code>app/schemas/</code>.</p>
+<p>Migration path: v4→v5 (add <code>calendar_events</code>) → v5→v6 (add <code>recurringEventId</code>) → v6→v7 (add indices on <code>calendarId</code>, <code>recurringEventId</code>) → v7→v8 (add <code>isEditable</code>). Schema JSON files stored in <code>app/schemas/</code>. <code>fallbackToDestructiveMigration(dropAllTables = true)</code> is set as a safety net.</p>
 
 <h3>calendar_events columns</h3>
 <table>
   <tr><th>Column</th><th>Type</th><th>Notes</th></tr>
   <tr><td><code>id</code></td><td>TEXT PK</td><td>Google event ID</td></tr>
-  <tr><td><code>calendar_id</code></td><td>TEXT</td><td></td></tr>
-  <tr><td><code>calendar_name</code></td><td>TEXT</td><td></td></tr>
-  <tr><td><code>calendar_color</code></td><td>TEXT</td><td></td></tr>
+  <tr><td><code>calendarId</code></td><td>TEXT</td><td>indexed</td></tr>
+  <tr><td><code>calendarName</code></td><td>TEXT</td><td></td></tr>
+  <tr><td><code>calendarColor</code></td><td>TEXT</td><td></td></tr>
   <tr><td><code>title</code></td><td>TEXT</td><td></td></tr>
-  <tr><td><code>start_date</code></td><td>TEXT</td><td><code>"YYYY-MM-DD"</code></td></tr>
-  <tr><td><code>start_time</code></td><td>TEXT</td><td><code>"HH:MM"</code> or <code>""</code></td></tr>
-  <tr><td><code>end_time</code></td><td>TEXT</td><td><code>"HH:MM"</code> or <code>""</code></td></tr>
-  <tr><td><code>is_all_day</code></td><td>INTEGER</td><td>0/1</td></tr>
-  <tr><td><code>recurring_event_id</code></td><td>TEXT</td><td>nullable</td></tr>
-  <tr><td><code>series_id</code></td><td>TEXT</td><td>nullable</td></tr>
+  <tr><td><code>startDate</code></td><td>TEXT</td><td><code>"YYYY-MM-DD"</code></td></tr>
+  <tr><td><code>startTime</code></td><td>TEXT</td><td><code>"HH:MM"</code> or <code>""</code></td></tr>
+  <tr><td><code>endDate</code></td><td>TEXT</td><td><code>"YYYY-MM-DD"</code></td></tr>
+  <tr><td><code>endTime</code></td><td>TEXT</td><td><code>"HH:MM"</code> or <code>""</code></td></tr>
+  <tr><td><code>isAllDay</code></td><td>INTEGER</td><td>0/1</td></tr>
+  <tr><td><code>recurringEventId</code></td><td>TEXT</td><td>Base event ID of series, or <code>""</code>; indexed</td></tr>
+  <tr><td><code>isEditable</code></td><td>INTEGER</td><td>Default 1; false for read-only calendars (holidays, shared)</td></tr>
 </table>
 
 <h2>5.5 SyncQueue Entry</h2>
@@ -521,6 +522,32 @@ com.stler.tasks/<br>
 
 <p>Row 1 is a header row (skipped). <strong>Soft delete</strong> = clearing all cells in the row; rows with no ID are skipped during pull.</p>
 
+<h3>Sheet: folders (columns A–D)</h3>
+<table>
+  <tr><th>Col</th><th>Name</th><th>Format</th></tr>
+  <tr><td>A</td><td>id</td><td>String</td></tr>
+  <tr><td>B</td><td>name</td><td>String</td></tr>
+  <tr><td>C</td><td>color</td><td>Hex string, e.g. <code>"#f97316"</code></td></tr>
+  <tr><td>D</td><td>sort_order</td><td>Integer string</td></tr>
+</table>
+
+<h3>Sheet: labels (columns A–D)</h3>
+<table>
+  <tr><th>Col</th><th>Name</th><th>Format</th></tr>
+  <tr><td>A</td><td>id</td><td>String</td></tr>
+  <tr><td>B</td><td>name</td><td>String</td></tr>
+  <tr><td>C</td><td>color</td><td>Hex string</td></tr>
+  <tr><td>D</td><td>sort_order</td><td>Integer string</td></tr>
+</table>
+
+<h3>Sheet: settings (index 3)</h3>
+<p>Present in spreadsheet structure (created at onboarding); not currently read/written by the Android app.</p>
+
+<h3>Sheet: meta (index 4)</h3>
+<p>Present in spreadsheet structure (created at onboarding); not currently read/written by the Android app.</p>
+
+<p><strong>Row-number lookup for UPDATE/DELETE:</strong> <code>SheetsMapper.findRowNumber(rows, id)</code> iterates rows, skips the header (index 0), and returns the 1-based row number when <code>row[0] == id</code>. Returns null if not found (operation is skipped).</p>
+
 <!-- ─── 6. Auth ─────────────────────────────────────────────────────────────── -->
 <h1 id="auth">6. Authentication &amp; First-Launch Setup</h1>
 
@@ -542,16 +569,45 @@ com.stler.tasks/<br>
 
 <h2>6.3 First-Launch Spreadsheet Creation</h2>
 <ol>
-  <li>POST <code>https://sheets.googleapis.com/v4/spreadsheets</code> — creates spreadsheet with 3 named sheets (tasks, folders, labels)</li>
-  <li>POST <code>.../values:batchUpdate</code> — writes header rows + seeds Inbox folder row</li>
-  <li>Upserts <code>FolderEntity(id="fld-inbox", ...)</code> to Room so the app is immediately usable</li>
+  <li>POST <code>https://sheets.googleapis.com/v4/spreadsheets</code> — creates spreadsheet with <strong>5 named sheets</strong>: <code>tasks</code> (index 0), <code>folders</code> (index 1), <code>labels</code> (index 2), <code>settings</code> (index 3), <code>meta</code> (index 4). Done via raw OkHttp to avoid a circular Hilt dependency.</li>
+  <li>POST <code>.../values:batchUpdate</code> — writes header rows for tasks, folders, labels <strong>plus full onboarding seed data</strong> (see below).</li>
+  <li>Upserts all seed folders, labels, and tasks to Room so the app is immediately usable without waiting for the first sync.</li>
 </ol>
 
-<h2>6.4 Token Refresh</h2>
-<p><code>refreshToken()</code> calls <code>Identity.getAuthorizationClient.authorize()</code> silently. Token is stale if it expires within 5 minutes. The <code>NetworkModule</code> 401 Authenticator calls <code>refreshToken()</code> automatically.</p>
+<h2>6.4 Onboarding Seed Data</h2>
+<p>Created in both Sheets and Room the first time <code>db_tasks</code> is created. Matches the PWA seed exactly.</p>
 
-<h2>6.5 Sign-Out</h2>
-<p>Clears all DataStore keys + deletes all Room tables (tasks, folders, labels, sync_queue, calendar_events).</p>
+<h3>Folders</h3>
+<table>
+  <tr><th>ID</th><th>Name</th><th>Color</th><th>Order</th></tr>
+  <tr><td><code>fld-inbox</code></td><td>Inbox</td><td><code>#6b7280</code></td><td>0</td></tr>
+  <tr><td><code>fld-work</code></td><td>Work</td><td><code>#4A90D9</code></td><td>1</td></tr>
+  <tr><td><code>fld-personal</code></td><td>Personal</td><td><code>#7ED321</code></td><td>2</td></tr>
+</table>
+
+<h3>Labels</h3>
+<table>
+  <tr><th>ID</th><th>Name</th><th>Color</th><th>Order</th></tr>
+  <tr><td><code>lbl-review</code></td><td>Review</td><td><code>#F5A623</code></td><td>1</td></tr>
+  <tr><td><code>lbl-idea</code></td><td>Idea</td><td><code>#9B59B6</code></td><td>2</td></tr>
+</table>
+
+<h3>Tasks (5)</h3>
+<table>
+  <tr><th>ID</th><th>Folder</th><th>Title</th><th>Priority</th><th>Labels</th><th>Deadline</th></tr>
+  <tr><td><code>tsk-seed-1</code></td><td>Work</td><td>Make important call</td><td>important</td><td>—</td><td>—</td></tr>
+  <tr><td><code>tsk-seed-2</code></td><td>Work</td><td>Review project draft</td><td>normal</td><td><code>lbl-review</code></td><td>—</td></tr>
+  <tr><td><code>tsk-seed-3</code></td><td>Personal</td><td>Buy groceries</td><td>urgent</td><td>—</td><td>—</td></tr>
+  <tr><td><code>tsk-seed-4</code></td><td>Personal</td><td>Schedule dentist appointment</td><td>normal</td><td>—</td><td>now + 5 days</td></tr>
+  <tr><td><code>tsk-seed-5</code></td><td>Inbox</td><td>Plan the week</td><td>normal</td><td><code>lbl-idea</code></td><td>—</td></tr>
+</table>
+<p>All seed tasks: <code>status=pending</code>, <code>isExpanded=true</code>, <code>isRecurring=false</code>, <code>createdAt=updatedAt=Instant.now()</code>. Deadline format: <code>YYYY-MM-DD</code> via <code>LocalDate.now().plusDays(5)</code>.</p>
+
+<h2>6.5 Token Refresh</h2>
+<p><code>isExpiredSoon(expiry)</code> returns true if <code>Instant.now()</code> is within 300 seconds of the stored expiry. <code>refreshToken()</code> calls <code>Identity.getAuthorizationClient.authorize()</code> silently. If <code>hasResolution()</code> is true (interactive re-auth needed), returns null. On success, saves new token with new 1-hour expiry. The OkHttp <code>Authenticator</code> calls <code>refreshToken()</code> once on 401.</p>
+
+<h2>6.6 Sign-Out</h2>
+<p>Clears all DataStore keys + deletes all Room tables (<code>tasks</code>, <code>folders</code>, <code>labels</code>, <code>sync_queue</code>). Calendar events are <em>not</em> explicitly cleared (pure cache, no user-generated data).</p>
 
 <!-- ─── 7. Sync ─────────────────────────────────────────────────────────────── -->
 <h1 id="sync">7. Synchronization</h1>
