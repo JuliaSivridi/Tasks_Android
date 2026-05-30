@@ -1,5 +1,8 @@
 package com.stler.tasks.ui.settings
 
+import android.content.ComponentName
+import android.content.Context
+import android.content.pm.PackageManager
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -13,7 +16,9 @@ import com.stler.tasks.data.remote.dto.DriveFile
 import com.stler.tasks.data.repository.CalendarRepository
 import com.stler.tasks.domain.model.CalendarItem
 import com.stler.tasks.sync.SyncManager
+import com.stler.tasks.widget.CalendarWidgetReceiver
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +31,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val authPreferences: AuthPreferences,
     private val googleAuthRepository: GoogleAuthRepository,
     private val taskDao: TaskDao,
@@ -98,7 +104,10 @@ class SettingsViewModel @Inject constructor(
 
     /**
      * Enables or disables calendar integration.
-     * On disable: clears all cached events from Room so stale data is not shown on re-enable.
+     * - Persists the flag to DataStore.
+     * - On disable: clears cached events from Room; hides CalendarWidgetReceiver from the
+     *   launcher's widget picker via PackageManager so users can't add new calendar widgets.
+     * - On enable: re-registers the receiver so it reappears in the picker.
      * The saved selection of calendar IDs is preserved and restored when re-enabled.
      */
     fun setCalendarsEnabled(enabled: Boolean) {
@@ -107,6 +116,16 @@ class SettingsViewModel @Inject constructor(
             if (!enabled) {
                 calendarRepository.clearAllEvents()
             }
+            // Show/hide the CalendarWidget in the system's widget picker
+            val newState = if (enabled)
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+            else
+                PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+            context.packageManager.setComponentEnabledSetting(
+                ComponentName(context, CalendarWidgetReceiver::class.java),
+                newState,
+                PackageManager.DONT_KILL_APP,
+            )
         }
     }
 
