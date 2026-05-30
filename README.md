@@ -165,4 +165,4 @@ Required secrets: `KEYSTORE_BASE64` · `KEYSTORE_PASSWORD` · `KEY_ALIAS` · `KE
 
 - **PWA version:** [github.com/JuliaSivridi/Tasks](https://github.com/JuliaSivridi/Tasks) — React + TypeScript, same Google Sheets backend
 - **Live PWA:** [stler-tasks.vercel.app](https://stler-tasks.vercel.app)
-- **Technical specification:** [`docs/tech-spec.html`](docs/tech-spec.html)
+- **Technical specification:** [`docs/tech-spec.md`](docs/tech-spec.md)

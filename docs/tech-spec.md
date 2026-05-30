@@ -7,6 +7,55 @@
 
 ---
 
+## Table of Contents
+
+1. [Overview](#1-overview)
+2. [Tech Stack](#2-tech-stack)
+3. [Architecture](#3-architecture)
+4. [Package / Folder Structure](#4-package--folder-structure)
+5. [Data Model](#5-data-model)
+   - [5.1 Task](#51-task)
+   - [5.2 Folder](#52-folder)
+   - [5.3 Label](#53-label)
+   - [5.4 CalendarEvent](#54-calendarevent)
+   - [5.5 CalendarItem](#55-calendaritem)
+   - [5.6 SyncQueue Entry](#56-syncqueue-entry)
+   - [5.7 Room Database (version 8)](#57-room-database-version-8)
+   - [5.8 Google Sheets Schema](#58-google-sheets-schema)
+6. [Authentication & First-Launch Setup](#6-authentication--first-launch-setup)
+   - [6.1 OAuth Scopes](#61-oauth-scopes)
+   - [6.2 Sign-In Flow](#62-sign-in-flow)
+   - [6.3 First-Launch Spreadsheet Creation](#63-first-launch-spreadsheet-creation)
+   - [6.4 Onboarding Seed Data](#64-onboarding-seed-data)
+   - [6.5 Token Refresh](#65-token-refresh)
+   - [6.6 Sign-Out](#66-sign-out)
+7. [Synchronization](#7-synchronization)
+8. [UI Screens](#8-ui-screens)
+   - [AuthScreen](#authscreen)
+   - [8.1 Upcoming](#81-upcoming)
+   - [8.2 All Tasks](#82-all-tasks)
+   - [8.3 Completed](#83-completed)
+   - [8.4 Folder](#84-folder)
+   - [8.5 FilterBar](#85-filterbar-shared-component)
+   - [8.6 Calendar](#86-calendar)  <!-- was removed: Label (8.5), Priority (8.6) -->
+   - [8.7 CalendarEventItem](#87-calendareventitem)
+   - [8.8 MainScreen](#88-mainscreen--global-fab-and-navigation)
+   - [8.9 Settings Screen](#89-settings-screen)
+   - [8.10 Sidebar](#810-sidebar-sidebarmenu)
+   - [HelpScreen](#helpscreen)
+   - [FeedbackScreen](#feedbackscreen)
+9. [TaskItem Component](#9-taskitem-component)
+10. [TaskFormSheet](#10-taskformsheet)
+11. [Widgets](#11-widgets)
+12. [Theme & Colors](#12-theme--colors)
+13. [Navigation](#13-navigation)
+14. [Loading & Empty States](#14-loading--empty-states)
+15. [CI/CD & Build](#15-cicd--build)
+16. [First-Time Setup (New Developer)](#16-first-time-setup-new-developer)
+17. [Key Algorithms](#17-key-algorithms)
+
+---
+
 ## 1. Overview
 
 Stler Tasks is a personal task manager for Android. It is a native rewrite of a PWA with the same Google Sheets backend, so both apps share one `db_tasks` spreadsheet per user. There is no dedicated backend server — all persistent task data lives in Google Sheets, accessed via the Sheets API v4. Room serves as a local cache that makes the app fully functional offline.
