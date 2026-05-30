@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Stler Tasks Android — Technical Specification v2.2</title>
+<title>Stler Tasks Android — Technical Specification v2.5</title>
 <style>
   @page { margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -227,7 +227,7 @@
   <div class="subtitle">Technical Specification</div>
   <div class="accent-line"></div>
   <div class="meta">
-    <strong>Version:</strong> 2.2 (May 2026)<br>
+    <strong>Version:</strong> 2.5 (May 2026)<br>
     <strong>Repository:</strong> github.com/JuliaSivridi/Tasks_Android<br>
     <strong>Stack:</strong> Kotlin · Jetpack Compose · Room · Hilt · WorkManager · Glance · Google Sheets API v4 · Google Calendar API v3<br>
     <strong>Min SDK:</strong> 26 (Android 8.0) &nbsp;·&nbsp; <strong>Target SDK:</strong> 36
@@ -340,9 +340,10 @@ Local DB (Room)            SyncWorker (background push + pull)
 com.stler.tasks/<br>
 ├── <span class="orange">auth/</span><br>
 │   ├── AuthData.kt               <span class="dim">data class (email, name, avatar, spreadsheetId)</span><br>
-│   ├── AuthPreferences.kt        <span class="dim">DataStore wrapper (token, expiry, user info)</span><br>
+│   ├── AuthPreferences.kt        <span class="dim">DataStore wrapper (token, expiry, user info, feature flags)</span><br>
 │   ├── AuthScreen.kt             <span class="dim">Sign-in UI</span><br>
 │   ├── AuthViewModel.kt          <span class="dim">signIn / finalizeAuth / sign-out state</span><br>
+│   ├── FeatureFlags.kt           <span class="dim">data class (foldersEnabled, labelsEnabled, prioritiesEnabled, calendarsEnabled)</span><br>
 │   └── GoogleAuthRepository.kt   <span class="dim">full auth flow + find-or-create spreadsheet</span><br>
 │<br>
 ├── <span class="orange">data/</span><br>
@@ -382,7 +383,7 @@ com.stler.tasks/<br>
 │   └── SyncWorker.kt             <span class="dim">push queue → pull Sheets → pull Calendar</span><br>
 │<br>
 ├── <span class="orange">ui/</span><br>
-│   ├── alltasks/  completed/  folder/  label/  main/  priority/<br>
+│   ├── alltasks/  completed/  folder/  main/<br>
 │   ├── calendar/             <span class="dim">CalendarScreen, CalendarViewModel, CalendarEventItem</span><br>
 │   ├── navigation/           <span class="dim">Screen.kt (route constants)</span><br>
 │   ├── task/                 <span class="dim">TaskItem, TaskCheckbox, TaskFormSheet, TaskFormViewModel,</span><br>
@@ -794,7 +795,7 @@ shown events = if (calFiltersActive)  → events filtered by calendarId ∈ cale
 
 <p><strong>Layout:</strong></p>
 <ul>
-  <li><code>FilterBar</code> (shared component — see §8.11) at top</li>
+  <li><code>FilterBar</code> (shared component — see §8.5) at top</li>
   <li><code>ShimmerTaskList</code> while <code>isLoading</code></li>
   <li><code>EmptyState</code> (<code>FormatListBulleted</code> icon, "No tasks") when <code>filteredItems</code> is empty</li>
   <li><code>LazyColumn</code> with <code>TaskItem</code> and <code>CalendarEventItem</code> rows, <code>HorizontalDivider</code> (0.5dp) between each</li>
@@ -872,59 +873,7 @@ shown events = if (calFiltersActive)  → events filtered by calendarId ∈ cale
 
 <p><strong><code>toggleExpanded(task)</code>:</strong> calls <code>repository.toggleExpanded(task.id, !task.isExpanded)</code> — writes to Room (triggers <code>displayList</code> recomposition) without touching <code>updatedAt</code>.</p>
 
-<h3 id="s8-5">8.5 Label</h3>
-<p><strong>ViewModel:</strong> <code>LabelViewModel</code><br>
-<strong>Route:</strong> <code>label/{labelId}</code><br>
-<strong>Data source:</strong> <code>repository.observeAllPendingTasks()</code> filtered by <code>labelId in task.labels</code>. <code>labelId</code> from <code>SavedStateHandle</code>.</p>
-
-<p><strong>No filter bar</strong> — there is no <code>FilterBar</code> in <code>LabelScreen</code>. The screen shows only tasks with this label, no secondary filters.</p>
-
-<p><strong><code>showLabels = false</code></strong> passed to <code>TaskItem</code> — label chips are not shown in row 2 (the label is implicit from context).</p>
-
-<p><strong><code>showFolder = true</code></strong> — folder name and color shown in row 2.</p>
-
-<p><strong>Sort:</strong> Tasks are in the order returned by <code>observeAllPendingTasks()</code> filtered by label (Room default order — not re-sorted by priority/deadline). All tasks with the matching label ID appear regardless of folder.</p>
-
-<p><strong>Layout:</strong></p>
-<ul>
-  <li><code>ShimmerTaskList</code> while <code>isLoading</code></li>
-  <li><code>EmptyState</code> (<code>Label</code> icon, "No tasks", "Tasks with this label will appear here") when empty</li>
-  <li><code>LazyColumn</code> of <code>TaskItem</code> rows with <code>HorizontalDivider</code> (0.5dp)</li>
-</ul>
-
-<p><strong>Actions:</strong> complete, delete; update deadline, priority, labels.</p>
-
-<h3 id="s8-6">8.6 Priority</h3>
-<p><strong>ViewModel:</strong> <code>PriorityViewModel</code><br>
-<strong>Route:</strong> <code>priority/{priority}</code> — each priority level is a <strong>separate route</strong> (<code>priority/urgent</code>, <code>priority/important</code>, <code>priority/normal</code>). There are no tabs within <code>PriorityScreen</code>; the sidebar has three separate nav items that navigate to three separate route instances.</p>
-
-<p><strong>Data source:</strong> <code>repository.observeAllPendingTasks()</code> filtered by <code>task.priority == selectedPriority</code>.</p>
-
-<p><strong><code>selectedPriority</code>:</strong> set via <code>viewModel.selectPriority(p)</code> in <code>LaunchedEffect(priority)</code> when the composable receives the route param (<code>"urgent"</code> → <code>Priority.URGENT</code>, <code>"important"</code> → <code>Priority.IMPORTANT</code>, else → <code>Priority.NORMAL</code>).</p>
-
-<p><strong>Sort (within <code>filteredTasks</code>):</strong></p>
-<ol>
-  <li>Dated tasks first (0) before undated (1)</li>
-  <li><code>deadlineDate</code> ascending</li>
-  <li>Timed (0) before all-day (1) within same date</li>
-  <li><code>deadlineTime</code> ascending</li>
-  <li><code>createdAt</code> ascending</li>
-</ol>
-
-<p><strong>No filter bar</strong> — there is no <code>FilterBar</code> in <code>PriorityScreen</code>.</p>
-
-<p><strong><code>showFolder = true</code></strong> — folder name and color shown in row 2.</p>
-
-<p><strong>Layout:</strong></p>
-<ul>
-  <li><code>ShimmerTaskList</code> while <code>isLoading</code></li>
-  <li><code>EmptyState</code> (<code>Flag</code> icon, "No tasks", "No {Priority} priority tasks") when empty</li>
-  <li><code>LazyColumn</code> of <code>TaskItem</code> rows with <code>HorizontalDivider</code> (0.5dp)</li>
-</ul>
-
-<p><strong>Actions:</strong> complete, delete; update deadline, priority, labels.</p>
-
-<h3 id="s8-11">8.11 FilterBar (Shared Component)</h3>
+<h3 id="s8-5">8.5 FilterBar (Shared Component)</h3>
 <p><code>FilterBar</code> is a shared composable defined in <code>AllTasksScreen.kt</code>, reused by <code>AllTasksScreen</code> and <code>CompletedScreen</code>.</p>
 
 <p><strong>Layout:</strong> <code>Row(horizontalArrangement=spacedBy(4.dp))</code> — compact filter bar, never wraps.</p>
@@ -957,12 +906,13 @@ shown events = if (calFiltersActive)  → events filtered by calendarId ∈ cale
     <tr><td><code>folderFilter</code></td><td><code>emptySet()</code></td><td>Active folder ID set</td></tr>
     <tr><td><code>calendars</code></td><td><code>emptyList()</code></td><td><code>CalendarItem</code> list (distinct from events)</td></tr>
     <tr><td><code>calendarFilter</code></td><td><code>emptySet()</code></td><td>Active calendar ID set</td></tr>
-    <tr><td><code>showLabelFilter</code></td><td><code>true</code></td><td>Hide label chip (e.g. on LabelScreen)</td></tr>
-    <tr><td><code>showFolderFilter</code></td><td><code>true</code></td><td>Hide folder chip (e.g. on FolderScreen)</td></tr>
+    <tr><td><code>featureFlags</code></td><td><code>FeatureFlags()</code></td><td>Gates Priority/Label/Folder chips — hidden when corresponding feature disabled</td></tr>
+    <tr><td><code>showLabelFilter</code></td><td><code>true</code></td><td>Additional gate for label chip (e.g. implicit in FolderScreen)</td></tr>
+    <tr><td><code>showFolderFilter</code></td><td><code>true</code></td><td>Additional gate for folder chip (e.g. on FolderScreen)</td></tr>
   </tbody>
 </table>
 
-<h2 id="s8-7">8.7 Calendar</h2>
+<h2 id="s8-6">8.6 Calendar</h2>
 <p><strong>ViewModel:</strong> <code>CalendarViewModel</code><br>
 <strong>Route:</strong> <code>calendar/{calendarId}</code> — separate screen per calendar; <code>calendarId</code> from <code>SavedStateHandle</code> (URL-decoded).<br>
 <strong>Data:</strong> events for one specific calendar from Room, from <code>today</code> to <code>today&nbsp;+&nbsp;366&nbsp;days</code>.</p>
@@ -971,11 +921,11 @@ shown events = if (calFiltersActive)  → events filtered by calendarId ∈ cale
   <li>Date header before each group (<code>CalendarDayHeader</code>): <code>"d MMM ‧ Weekday"</code> with <code>"‧ Today"</code> / <code>"‧ Tomorrow"</code> suffix for near dates</li>
   <li>All overdue events (<code>startDate &lt; today</code>) collapsed into a single <code>"Overdue"</code> group (key = <code>LocalDate.MIN</code>)</li>
   <li><code>ShimmerTaskList</code> while loading; <code>EmptyState</code> when no events</li>
-  <li>One <code>CalendarEventItem</code> per event (see §8.8)</li>
+  <li>One <code>CalendarEventItem</code> per event (see §8.7)</li>
   <li>No FAB inside <code>CalendarScreen</code> itself; the global <code>MainScreen</code> FAB is still visible and opens <strong>task</strong> creation (TASK mode), not event creation</li>
 </ul>
 
-<h2 id="s8-8">8.8 CalendarEventItem</h2>
+<h2 id="s8-7">8.7 CalendarEventItem</h2>
 <p>Shared composable for displaying a single calendar event — used in <code>CalendarScreen</code>, <code>AllTasksScreen</code>, and <code>UpcomingScreen</code>. Layout mirrors <code>TaskItem</code>.</p>
 <pre>Row(start=8dp, end=4dp, top=4dp, bottom=4dp) {
     Box(40dp) { CalendarMonth icon 24dp, tinted calColor }
@@ -1011,7 +961,7 @@ shown events = if (calFiltersActive)  → events filtered by calendarId ∈ cale
   </tbody>
 </table>
 
-<h2 id="s8-9">8.9 MainScreen — Global FAB and Settings</h2>
+<h2 id="s8-8">8.8 MainScreen — Global FAB and Navigation</h2>
 <p><strong>FAB</strong> — the single <code>FloatingActionButton</code> in the <code>MainScreen</code> <code>Scaffold</code>. Visible on <strong>all</strong> screens. Opens <code>TaskFormSheet</code> in TASK mode:</p>
 <ul>
   <li>On the Folder screen — creates a task in the current folder (<code>sidebarFolderContext = currentFolderId</code>)</li>
@@ -1020,27 +970,26 @@ shown events = if (calFiltersActive)  → events filtered by calendarId ∈ cale
 </ul>
 <p><strong>Settings</strong> — opened not via a NavHost route but as an overlay: <code>showSettings = true</code> in <code>MainScreen</code> replaces the main content with <code>SettingsScreen</code>. Triggered by the settings icon in <code>TasksTopAppBar</code>.</p>
 
-<h2 id="s8-10">8.10 Settings Screen</h2>
-<p><strong>ViewModel:</strong> <code>SettingsViewModel</code>. Opens as an overlay on top of the main content (not via NavHost); closed by the Back button in the TopAppBar.</p>
+<h2 id="s8-9">8.9 Settings Screen</h2>
+<p><strong>ViewModel:</strong> <code>SettingsViewModel</code>. Opens as an overlay on top of the main content (not via NavHost); <code>BackHandler</code> intercepts the system back button to return to the main screen without exiting the app.</p>
 
-<p><strong>SPREADSHEET section</strong></p>
-<ul>
-  <li>Shows the name and ID of the active Google Sheets spreadsheet</li>
-  <li>"Change" button expands an <code>AnimatedVisibility</code> list of all Google Sheets in the user's Drive (calls <code>listUserSheets()</code> on first open)</li>
-  <li>The active spreadsheet is marked with a Check icon; clicking another calls <code>switchSpreadsheet()</code>: saves the new ID to DataStore, clears Room (tasks / folders / labels / sync_queue), triggers sync</li>
-</ul>
+<p><strong>StateFlows:</strong> <code>featureFlags</code>, <code>folders</code>, <code>labels</code>, <code>spreadsheetId</code>, <code>spreadsheetName</code>, <code>files</code>, <code>loading</code>, <code>switching</code>, <code>calendars</code>, <code>calendarsLoading</code></p>
 
-<p><strong>CALENDARS section</strong></p>
-<ul>
-  <li>Lists all of the user's Google Calendars (loaded on screen open via <code>loadCalendars()</code>)</li>
-  <li>Each row: <code>CalendarMonth</code> icon tinted with calendar color + name + <code>Checkbox</code></li>
-  <li>Clicking a row or the Checkbox → <code>toggleCalendar()</code>: updates <code>selectedCalendarIds</code> in DataStore + optimistically updates UI without re-fetching from API</li>
-  <li>Refresh button in section header — re-fetches from the Calendar API</li>
-  <li><strong>Only calendars with <code>isSelected = true</code> are synced</strong> (SyncWorker fetches events only for selected calendars) and shown in Upcoming / Calendar screens / widgets</li>
-</ul>
+<p><strong>Section order (top → bottom, no section headers):</strong></p>
+<ol>
+  <li><strong>Spreadsheet</strong> — current file name + "Change" button → expandable Drive file picker; <code>switchSpreadsheet()</code> clears all Room data and triggers sync.</li>
+  <li><strong>Priorities</strong> — <code>Switch</code> toggle (<code>featureFlags.prioritiesEnabled</code>); hides priority UI everywhere when off.</li>
+  <li><strong>Labels</strong> — <code>Switch</code> toggle in card header + animated label list (color dot + name + Edit/Delete) + Add "+" button in header when enabled; label CRUD inline.</li>
+  <li><strong>Folders</strong> — <code>Switch</code> toggle in card header + animated folder list (icon tinted with folder color + name + Edit/Delete, Inbox excluded) + Add "+" button in header when enabled; folder CRUD inline.</li>
+  <li><strong>Calendars</strong> — <code>Switch</code> toggle + Refresh button + checkbox list of Google Calendars; clearing events on disable; <code>PackageManager.setComponentEnabledSetting</code> hides <code>CalendarWidgetReceiver</code> from widget picker.</li>
+</ol>
 
-<h3 id="s8-12">8.12 Sidebar (SidebarMenu)</h3>
-<p><code>ModalDrawerSheet</code> occupying 70% of screen width (<code>fillMaxWidth(0.70f)</code>). Opened via the hamburger button in <code>TasksTopAppBar</code>.</p>
+<p><strong>Feature flags storage:</strong> <code>AuthPreferences</code> DataStore keys <code>folders_enabled</code>, <code>labels_enabled</code>, <code>priorities_enabled</code>, <code>calendars_enabled</code> (all default <code>true</code>). Combined via <code>combine()</code> into <code>featureFlags: Flow&lt;FeatureFlags&gt;</code>. All ViewModels that gate UI subscribe to <code>authPreferences.featureFlags</code> once. Stale filters auto-cleared in <code>init</code> coroutines when a feature is disabled.</p>
+
+<p><strong>Widget picker hiding:</strong> <code>PackageManager.setComponentEnabledSetting(FolderWidgetReceiver, DISABLED)</code> removes Folder widget from system picker when <code>foldersEnabled = false</code>; same for <code>CalendarWidgetReceiver</code>.</p>
+
+<h3 id="s8-10">8.10 Sidebar (SidebarMenu)</h3>
+<p><code>ModalDrawerSheet</code> occupying 70% of screen width (<code>fillMaxWidth(0.70f)</code>). Navigation-only — folder/label CRUD has moved to Settings. Opened via the hamburger button in <code>TasksTopAppBar</code>.</p>
 
 <p><strong>Structure (top to bottom):</strong></p>
 <ol>
@@ -1052,29 +1001,16 @@ shown events = if (calFiltersActive)  → events filtered by calendarId ∈ cale
       <li>Completed (<code>CheckCircle</code> icon)</li>
     </ul>
   </li>
-  <li><strong>Priorities section</strong> (collapsible):
-    <ul>
-      <li>Section header with <code>ExpandMore</code> chevron + toggle</li>
-      <li>3 nav items: Urgent (<code>Flag</code>, PriorityUrgent color) / Important (<code>Flag</code>, PriorityImportant) / Normal (<code>Flag</code>, PriorityNormal)</li>
-      <li>Each navigates to <code>priority/{key}</code> route</li>
-    </ul>
-  </li>
-  <li><strong>Labels section</strong> (collapsible, has "+" add button):
-    <ul>
-      <li>Each label: <code>Label</code> icon (label.color) + name; badge area shows <code>MoreVert</code> → <code>DropdownMenu</code> (Edit / Delete)</li>
-    </ul>
-  </li>
-  <li><strong>Folders section</strong> (collapsible, has "+" add button):
+  <li><strong>Folders section</strong> (collapsible; hidden when <code>featureFlags.foldersEnabled = false</code>):
     <ul>
       <li>Inbox: <code>Inbox</code> icon; other folders: <code>Folder</code> icon — both tinted with <code>folder.color</code></li>
-      <li>Each folder: badge area shows <code>MoreVert</code> → <code>DropdownMenu</code> (Edit / Delete)</li>
+      <li>Navigation-only: no Edit/Delete context menu (managed in Settings)</li>
     </ul>
   </li>
-  <li><strong>Calendars section</strong> (collapsible, <strong>only shown when <code>selectedCalendars.isNotEmpty()</code></strong>):
+  <li><strong>Calendars section</strong> (collapsible; hidden when <code>featureFlags.calendarsEnabled = false</code> or <code>selectedCalendars.isEmpty()</code>):
     <ul>
       <li>Each calendar: <code>CalendarMonth</code> icon tinted <code>cal.color</code> + <code>cal.summary</code></li>
       <li>Navigates to <code>calendar/{calendarId}</code> (URL-encoded via <code>Screen.calendarRoute()</code>)</li>
-      <li>No "+" button (calendars are managed in Settings)</li>
     </ul>
   </li>
 </ol>
@@ -1082,7 +1018,7 @@ shown events = if (calFiltersActive)  → events filtered by calendarId ∈ cale
 
 <p><strong>Selected item highlight:</strong> <code>NavigationDrawerItem</code> uses <code>sidebarItemColors()</code> — overrides Material You default (<code>primaryContainer</code>) with <code>NavSelected</code> in light mode and <code>SelectedHighlightDark</code> in dark mode for clearer active item visibility.</p>
 
-<p><strong><code>SidebarState</code></strong> — tracks which sections are open/closed (<code>prioritiesOpen</code>, <code>labelsOpen</code>, <code>foldersOpen</code>, <code>calendarsOpen</code>); persisted via <code>SidebarPreferences</code> (DataStore).</p>
+<p><strong><code>SidebarState</code></strong> — tracks which sections are open/closed (<code>foldersOpen</code>, <code>calendarsOpen</code>); persisted via <code>SidebarPreferences</code> (DataStore).</p>
 
 <hr>
 

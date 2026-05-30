@@ -1,6 +1,6 @@
 # Stler Tasks Android — Technical Specification
 
-**Version:** 2.2 (May 2026)  
+**Version:** 2.5 (May 2026)  
 **Repository:** github.com/JuliaSivridi/Tasks_Android  
 **Stack:** Kotlin · Jetpack Compose · Room · Hilt · WorkManager · Glance · Google Sheets API v4 · Google Calendar API v3  
 **Min SDK:** 26 (Android 8.0) · **Target SDK:** 36
@@ -45,7 +45,7 @@ In addition to tasks, the app integrates with **Google Calendar API v3**: events
 | Navigation | Navigation Compose | — | Single NavHost inside MainScreen |
 | Lifecycle | Lifecycle ViewModel / Runtime | — | `WhileSubscribed(5000)` sharing strategy |
 
-**Build config:** `applicationId = "com.stler.tasks"`, `versionCode = 21`, `versionName = "2.1"`, `minSdk = 26`, `targetSdk = 36`. KSP with `room.schemaLocation = "$projectDir/schemas"`. Signing via environment variables `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` (only wired if `KEYSTORE_PATH` is non-blank, so debug builds are unaffected).
+**Build config:** `applicationId = "com.stler.tasks"`, `versionCode = 25`, `versionName = "2.5"`, `minSdk = 26`, `targetSdk = 36`. KSP with `room.schemaLocation = "$projectDir/schemas"`. Signing via environment variables `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` (only wired if `KEYSTORE_PATH` is non-blank, so debug builds are unaffected).
 
 ---
 
@@ -110,7 +110,7 @@ In addition to tasks, the app integrates with **Google Calendar API v3**: events
 
 ```
 com.stler.tasks/
-├── auth/                    Google auth repository, DataStore preferences, AuthData model
+├── auth/                    GoogleAuthRepository, AuthPreferences (DataStore), AuthData, FeatureFlags
 ├── data/
 │   ├── local/
 │   │   ├── dao/             TaskDao, FolderDao, LabelDao, SyncQueueDao, CalendarEventDao
@@ -143,11 +143,9 @@ com.stler.tasks/
 │   ├── alltasks/            AllTasksScreen + AllTasksViewModel + FilterBar
 │   ├── completed/           CompletedScreen + CompletedViewModel
 │   ├── folder/              FolderScreen (drag-reorder) + FolderViewModel
-│   ├── label/               LabelScreen + LabelViewModel
-│   ├── priority/            PriorityScreen + PriorityViewModel
 │   ├── calendar/            CalendarScreen + CalendarViewModel + CalendarEventItem
 │   ├── task/                TaskFormSheet, TaskFormViewModel, TaskItem, TaskColors, pickers
-│   ├── settings/            SettingsScreen + SettingsViewModel
+│   ├── settings/            SettingsScreen + SettingsViewModel (feature flags, folder/label/calendar mgmt)
 │   ├── help/                HelpScreen (static content)
 │   ├── feedback/            FeedbackScreen + FeedbackViewModel
 │   ├── navigation/          Screen.kt (route constants)
@@ -639,28 +637,7 @@ All methods live in `CalendarRepositoryImpl`. Mutations bypass the SyncQueue ent
 
 ---
 
-### 8.5 Label
-
-**ViewModel:** `LabelViewModel` (gets `labelId` from `SavedStateHandle`)  
-**Data source:** `repository.observeAllPendingTasks()` filtered by `labelId in task.labels`  
-**StateFlows:** `filteredTasks`, `isLoading`, `labels`, `folders`  
-**Note:** Label chip is hidden from FilterBar (`showLabels = false` on TaskItem — label is implicit).  
-**Empty state:** `EmptyState` with `Label` icon.
-
----
-
-### 8.6 Priority
-
-**ViewModel:** `PriorityViewModel`  
-**Data source:** `repository.observeAllPendingTasks()` filtered by `_selectedPriority`  
-**StateFlows:** `filteredTasks`, `isLoading`, `labels`, `folders`, `selectedPriority`  
-**Sort:** deadline date (nulls last) → timed-before-allday → time → createdAt  
-**Navigation arg:** `priority` string (`"urgent"`, `"important"`, `"normal"`) — sets `_selectedPriority` via `LaunchedEffect`.  
-**Empty state:** `EmptyState` with `Flag` icon.
-
----
-
-### 8.7 Calendar
+### 8.5 Calendar
 
 **ViewModel:** `CalendarViewModel` (gets `calendarId` from `SavedStateHandle`)  
 **Data source:** `calendarRepository.getEventsForCalendars(setOf(calendarId), now, now+366)`  
@@ -671,7 +648,7 @@ All methods live in `CalendarRepositoryImpl`. Mutations bypass the SyncQueue ent
 
 ---
 
-### 8.8 CalendarEventItem
+### 8.6 CalendarEventItem
 
 Shared composable for displaying a single calendar event — used in `CalendarScreen`, `AllTasksScreen`, and `UpcomingScreen`. Layout mirrors `TaskItem`.
 
@@ -696,29 +673,43 @@ fun CalendarEventItem(
 
 ---
 
-### 8.9 MainScreen — Global FAB and Settings
+### 8.7 MainScreen — Global FAB and Navigation
 
 **ViewModel:** `MainViewModel`, `TaskFormViewModel`  
-**StateFlows:** `folders`, `labels`, `syncState`, `authData`, `sidebarState`, `selectedCalendars`  
+**StateFlows:** `folders`, `labels`, `syncState`, `authData`, `sidebarState`, `selectedCalendars`, `featureFlags`  
 **Layout:** `ModalNavigationDrawer` + `Scaffold` (TopAppBar, FAB, SnackbarHost) + `NavHost`.  
 **Start destination:** `Screen.UPCOMING`  
+**Routes:** `UPCOMING`, `ALL_TASKS`, `COMPLETED`, `FOLDER/{folderId}`, `CALENDAR/{calendarId}`  
 **Overlay screens** (replace entire content, no NavBackStack entry): Settings, Help, Feedback — toggled via `showSettings`, `showHelp`, `showFeedback` local state.  
 **Task form:** `TaskFormSheet` shown as overlay when `showForm = true`. Supports create, edit, add-subtask, edit-calendar-event, edit-event-schedule-only modes.  
-**Deep links:** Handled in `LaunchedEffect(initialDeepLinkUri)`.
+**Deep links:** Handled in `LaunchedEffect(initialDeepLinkUri)`.  
+**Sidebar:** `SidebarMenu` — navigation-only; folder CRUD moved to Settings. Folders/Calendars sections gated by `featureFlags`.
 
 ---
 
-### 8.10 Settings Screen
+### 8.8 Settings Screen
 
 **ViewModel:** `SettingsViewModel`  
-**StateFlows:** `spreadsheetId`, `spreadsheetName`, `files: List<DriveFile>`, `loading`, `switching`, `calendars: List<CalendarItem>`, `calendarsLoading`  
-**Sections:** SPREADSHEET (shows current spreadsheet name; expandable picker listing all Drive spreadsheets), CALENDARS (checkbox list of all Google Calendars; refresh button).  
-**Switch spreadsheet:** saves new ID/name to DataStore, clears all local Room data (tasks/folders/labels/syncQueue), triggers sync.  
-**Toggle calendar:** updates `selectedCalendarIds` in DataStore + optimistically updates UI list.
+**StateFlows:** `featureFlags`, `folders`, `labels`, `spreadsheetId`, `spreadsheetName`, `files`, `loading`, `switching`, `calendars`, `calendarsLoading`  
+**Physical back button:** `BackHandler` intercepts system back → calls `onNavigateBack` (returns to main screen, does not exit app).
+
+**Section order (top → bottom, no headers):**
+
+1. **Spreadsheet** — current file name + "Change" button → expandable Drive file picker; `switchSpreadsheet()` clears all Room data and triggers sync.
+2. **Priorities** — `Switch` toggle (`featureFlags.prioritiesEnabled`); hides priority UI everywhere when off.
+3. **Labels** — `Switch` toggle + animated label list (color dot + name + Edit/Delete) + Add button in header; label CRUD inline.
+4. **Folders** — `Switch` toggle + animated folder list (icon tinted with folder color + name + Edit/Delete, Inbox excluded) + Add button in header; folder CRUD inline.
+5. **Calendars** — `Switch` toggle + Refresh button + checkbox list of Google Calendars; clearing events on disable; `PackageManager.setComponentEnabledSetting` hides `CalendarWidgetReceiver` from widget picker.
+
+**Feature flags storage:** `AuthPreferences` DataStore keys `folders_enabled`, `labels_enabled`, `priorities_enabled`, `calendars_enabled` (all default `true`). Combined into `featureFlags: Flow<FeatureFlags>` via `combine`.
+
+**`FeatureFlags` data class** (`auth/FeatureFlags.kt`): `foldersEnabled`, `labelsEnabled`, `prioritiesEnabled`, `calendarsEnabled`. All ViewModels that gate UI subscribe to `authPreferences.featureFlags` once (single subscription pattern). Auto-clear stale filters on feature disable via `init` coroutines.
+
+**Widget picker hiding:** `PackageManager.setComponentEnabledSetting(FolderWidgetReceiver, DISABLED)` removes Folder widget from system picker when `foldersEnabled = false`; same for `CalendarWidgetReceiver`.
 
 ---
 
-### 8.11 FilterBar
+### 8.9 FilterBar
 
 Shared composable defined in `AllTasksScreen.kt`, reused by `AllTasksScreen` and `CompletedScreen`.
 
@@ -731,6 +722,7 @@ fun FilterBar(
     folderFilter    : Set<String> = emptySet(),
     calendars       : List<CalendarItem> = emptyList(),
     calendarFilter  : Set<String> = emptySet(),
+    featureFlags    : FeatureFlags = FeatureFlags(),
     onTogglePriority: (Priority) -> Unit,
     onToggleLabel   : (String) -> Unit,
     onToggleFolder  : (String) -> Unit = {},
@@ -740,6 +732,8 @@ fun FilterBar(
     showFolderFilter: Boolean = true,
 )
 ```
+
+Priority/label/folder chips are hidden when the corresponding `featureFlags.*Enabled` is `false`.
 
 **Layout:** `Row` — optional ✕ clear-all button, then icon-only `FilterChip` buttons (priority 🚩, labels 🏷, folders 📁, calendars 📅). Each chip shows a count badge when active. Each chip opens a `DropdownMenu` with multi-select items (checkmark on active).  
 **Neutral chip colors:** overrides Material You warm tint — selected container = `#d8d8d8` (light) / `primaryContainer` (dark).
@@ -774,6 +768,7 @@ A large composable used in all task list screens and widgets. Key parameters:
 | `depth` | Indentation depth (0 = root) |
 | `hasChildren` | Shows expand/collapse toggle |
 | `completedChildCount` / `totalChildCount` | Progress indicator in subtask badge |
+| `featureFlags` | `FeatureFlags` — gates checkbox color, label chips, priority chip, context menu items |
 | `showFolder` | Whether to show folder name/color in row 2 |
 | `showLabels` | Whether to show label chips in row 2 |
 | `showExpandSlot` | Reserve space for expand icon even if no children |

@@ -17,8 +17,8 @@ android {
         applicationId = "com.stler.tasks"
         minSdk = 26
         targetSdk = 36
-        versionCode = 21
-        versionName = "2.1"
+        versionCode = 25
+        versionName = "2.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

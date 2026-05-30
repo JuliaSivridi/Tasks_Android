@@ -2,8 +2,6 @@
 
 A native Android task manager — the companion app to [Stler Tasks PWA](https://stler-tasks.vercel.app). Both apps share the same `db_tasks` Google Spreadsheet, so tasks, folders, and labels stay in sync between web and phone automatically.
 
-> Inspired by [Todoist](https://todoist.com/) — personal task management without a subscription, backed by your own Google Sheets.
-
 ---
 
 ## Features
@@ -12,18 +10,22 @@ A native Android task manager — the companion app to [Stler Tasks PWA](https:/
 - Create tasks with title, priority, deadline (date + optional time), labels, and folder
 - Subtasks at any depth with expand/collapse; progress counter on the parent row
 - Recurring tasks — daily / weekly / monthly; completing a recurring task advances the deadline automatically, not marks it done
-- Smart input: type `@FolderName` or `#LabelName` in the title to set folder / add label instantly
+- Smart input: type `@FolderName`, `#LabelName`, or `!1`/`!2`/`!3` in the title to set folder / label / priority instantly
 
 **Organization**
 - **Folders** — group tasks; drag to reorder within a folder; hierarchical subtask tree
 - **Labels** — colored tags, multiple per task; filterable across all views
 - **Priority** — Urgent / Important / Normal; color-coded flags on every task row
 
+**App flexibility**
+- Each feature area (Folders, Labels, Priorities, Calendars) can be individually toggled on/off in Settings
+- All task data is preserved regardless of toggle state — turning a feature back on restores full visibility instantly
+- Folders and Labels are managed directly in Settings (create, rename, delete)
+
 **Views**
 - **Upcoming** — tasks + calendar events grouped by day with a scrollable week strip; overdue section at the top
 - **All Tasks** — flat list of all pending tasks and calendar events, interleaved by date and priority
-- **Priority** — separate screen per priority level
-- **Folders / Labels** — dedicated screen per folder or label
+- **Folder** — dedicated task list per folder with drag-to-reorder
 - **Calendar** — event list for each connected calendar
 - **Completed** — archive of done tasks with one-tap restore
 
@@ -82,20 +84,20 @@ A native Android task manager — the companion app to [Stler Tasks PWA](https:/
 ui/
   main/        — Navigation drawer, top bar, main scaffold, FAB
   upcoming/    — Week strip + day-grouped task list
-  alltasks/    — Flat task list with priority / label / folder filters
+  alltasks/    — Flat task list with priority / label / folder / calendar filters
   folder/      — Hierarchical task list with drag-to-reorder
-  label/       — Tasks filtered by label
-  priority/    — Tasks filtered by priority level
+  calendar/    — Event list per calendar
   completed/   — Completed tasks with restore / delete
+  settings/    — Feature toggles, spreadsheet picker, folder/label/calendar management
   task/        — TaskItem, TaskFormSheet, DeadlinePickerDialog, pickers
   theme/       — Color palette, Typography, Theme
 data/
-  local/       — Room DB (version 4), DAOs, entities
-  remote/      — Retrofit + SheetsMapper (row ↔ entity)
-  repository/  — TaskRepositoryImpl (single source of truth)
+  local/       — Room DB (version 8), DAOs, entities
+  remote/      — Retrofit + SheetsMapper (row ↔ entity) + CalendarApi
+  repository/  — TaskRepositoryImpl + CalendarRepositoryImpl
 sync/          — SyncWorker (WorkManager), SyncManager, SyncState
-auth/          — GoogleAuthRepository, AuthPreferences (DataStore)
-widget/        — Glance widgets (Upcoming, Folder, TaskList) + actions
+auth/          — GoogleAuthRepository, AuthPreferences (DataStore), FeatureFlags
+widget/        — Glance widgets (Upcoming, Folder, TaskList, Calendar) + actions
 di/            — Hilt modules
 ```
 
