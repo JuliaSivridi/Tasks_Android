@@ -2,6 +2,8 @@ package com.stler.tasks.ui.main
 
 import androidx.lifecycle.viewModelScope
 import com.stler.tasks.auth.AuthData
+import com.stler.tasks.auth.AuthPreferences
+import com.stler.tasks.auth.FeatureFlags
 import com.stler.tasks.ui.BaseViewModel
 import com.stler.tasks.auth.GoogleAuthRepository
 import com.stler.tasks.data.repository.CalendarRepository
@@ -33,6 +35,7 @@ class MainViewModel @Inject constructor(
     private val syncManager: SyncManager,
     private val sidebarPreferences: SidebarPreferences,
     private val calendarRepository: CalendarRepository,
+    private val authPreferences: AuthPreferences,
 ) : BaseViewModel() {
 
     /** All pending tasks at any depth — used for deeplink task lookup. */
@@ -41,6 +44,9 @@ class MainViewModel @Inject constructor(
     /** All stored calendar events — used for deeplink event lookup. */
     val allEventsForDeepLink: Flow<List<com.stler.tasks.domain.model.CalendarEvent>> =
         calendarRepository.getAllEvents()
+
+    val featureFlags: StateFlow<FeatureFlags> = authPreferences.featureFlags
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FeatureFlags())
 
     val folders: StateFlow<List<Folder>> = taskRepository.observeFolders()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -114,20 +120,4 @@ class MainViewModel @Inject constructor(
         taskRepository.deleteFolder(folderId)
     }
 
-    // ── Label CRUD ────────────────────────────────────────────────────────
-
-    fun createLabel(name: String, color: String) = safeLaunch {
-        val nextOrder = (labels.value.maxOfOrNull { it.sortOrder } ?: -1) + 1
-        taskRepository.createLabel(
-            Label(id = generateId("lbl"), name = name, color = color, sortOrder = nextOrder)
-        )
-    }
-
-    fun updateLabel(label: Label, name: String, color: String) = safeLaunch {
-        taskRepository.updateLabel(label.copy(name = name, color = color))
-    }
-
-    fun deleteLabel(labelId: String) = safeLaunch {
-        taskRepository.deleteLabel(labelId)
-    }
 }

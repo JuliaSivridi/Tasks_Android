@@ -108,19 +108,19 @@ class WidgetConfigActivity : ComponentActivity() {
 
         setContent {
             TasksTheme {
-                val folders by taskRepository.observeFolders()
+                val folders      by taskRepository.observeFolders()
                     .collectAsStateWithLifecycle(initialValue = emptyList())
-                val labels by taskRepository.observeLabels()
+                val labels       by taskRepository.observeLabels()
                     .collectAsStateWithLifecycle(initialValue = emptyList())
-                val calendarsEnabled by authPreferences.calendarsEnabled
-                    .collectAsStateWithLifecycle(initialValue = true)
+                val featureFlags by authPreferences.featureFlags
+                    .collectAsStateWithLifecycle(initialValue = com.stler.tasks.auth.FeatureFlags())
 
                 WidgetConfigScreen(
                     widgetType         = widgetType,
                     folders            = folders,
                     labels             = labels,
                     calendarRepository = calendarRepository,
-                    calendarsEnabled   = calendarsEnabled,
+                    featureFlags       = featureFlags,
                     onConfirmFolder    = { folderId ->
                         lifecycleScope.launch {
                             WidgetPrefs.setFolderId(this@WidgetConfigActivity, appWidgetId, folderId)
@@ -173,7 +173,7 @@ private fun WidgetConfigScreen(
     folders           : List<Folder>,
     labels            : List<Label>,
     calendarRepository: CalendarRepository,
-    calendarsEnabled  : Boolean,
+    featureFlags      : com.stler.tasks.auth.FeatureFlags,
     onConfirmFolder   : (folderId: String) -> Unit,
     onConfirmTaskList : (folderIds: Set<String>, labelIds: Set<String>, priorityIds: Set<String>) -> Unit,
     onConfirmCalendar : (selectedIds: Set<String>, displayName: String) -> Unit,
@@ -200,19 +200,21 @@ private fun WidgetConfigScreen(
         ) {
             when (widgetType) {
                 WidgetType.FOLDER    -> FolderSelectorContent(
-                    folders   = folders,
-                    onConfirm = onConfirmFolder,
-                    onCancel  = onCancel,
+                    folders          = folders,
+                    foldersEnabled   = featureFlags.foldersEnabled,
+                    onConfirm        = onConfirmFolder,
+                    onCancel         = onCancel,
                 )
                 WidgetType.TASK_LIST -> TaskListFilterContent(
-                    folders   = folders,
-                    labels    = labels,
-                    onConfirm = onConfirmTaskList,
-                    onCancel  = onCancel,
+                    folders          = folders,
+                    labels           = labels,
+                    featureFlags     = featureFlags,
+                    onConfirm        = onConfirmTaskList,
+                    onCancel         = onCancel,
                 )
                 WidgetType.CALENDAR  -> CalendarSelectorContent(
                     calendarRepository = calendarRepository,
-                    calendarsEnabled   = calendarsEnabled,
+                    calendarsEnabled   = featureFlags.calendarsEnabled,
                     onConfirm          = onConfirmCalendar,
                     onCancel           = onCancel,
                 )
@@ -226,10 +228,22 @@ private fun WidgetConfigScreen(
 
 @Composable
 private fun FolderSelectorContent(
-    folders  : List<Folder>,
-    onConfirm: (folderId: String) -> Unit,
-    onCancel : () -> Unit,
+    folders        : List<Folder>,
+    foldersEnabled : Boolean = true,
+    onConfirm      : (folderId: String) -> Unit,
+    onCancel       : () -> Unit,
 ) {
+    if (!foldersEnabled) {
+        Text("Folders are disabled.", style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("Enable Folders in Settings to use this widget.", style = MaterialTheme.typography.bodyMedium)
+        Spacer(modifier = Modifier.height(24.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            OutlinedButton(onClick = onCancel) { Text("Close") }
+        }
+        return
+    }
+
     var selectedFolderId by remember { mutableStateOf(folders.firstOrNull()?.id ?: "fld-inbox") }
 
     Text("Select a folder to show in the widget:", style = MaterialTheme.typography.titleMedium)
@@ -264,10 +278,11 @@ private val PRIORITY_OPTIONS = listOf(
 
 @Composable
 private fun TaskListFilterContent(
-    folders  : List<Folder>,
-    labels   : List<Label>,
-    onConfirm: (folderIds: Set<String>, labelIds: Set<String>, priorityIds: Set<String>) -> Unit,
-    onCancel : () -> Unit,
+    folders      : List<Folder>,
+    labels       : List<Label>,
+    featureFlags : com.stler.tasks.auth.FeatureFlags = com.stler.tasks.auth.FeatureFlags(),
+    onConfirm    : (folderIds: Set<String>, labelIds: Set<String>, priorityIds: Set<String>) -> Unit,
+    onCancel     : () -> Unit,
 ) {
     val selectedFolderIds   = remember { mutableStateListOf<String>() }
     val selectedLabelIds    = remember { mutableStateListOf<String>() }
@@ -280,7 +295,7 @@ private fun TaskListFilterContent(
     Spacer(modifier = Modifier.height(16.dp))
 
     // ── Folders ───────────────────────────────────────────────────────────────
-    if (folders.isNotEmpty()) {
+    if (featureFlags.foldersEnabled && folders.isNotEmpty()) {
         FilterSectionHeader(
             title = "Folder",
             hint  = if (selectedFolderIds.isEmpty()) "Any" else "${selectedFolderIds.size} selected",
@@ -300,7 +315,7 @@ private fun TaskListFilterContent(
     }
 
     // ── Labels ────────────────────────────────────────────────────────────────
-    if (labels.isNotEmpty()) {
+    if (featureFlags.labelsEnabled && labels.isNotEmpty()) {
         FilterSectionHeader(
             title = "Label",
             hint  = if (selectedLabelIds.isEmpty()) "Any" else "${selectedLabelIds.size} selected",
@@ -320,6 +335,7 @@ private fun TaskListFilterContent(
     }
 
     // ── Priority ──────────────────────────────────────────────────────────────
+    if (featureFlags.prioritiesEnabled) {
     FilterSectionHeader(
         title = "Priority",
         hint  = if (selectedPriorityIds.isEmpty()) "Any" else "${selectedPriorityIds.size} selected",
@@ -335,6 +351,7 @@ private fun TaskListFilterContent(
             },
         )
     }
+    } // end if (featureFlags.prioritiesEnabled)
 
     Spacer(modifier = Modifier.height(24.dp))
     ActionButtons(

@@ -76,6 +76,7 @@ fun AllTasksScreen(
     val folderFilter       by viewModel.folderFilter.collectAsStateWithLifecycle()
     val calendarFilter     by viewModel.calendarFilter.collectAsStateWithLifecycle()
     val calendarsInEvents  by viewModel.calendarsInEvents.collectAsStateWithLifecycle()
+    val featureFlags       by viewModel.featureFlags.collectAsStateWithLifecycle()
 
     ErrorSnackbarEffect(viewModel)
 
@@ -119,6 +120,7 @@ fun AllTasksScreen(
             folderFilter     = folderFilter,
             calendars        = calendarsInEvents,
             calendarFilter   = calendarFilter,
+            featureFlags     = featureFlags,
             onTogglePriority = { viewModel.togglePriorityFilter(it) },
             onToggleLabel    = { viewModel.toggleLabelFilter(it) },
             onToggleFolder   = { viewModel.toggleFolderFilter(it) },
@@ -144,19 +146,21 @@ fun AllTasksScreen(
                         is ListItem.TaskItem -> {
                             val task = item.task
                             TaskItem(
-                                task = task,
-                                labels = labels,
-                                showFolder = true,
-                                folderName = folders.find { it.id == task.folderId }?.name,
+                                task        = task,
+                                labels      = labels,
+                                showFolder  = featureFlags.foldersEnabled,
+                                showLabels  = featureFlags.labelsEnabled,
+                                featureFlags = featureFlags,
+                                folderName  = folders.find { it.id == task.folderId }?.name,
                                 folderColor = folders.find { it.id == task.folderId }?.color,
-                                onCheckedChange = { checked -> if (checked) viewModel.completeTask(task.id) },
-                                onExpand = {},
+                                onCheckedChange  = { checked -> if (checked) viewModel.completeTask(task.id) },
+                                onExpand         = {},
                                 onDeadlineChange = { d, t, isRec, rType, rVal -> viewModel.updateDeadline(task.id, d, t, isRec, rType, rVal) },
                                 onPriorityChange = { p -> viewModel.updatePriority(task.id, p) },
-                                onLabelChange = { l -> viewModel.updateLabels(task.id, l) },
-                                onAddSubtask = { onAddSubtask(task) },
-                                onEdit = { onEditTask(task) },
-                                onDelete = { viewModel.deleteTask(task.id) },
+                                onLabelChange    = { l -> viewModel.updateLabels(task.id, l) },
+                                onAddSubtask     = { onAddSubtask(task) },
+                                onEdit           = { onEditTask(task) },
+                                onDelete         = { viewModel.deleteTask(task.id) },
                             )
                         }
                         is ListItem.EventItem -> {
@@ -212,6 +216,7 @@ fun FilterBar(
     folderFilter    : Set<String> = emptySet(),
     calendars       : List<CalendarItem> = emptyList(),
     calendarFilter  : Set<String> = emptySet(),
+    featureFlags    : com.stler.tasks.auth.FeatureFlags = com.stler.tasks.auth.FeatureFlags(),
     onTogglePriority: (Priority) -> Unit,
     onToggleLabel   : (String) -> Unit,
     onToggleFolder  : (String) -> Unit = {},
@@ -247,7 +252,7 @@ fun FilterBar(
         }
 
         // ── Priority chip ─────────────────────────────────────────────────
-        Box {
+        if (featureFlags.prioritiesEnabled) Box {
             FilterChip(
                 selected    = priorityFilter.isNotEmpty(),
                 onClick     = { priorityExpanded = true },
@@ -281,7 +286,7 @@ fun FilterBar(
         }
 
         // ── Labels chip ───────────────────────────────────────────────────
-        if (showLabelFilter && labels.isNotEmpty()) {
+        if (featureFlags.labelsEnabled && showLabelFilter && labels.isNotEmpty()) {
             Box {
                 FilterChip(
                     selected    = labelFilter.isNotEmpty(),
@@ -316,7 +321,7 @@ fun FilterBar(
         }
 
         // ── Folders chip ──────────────────────────────────────────────────
-        if (showFolderFilter && folders.isNotEmpty()) {
+        if (featureFlags.foldersEnabled && showFolderFilter && folders.isNotEmpty()) {
             Box {
                 FilterChip(
                     selected    = folderFilter.isNotEmpty(),

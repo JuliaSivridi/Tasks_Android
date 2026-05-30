@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.stler.tasks.auth.AuthPreferences
+import com.stler.tasks.auth.FeatureFlags
 import com.stler.tasks.auth.GoogleAuthRepository
 import com.stler.tasks.data.local.dao.FolderDao
 import com.stler.tasks.data.local.dao.LabelDao
@@ -14,9 +15,12 @@ import com.stler.tasks.data.local.dao.SyncQueueDao
 import com.stler.tasks.data.local.dao.TaskDao
 import com.stler.tasks.data.remote.dto.DriveFile
 import com.stler.tasks.data.repository.CalendarRepository
+import com.stler.tasks.data.repository.TaskRepository
 import com.stler.tasks.domain.model.CalendarItem
+import com.stler.tasks.domain.model.Label
 import com.stler.tasks.sync.SyncManager
 import com.stler.tasks.widget.CalendarWidgetReceiver
+import com.stler.tasks.widget.FolderWidgetReceiver
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,13 +31,18 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
+
+private fun generateId(prefix: String): String =
+    "${prefix}_${UUID.randomUUID().toString().replace("-", "").take(8)}"
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val authPreferences: AuthPreferences,
     private val googleAuthRepository: GoogleAuthRepository,
+    private val taskRepository: TaskRepository,
     private val taskDao: TaskDao,
     private val folderDao: FolderDao,
     private val labelDao: LabelDao,
@@ -41,6 +50,36 @@ class SettingsViewModel @Inject constructor(
     private val syncManager: SyncManager,
     private val calendarRepository: CalendarRepository,
 ) : ViewModel() {
+
+    // ── Feature flags ─────────────────────────────────────────────────────
+
+    val featureFlags: StateFlow<FeatureFlags> = authPreferences.featureFlags
+        .stateIn(viewModelScope, SharingStarted.Eagerly, FeatureFlags())
+
+    fun setFoldersEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            authPreferences.setFoldersEnabled(enabled)
+            setComponentEnabled(FolderWidgetReceiver::class.java, enabled)
+        }
+    }
+
+    fun setLabelsEnabled(enabled: Boolean) {
+        viewModelScope.launch { authPreferences.setLabelsEnabled(enabled) }
+    }
+
+    fun setPrioritiesEnabled(enabled: Boolean) {
+        viewModelScope.launch { authPreferences.setPrioritiesEnabled(enabled) }
+    }
+
+    private fun setComponentEnabled(cls: Class<*>, enabled: Boolean) {
+        val state = if (enabled) PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                    else         PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        context.packageManager.setComponentEnabledSetting(
+            ComponentName(context, cls),
+            state,
+            PackageManager.DONT_KILL_APP,
+        )
+    }
 
     // ── Spreadsheet ───────────────────────────────────────────────────────
 
@@ -58,7 +97,6 @@ class SettingsViewModel @Inject constructor(
     val loading:   StateFlow<Boolean>          = _loading.asStateFlow()
     val switching: StateFlow<Boolean>          = _switching.asStateFlow()
 
-    /** Loads all Google Sheets from the user's Drive (called when the picker expands). */
     fun loadFiles() {
         viewModelScope.launch {
             _loading.value = true
@@ -72,12 +110,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Switches the active spreadsheet:
-     * 1. Saves new spreadsheetId + name to DataStore
-     * 2. Clears all local Room data
-     * 3. Triggers a sync to pull fresh data from the new spreadsheet
-     */
     fun switchSpreadsheet(file: DriveFile) {
         if (file.id == spreadsheetId.value) return
         viewModelScope.launch {
@@ -97,35 +129,39 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    // ── Labels (managed in Settings) ──────────────────────────────────────
+
+    val labels: StateFlow<List<Label>> = taskRepository.observeLabels()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun createLabel(name: String, color: String) {
+        viewModelScope.launch {
+            val nextOrder = (labels.value.maxOfOrNull { it.sortOrder } ?: -1) + 1
+            taskRepository.createLabel(
+                Label(id = generateId("lbl"), name = name, color = color, sortOrder = nextOrder)
+            )
+        }
+    }
+
+    fun updateLabel(label: Label, name: String, color: String) {
+        viewModelScope.launch { taskRepository.updateLabel(label.copy(name = name, color = color)) }
+    }
+
+    fun deleteLabel(labelId: String) {
+        viewModelScope.launch { taskRepository.deleteLabel(labelId) }
+    }
+
     // ── Calendars ─────────────────────────────────────────────────────────
 
+    /** Convenience shortcut used by the Switch composable. */
     val calendarsEnabled: StateFlow<Boolean> = authPreferences.calendarsEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
-    /**
-     * Enables or disables calendar integration.
-     * - Persists the flag to DataStore.
-     * - On disable: clears cached events from Room; hides CalendarWidgetReceiver from the
-     *   launcher's widget picker via PackageManager so users can't add new calendar widgets.
-     * - On enable: re-registers the receiver so it reappears in the picker.
-     * The saved selection of calendar IDs is preserved and restored when re-enabled.
-     */
     fun setCalendarsEnabled(enabled: Boolean) {
         viewModelScope.launch {
             authPreferences.setCalendarsEnabled(enabled)
-            if (!enabled) {
-                calendarRepository.clearAllEvents()
-            }
-            // Show/hide the CalendarWidget in the system's widget picker
-            val newState = if (enabled)
-                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-            else
-                PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-            context.packageManager.setComponentEnabledSetting(
-                ComponentName(context, CalendarWidgetReceiver::class.java),
-                newState,
-                PackageManager.DONT_KILL_APP,
-            )
+            if (!enabled) calendarRepository.clearAllEvents()
+            setComponentEnabled(CalendarWidgetReceiver::class.java, enabled)
         }
     }
 
@@ -135,7 +171,6 @@ class SettingsViewModel @Inject constructor(
     val calendars:        StateFlow<List<CalendarItem>> = _calendars.asStateFlow()
     val calendarsLoading: StateFlow<Boolean>             = _calendarsLoading.asStateFlow()
 
-    /** Fetches the calendar list from the API and updates [calendars]. */
     fun loadCalendars() {
         viewModelScope.launch {
             _calendarsLoading.value = true
@@ -149,17 +184,12 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Toggles the selection of a calendar.
-     * Updates the DataStore and refreshes the local [calendars] list optimistically.
-     */
     fun toggleCalendar(id: String, selected: Boolean) {
         viewModelScope.launch {
             try {
                 val current = authPreferences.selectedCalendarIds.first().toMutableSet()
                 if (selected) current.add(id) else current.remove(id)
                 calendarRepository.saveSelectedCalendarIds(current)
-                // Optimistic UI update — no need to re-fetch from API
                 _calendars.update { list ->
                     list.map { if (it.id == id) it.copy(isSelected = selected) else it }
                 }

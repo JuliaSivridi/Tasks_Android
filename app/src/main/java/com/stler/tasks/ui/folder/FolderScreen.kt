@@ -50,8 +50,9 @@ fun FolderScreen(
     onAddSubtask : (com.stler.tasks.domain.model.Task) -> Unit = {},
     viewModel    : FolderViewModel = hiltViewModel(),
 ) {
-    val displayList by viewModel.displayList.collectAsStateWithLifecycle()
-    val labels      by viewModel.labels.collectAsStateWithLifecycle()
+    val displayList  by viewModel.displayList.collectAsStateWithLifecycle()
+    val labels       by viewModel.labels.collectAsStateWithLifecycle()
+    val featureFlags by viewModel.featureFlags.collectAsStateWithLifecycle()
 
     ErrorSnackbarEffect(viewModel)
 
@@ -155,6 +156,8 @@ fun FolderScreen(
                         completedChildCount = node.completedChildCount,
                         totalChildCount     = node.childCount + node.completedChildCount,
                         showFolder          = false,
+                        showLabels          = featureFlags.labelsEnabled,
+                        featureFlags        = featureFlags,
                         showExpandSlot      = true,
                         onCheckedChange     = { checked -> if (checked) viewModel.completeTask(task.id) },
                         onExpand            = { viewModel.toggleExpanded(task) },

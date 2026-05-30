@@ -83,6 +83,7 @@ fun TaskItem(
     showExpandSlot: Boolean = false,
     folderName: String? = null,
     folderColor: String? = null,
+    featureFlags: com.stler.tasks.auth.FeatureFlags = com.stler.tasks.auth.FeatureFlags(),
     onCheckedChange: (Boolean) -> Unit,
     onExpand: () -> Unit,
     onDeadlineChange: (date: String, time: String, isRecurring: Boolean, recurType: RecurType, recurValue: Int) -> Unit,
@@ -254,12 +255,13 @@ fun TaskItem(
                 checked = isCompleted || pendingComplete,
                 onCheckedChange = { newChecked ->
                     if (newChecked && !isCompleted) {
-                        pendingComplete = true   // show checkmark, delay, then complete
+                        pendingComplete = true
                     } else {
                         onCheckedChange(newChecked)
                     }
                 },
-                priority = task.priority,
+                // When priorities are disabled, draw checkbox as neutral (Normal = gray)
+                priority = if (featureFlags.prioritiesEnabled) task.priority else Priority.NORMAL,
                 contentDesc = if (isCompleted) "Mark as incomplete: ${task.title}"
                               else "Mark as complete: ${task.title}",
             )
@@ -436,29 +438,16 @@ fun TaskItem(
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         ) {
             TaskMobileMenu(
-                task = task,
-                onPriority = {
-                    showMobileMenu = false
-                    showPriorityPicker = true
-                },
-                onLabels = {
-                    showMobileMenu = false
-                    showLabelPicker = true
-                },
-                onAddSubtask = {
-                    showMobileMenu = false
-                    onAddSubtask()
-                },
-                onIndent  = onIndent?.let { cb -> { showMobileMenu = false; cb() } },
-                onOutdent = onOutdent?.let { cb -> { showMobileMenu = false; cb() } },
-                onEdit = {
-                    showMobileMenu = false
-                    onEdit()
-                },
-                onDelete = {
-                    showMobileMenu = false
-                    showDeleteConfirm = true
-                },
+                task             = task,
+                showPriority     = featureFlags.prioritiesEnabled,
+                showLabels       = featureFlags.labelsEnabled,
+                onPriority       = { showMobileMenu = false; showPriorityPicker = true },
+                onLabels         = { showMobileMenu = false; showLabelPicker = true },
+                onAddSubtask     = { showMobileMenu = false; onAddSubtask() },
+                onIndent         = onIndent?.let { cb -> { showMobileMenu = false; cb() } },
+                onOutdent        = onOutdent?.let { cb -> { showMobileMenu = false; cb() } },
+                onEdit           = { showMobileMenu = false; onEdit() },
+                onDelete         = { showMobileMenu = false; showDeleteConfirm = true },
             )
         }
     }
@@ -534,10 +523,12 @@ fun TaskItem(
 
 @Composable
 private fun TaskMobileMenu(
-    task     : Task,
-    onPriority  : () -> Unit,
-    onLabels    : () -> Unit,
-    onAddSubtask: () -> Unit,
+    task         : Task,
+    showPriority : Boolean = true,
+    showLabels   : Boolean = true,
+    onPriority   : () -> Unit,
+    onLabels     : () -> Unit,
+    onAddSubtask : () -> Unit,
     /** Non-null → show "Make subtask of above" item. */
     onIndent : (() -> Unit)?,
     /** Non-null → show "Move up a level" item. */
@@ -546,43 +537,47 @@ private fun TaskMobileMenu(
     onDelete: () -> Unit,
 ) {
     Column(modifier = Modifier.padding(bottom = 24.dp)) {
-        // Priority
-        ListItem(
-            headlineContent = { Text("Priority") },
-            leadingContent = {
-                Icon(
-                    imageVector = Icons.Outlined.Flag,
-                    contentDescription = null,
-                    tint = priorityColor(task.priority),
-                )
-            },
-            trailingContent = {
-                Icon(
-                    imageVector = Icons.Outlined.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            },
-            modifier = Modifier.clickable { onPriority() },
-        )
-        // Labels
-        ListItem(
-            headlineContent = { Text("Labels") },
-            leadingContent = {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.Label,
-                    contentDescription = null,
-                )
-            },
-            trailingContent = {
-                Icon(
-                    imageVector = Icons.Outlined.ChevronRight,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            },
-            modifier = Modifier.clickable { onLabels() },
-        )
+        // Priority — hidden when priorities feature is disabled
+        if (showPriority) {
+            ListItem(
+                headlineContent = { Text("Priority") },
+                leadingContent = {
+                    Icon(
+                        imageVector = Icons.Outlined.Flag,
+                        contentDescription = null,
+                        tint = priorityColor(task.priority),
+                    )
+                },
+                trailingContent = {
+                    Icon(
+                        imageVector = Icons.Outlined.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+                modifier = Modifier.clickable { onPriority() },
+            )
+        }
+        // Labels — hidden when labels feature is disabled
+        if (showLabels) {
+            ListItem(
+                headlineContent = { Text("Labels") },
+                leadingContent = {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.Label,
+                        contentDescription = null,
+                    )
+                },
+                trailingContent = {
+                    Icon(
+                        imageVector = Icons.Outlined.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
+                modifier = Modifier.clickable { onLabels() },
+            )
+        }
         // Add subtask
         ListItem(
             headlineContent = { Text("Add subtask") },

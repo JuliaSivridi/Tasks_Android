@@ -3,6 +3,8 @@ package com.stler.tasks.ui.folder
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import com.stler.tasks.auth.AuthPreferences
+import com.stler.tasks.auth.FeatureFlags
 import com.stler.tasks.data.repository.TaskRepository
 import com.stler.tasks.ui.BaseViewModel
 import com.stler.tasks.domain.model.Label
@@ -23,7 +25,11 @@ data class TaskNode(val task: Task, val depth: Int, val childCount: Int, val com
 class FolderViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: TaskRepository,
+    private val authPreferences: AuthPreferences,
 ) : BaseViewModel() {
+
+    val featureFlags: StateFlow<FeatureFlags> = authPreferences.featureFlags
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FeatureFlags())
 
     private val folderId: String = savedStateHandle.get<String>("folderId") ?: run {
         Log.e("FolderViewModel", "Missing 'folderId' in SavedStateHandle — navigation bug")
