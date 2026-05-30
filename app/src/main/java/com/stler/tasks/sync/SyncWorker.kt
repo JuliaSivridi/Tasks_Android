@@ -87,6 +87,7 @@ class SyncWorker @AssistedInject constructor(
     // Per-calendar fetch errors are handled best-effort inside fetchEventsAndSave().
 
     private suspend fun syncCalendars() {
+        if (!authPreferences.calendarsEnabled.first()) return
         val selectedIds = authPreferences.selectedCalendarIds.first()
         if (selectedIds.isEmpty()) return
         val from = LocalDate.now().minusDays(1)

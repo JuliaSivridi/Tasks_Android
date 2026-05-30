@@ -1,6 +1,7 @@
 package com.stler.tasks.auth
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -36,6 +37,7 @@ class AuthPreferences @Inject constructor(
         private val USER_NAME         = stringPreferencesKey("user_name")
         private val USER_AVATAR_URL        = stringPreferencesKey("user_avatar_url")
         private val SELECTED_CALENDAR_IDS  = stringSetPreferencesKey("selected_calendar_ids")
+        private val CALENDARS_ENABLED       = booleanPreferencesKey("calendars_enabled")
     }
 
     val accessToken: Flow<String>      = context.authDataStore.data.map { it[ACCESS_TOKEN]     ?: "" }
@@ -46,6 +48,8 @@ class AuthPreferences @Inject constructor(
     val userName: Flow<String>         = context.authDataStore.data.map { it[USER_NAME]        ?: "" }
     val userAvatarUrl: Flow<String>       = context.authDataStore.data.map { it[USER_AVATAR_URL]       ?: "" }
     val selectedCalendarIds: Flow<Set<String>> = context.authDataStore.data.map { it[SELECTED_CALENDAR_IDS] ?: emptySet() }
+    /** Whether Google Calendar integration is enabled. Defaults to true for existing users. */
+    val calendarsEnabled: Flow<Boolean> = context.authDataStore.data.map { it[CALENDARS_ENABLED] ?: true }
 
     suspend fun saveAll(
         accessToken: String,
@@ -84,6 +88,10 @@ class AuthPreferences @Inject constructor(
 
     suspend fun saveSelectedCalendarIds(ids: Set<String>) {
         context.authDataStore.edit { it[SELECTED_CALENDAR_IDS] = ids }
+    }
+
+    suspend fun setCalendarsEnabled(enabled: Boolean) {
+        context.authDataStore.edit { it[CALENDARS_ENABLED] = enabled }
     }
 
     suspend fun saveSpreadsheetId(spreadsheetId: String) {

@@ -34,15 +34,7 @@ class AllTasksViewModel @Inject constructor(
     private val from: LocalDate = LocalDate.now()
     private val to:   LocalDate = LocalDate.now().plusDays(366)
 
-    val tasks: StateFlow<List<Task>> = repository.observeAllPendingTasks()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val labels: StateFlow<List<Label>> = repository.observeLabels()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val folders: StateFlow<List<Folder>> = repository.observeFolders()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
+    // Filters — declared before init so the init coroutine can safely reference them
     private val _priorityFilter = MutableStateFlow<Set<Priority>>(emptySet())
     val priorityFilter: StateFlow<Set<Priority>> = _priorityFilter.asStateFlow()
 
@@ -54,6 +46,25 @@ class AllTasksViewModel @Inject constructor(
 
     private val _calendarFilter = MutableStateFlow<Set<String>>(emptySet())
     val calendarFilter: StateFlow<Set<String>> = _calendarFilter.asStateFlow()
+
+    init {
+        // When calendars are disabled (or all deselected), clear any active calendar filter
+        // so tasks are not accidentally hidden by a stale filter state.
+        safeLaunch {
+            calendarRepository.getSelectedCalendarIds().collect { ids ->
+                if (ids.isEmpty()) _calendarFilter.value = emptySet()
+            }
+        }
+    }
+
+    val tasks: StateFlow<List<Task>> = repository.observeAllPendingTasks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val labels: StateFlow<List<Label>> = repository.observeLabels()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val folders: StateFlow<List<Folder>> = repository.observeFolders()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /** Live events for all selected calendars — hot StateFlow for immediate reactivity. */
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)

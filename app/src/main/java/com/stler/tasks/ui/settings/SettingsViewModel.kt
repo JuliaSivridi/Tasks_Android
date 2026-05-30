@@ -93,6 +93,23 @@ class SettingsViewModel @Inject constructor(
 
     // ── Calendars ─────────────────────────────────────────────────────────
 
+    val calendarsEnabled: StateFlow<Boolean> = authPreferences.calendarsEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    /**
+     * Enables or disables calendar integration.
+     * On disable: clears all cached events from Room so stale data is not shown on re-enable.
+     * The saved selection of calendar IDs is preserved and restored when re-enabled.
+     */
+    fun setCalendarsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            authPreferences.setCalendarsEnabled(enabled)
+            if (!enabled) {
+                calendarRepository.clearAllEvents()
+            }
+        }
+    }
+
     private val _calendars        = MutableStateFlow<List<CalendarItem>>(emptyList())
     private val _calendarsLoading = MutableStateFlow(false)
 

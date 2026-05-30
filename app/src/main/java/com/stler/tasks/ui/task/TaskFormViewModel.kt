@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewModelScope
 import com.stler.tasks.data.remote.dto.CalendarEventRequest
 import com.stler.tasks.data.remote.dto.EventDateTime
+import com.stler.tasks.auth.AuthPreferences
 import com.stler.tasks.data.repository.CalendarRepository
 import com.stler.tasks.data.repository.TaskRepository
 import com.stler.tasks.domain.model.CalendarItem
@@ -19,9 +20,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.DayOfWeek
 import java.time.Instant
@@ -48,7 +51,12 @@ private fun generateId(prefix: String): String =
 class TaskFormViewModel @Inject constructor(
     private val repository         : TaskRepository,
     private val calendarRepository : CalendarRepository,
+    private val authPreferences    : AuthPreferences,
 ) : BaseViewModel() {
+
+    /** Mirrors [AuthPreferences.calendarsEnabled] — used to hide Event mode in the form. */
+    val calendarsEnabled: StateFlow<Boolean> = authPreferences.calendarsEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
     // ── Event-mode state (observable from Compose) ────────────────────────
     var formMode           by mutableStateOf(FormMode.TASK)

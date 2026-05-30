@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import com.stler.tasks.auth.AuthPreferences
 import com.stler.tasks.data.repository.CalendarRepository
 import com.stler.tasks.data.repository.TaskRepository
 import com.stler.tasks.domain.model.CalendarItem
@@ -60,6 +61,9 @@ class WidgetConfigActivity : ComponentActivity() {
 
     @Inject
     lateinit var calendarRepository: CalendarRepository
+
+    @Inject
+    lateinit var authPreferences: AuthPreferences
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -108,12 +112,15 @@ class WidgetConfigActivity : ComponentActivity() {
                     .collectAsStateWithLifecycle(initialValue = emptyList())
                 val labels by taskRepository.observeLabels()
                     .collectAsStateWithLifecycle(initialValue = emptyList())
+                val calendarsEnabled by authPreferences.calendarsEnabled
+                    .collectAsStateWithLifecycle(initialValue = true)
 
                 WidgetConfigScreen(
                     widgetType         = widgetType,
                     folders            = folders,
                     labels             = labels,
                     calendarRepository = calendarRepository,
+                    calendarsEnabled   = calendarsEnabled,
                     onConfirmFolder    = { folderId ->
                         lifecycleScope.launch {
                             WidgetPrefs.setFolderId(this@WidgetConfigActivity, appWidgetId, folderId)
@@ -166,6 +173,7 @@ private fun WidgetConfigScreen(
     folders           : List<Folder>,
     labels            : List<Label>,
     calendarRepository: CalendarRepository,
+    calendarsEnabled  : Boolean,
     onConfirmFolder   : (folderId: String) -> Unit,
     onConfirmTaskList : (folderIds: Set<String>, labelIds: Set<String>, priorityIds: Set<String>) -> Unit,
     onConfirmCalendar : (selectedIds: Set<String>, displayName: String) -> Unit,
@@ -204,6 +212,7 @@ private fun WidgetConfigScreen(
                 )
                 WidgetType.CALENDAR  -> CalendarSelectorContent(
                     calendarRepository = calendarRepository,
+                    calendarsEnabled   = calendarsEnabled,
                     onConfirm          = onConfirmCalendar,
                     onCancel           = onCancel,
                 )
@@ -382,9 +391,31 @@ private fun CheckboxRow(label: String, checked: Boolean, onToggle: () -> Unit) {
 @Composable
 private fun CalendarSelectorContent(
     calendarRepository: CalendarRepository,
+    calendarsEnabled  : Boolean,
     onConfirm         : (selectedIds: Set<String>, displayName: String) -> Unit,
     onCancel          : () -> Unit,
 ) {
+    // If calendar integration is disabled, show a message instead of the selector
+    if (!calendarsEnabled) {
+        Text(
+            text  = "Calendar integration is disabled.",
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text  = "Enable Google Calendars in Settings to use this widget.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            OutlinedButton(onClick = onCancel) { Text("Close") }
+        }
+        return
+    }
+
     var calendars by remember { mutableStateOf<List<CalendarItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
     val selectedIds = remember { mutableStateListOf<String>() }

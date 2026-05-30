@@ -272,8 +272,9 @@ fun TaskFormSheet(
     val baseEventLoading by remember { derivedStateOf { viewModel.baseEventLoading } }
 
     // Calendars for EVENT mode
-    val calendars       by viewModel.selectedCalendars.collectAsStateWithLifecycle()
+    val calendars        by viewModel.selectedCalendars.collectAsStateWithLifecycle()
     val calendarsLoading by viewModel.calendarsLoading.collectAsStateWithLifecycle()
+    val calendarsEnabled by viewModel.calendarsEnabled.collectAsStateWithLifecycle()
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -428,8 +429,8 @@ fun TaskFormSheet(
                 }
             }
 
-            // ── Mode toggle (hidden when editing an existing task or event) ──
-            if (!isEditing && !isEditingEvent) SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            // ── Mode toggle (hidden when editing an existing task or event, or calendars disabled) ──
+            if (!isEditing && !isEditingEvent && calendarsEnabled) SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 SegmentedButton(
                     selected = viewModel.formMode == FormMode.TASK,
                     onClick  = { viewModel.formMode = FormMode.TASK },

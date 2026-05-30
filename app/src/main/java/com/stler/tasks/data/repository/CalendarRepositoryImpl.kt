@@ -9,6 +9,7 @@ import com.stler.tasks.data.remote.dto.CalendarEventRequest
 import com.stler.tasks.domain.model.CalendarEvent
 import com.stler.tasks.domain.model.CalendarItem
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
@@ -66,8 +67,15 @@ class CalendarRepositoryImpl @Inject constructor(
             }
     }
 
+    /**
+     * Returns the user's selected calendar IDs only when calendar integration is enabled.
+     * Emits [emptySet] when disabled — causing all calendar-aware consumers to see no calendars
+     * without losing the saved selection (which is restored when re-enabled).
+     */
     override fun getSelectedCalendarIds(): Flow<Set<String>> =
-        authPreferences.selectedCalendarIds
+        combine(authPreferences.selectedCalendarIds, authPreferences.calendarsEnabled) { ids, enabled ->
+            if (enabled) ids else emptySet()
+        }
 
     override suspend fun fetchCalendarsAndSave(): List<CalendarItem> {
         val selectedIds = authPreferences.selectedCalendarIds.first()
@@ -213,6 +221,10 @@ class CalendarRepositoryImpl @Inject constructor(
 
     override suspend fun saveSelectedCalendarIds(ids: Set<String>) {
         authPreferences.saveSelectedCalendarIds(ids)
+    }
+
+    override suspend fun clearAllEvents() {
+        calendarEventDao.deleteAll()
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

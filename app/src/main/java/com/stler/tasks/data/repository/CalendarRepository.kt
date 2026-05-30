@@ -99,4 +99,7 @@ interface CalendarRepository {
 
     /** Persists the user's selected calendar ID set to DataStore. */
     suspend fun saveSelectedCalendarIds(ids: Set<String>)
+
+    /** Removes all cached calendar events from Room (called when calendar integration is disabled). */
+    suspend fun clearAllEvents()
 }

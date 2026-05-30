@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.TableChart
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Switch
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -60,8 +61,9 @@ fun SettingsScreen(
     val files           by viewModel.files.collectAsStateWithLifecycle()
     val loading         by viewModel.loading.collectAsStateWithLifecycle()
     val switching       by viewModel.switching.collectAsStateWithLifecycle()
-    val calendars       by viewModel.calendars.collectAsStateWithLifecycle()
+    val calendars        by viewModel.calendars.collectAsStateWithLifecycle()
     val calendarsLoading by viewModel.calendarsLoading.collectAsStateWithLifecycle()
+    val calendarsEnabled by viewModel.calendarsEnabled.collectAsStateWithLifecycle()
 
     var pickerExpanded by remember { mutableStateOf(false) }
 
@@ -237,7 +239,7 @@ fun SettingsScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp),
             ) {
-                // Header row: title + refresh button
+                // Header row: title + enable/disable switch + refresh button
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -249,64 +251,74 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.weight(1f),
                     )
-                    IconButton(
-                        onClick = viewModel::loadCalendars,
-                        enabled = !calendarsLoading,
-                    ) {
-                        if (calendarsLoading) {
-                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(Icons.Outlined.Refresh, contentDescription = "Refresh calendars", modifier = Modifier.size(20.dp))
+                    Switch(
+                        checked = calendarsEnabled,
+                        onCheckedChange = viewModel::setCalendarsEnabled,
+                    )
+                    AnimatedVisibility(visible = calendarsEnabled) {
+                        IconButton(
+                            onClick = viewModel::loadCalendars,
+                            enabled = !calendarsLoading,
+                        ) {
+                            if (calendarsLoading) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(Icons.Outlined.Refresh, contentDescription = "Refresh calendars", modifier = Modifier.size(20.dp))
+                            }
                         }
                     }
                 }
 
-                HorizontalDivider()
+                AnimatedVisibility(visible = calendarsEnabled) {
+                    Column {
+                        HorizontalDivider()
 
-                when {
-                    calendarsLoading && calendars.isEmpty() -> Row(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        Text("Loading calendars…", style = MaterialTheme.typography.bodySmall)
-                    }
-
-                    calendars.isEmpty() -> Text(
-                        text = "No calendars found. Tap refresh to load.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(16.dp),
-                    )
-
-                    else -> Column {
-                        calendars.forEach { calendar ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { viewModel.toggleCalendar(calendar.id, !calendar.isSelected) }
-                                    .padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                        when {
+                            calendarsLoading && calendars.isEmpty() -> Row(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.CalendarMonth,
-                                    contentDescription = null,
-                                    tint = calendar.color.toComposeColor(),
-                                    modifier = Modifier.size(20.dp),
-                                )
-                                Text(
-                                    text = calendar.summary,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Checkbox(
-                                    checked = calendar.isSelected,
-                                    onCheckedChange = { viewModel.toggleCalendar(calendar.id, it) },
-                                )
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                Text("Loading calendars…", style = MaterialTheme.typography.bodySmall)
+                            }
+
+                            calendars.isEmpty() -> Text(
+                                text = "No calendars found. Tap refresh to load.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(16.dp),
+                            )
+
+                            else -> Column {
+                                calendars.forEach { calendar ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { viewModel.toggleCalendar(calendar.id, !calendar.isSelected) }
+                                            .padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.CalendarMonth,
+                                            contentDescription = null,
+                                            tint = calendar.color.toComposeColor(),
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                        Text(
+                                            text = calendar.summary,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        Checkbox(
+                                            checked = calendar.isSelected,
+                                            onCheckedChange = { viewModel.toggleCalendar(calendar.id, it) },
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
