@@ -31,6 +31,7 @@ fun CompletedScreen(viewModel: CompletedViewModel = hiltViewModel()) {
     val priorityFilter by viewModel.priorityFilter.collectAsStateWithLifecycle()
     val labelFilter    by viewModel.labelFilter.collectAsStateWithLifecycle()
     val folderFilter   by viewModel.folderFilter.collectAsStateWithLifecycle()
+    val featureFlags   by viewModel.featureFlags.collectAsStateWithLifecycle()
 
     ErrorSnackbarEffect(viewModel)
 
@@ -41,6 +42,7 @@ fun CompletedScreen(viewModel: CompletedViewModel = hiltViewModel()) {
             priorityFilter   = priorityFilter,
             labelFilter      = labelFilter,
             folderFilter     = folderFilter,
+            featureFlags     = featureFlags,
             onTogglePriority = { viewModel.togglePriorityFilter(it) },
             onToggleLabel    = { viewModel.toggleLabelFilter(it) },
             onToggleFolder   = { viewModel.toggleFolderFilter(it) },
@@ -57,20 +59,22 @@ fun CompletedScreen(viewModel: CompletedViewModel = hiltViewModel()) {
             else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(filteredTasks, key = { it.id }) { task ->
                     TaskItem(
-                        task = task,
-                        labels = labels,
-                        showFolder = true,
-                        folderName = folders.find { it.id == task.folderId }?.name,
-                        folderColor = folders.find { it.id == task.folderId }?.color,
-                        onCheckedChange = { checked -> if (!checked) viewModel.restoreTask(task.id) },
-                        onExpand = {},
+                        task         = task,
+                        labels       = labels,
+                        showFolder   = featureFlags.foldersEnabled,
+                        showLabels   = featureFlags.labelsEnabled,
+                        featureFlags = featureFlags,
+                        folderName   = folders.find { it.id == task.folderId }?.name,
+                        folderColor  = folders.find { it.id == task.folderId }?.color,
+                        onCheckedChange  = { checked -> if (!checked) viewModel.restoreTask(task.id) },
+                        onExpand         = {},
                         onDeadlineChange = { _, _, _, _, _ -> },
                         onPriorityChange = {},
-                        onLabelChange = {},
-                        onAddSubtask = {},
-                        onEdit = {},
-                        onDelete = { viewModel.deleteTask(task.id) },
-                        enableSwipe = false,
+                        onLabelChange    = {},
+                        onAddSubtask     = {},
+                        onEdit           = {},
+                        onDelete         = { viewModel.deleteTask(task.id) },
+                        enableSwipe      = false,
                     )
                     HorizontalDivider(
                         thickness = 0.5.dp,

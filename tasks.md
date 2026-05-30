@@ -401,3 +401,123 @@ _Identified by architecture + UX review agents after Stage 13._
 - [x] 13b.x `UpcomingScreen` — remove initial scroll-to-today; list always opens at index 0 so Overdue tasks visible first
 - [x] 13b.x `SyncManager.triggerSync()` — add `networkConstraints` (was missing; prevents SyncWorker running offline and retrying 4×)
 - [x] 13b.x `WidgetRefresher` — skip `updateAll()` when no validated internet connection; avoids restarting Glance sessions offline which caused "Inbox / no tasks" flash
+
+---
+
+## Stage 14 — App Flexibility (Feature Toggles + Sidebar Cleanup)
+
+_Branch: `flexibility`. Base: `main` after Stage 13b._
+
+**Goal:** Let users switch off entire feature areas (Folders, Labels, Priorities, Calendars) so the app is as simple or feature-rich as they want. Also remove rarely-used Labels and Priorities sidebar views and move label management into Settings.
+
+**Rules for all toggles:** existing task data (folder assignments, label IDs, priority values) is never touched — toggling a feature off only hides its UI. Toggling back on restores full visibility immediately. New tasks created while a feature is disabled receive sensible defaults (Inbox folder, no labels, Normal priority).
+
+---
+
+### 14.0 Architecture: `FeatureFlags`
+
+- [x] 14.0.1 `AuthPreferences.kt` — add `booleanPreferencesKey` for `folders_enabled`, `labels_enabled`, `priorities_enabled` (all default `true`); add `featureFlags: Flow<FeatureFlags>` via `combine` of all four keys (calendars included); add individual setters `setFoldersEnabled()`, `setLabelsEnabled()`, `setPrioritiesEnabled()`
+- [x] 14.0.2 `FeatureFlags.kt` — new data class `FeatureFlags(foldersEnabled, labelsEnabled, prioritiesEnabled, calendarsEnabled)` in `auth` package; used as single injection point instead of four separate flows
+
+---
+
+### 14.1 Settings screen
+
+- [x] 14.1.1 `SettingsViewModel.kt` — `featureFlags`, `setFoldersEnabled/setLabelsEnabled/setPrioritiesEnabled`; PackageManager for FolderWidget; labels CRUD
+- [x] 14.1.2 `SettingsScreen.kt` — FEATURES section with 3 Switch rows + description subtitles
+- [x] 14.1.3 `SettingsScreen.kt` — LABELS section (AnimatedVisibility when enabled): color dot + name + edit/delete + Add button
+- [x] 14.1.4 `SettingsViewModel.kt` — `labels` StateFlow + `createLabel/updateLabel/deleteLabel`
+
+---
+
+### 14.2 Sidebar cleanup
+
+- [x] 14.2.1 `SidebarMenu.kt` — removed Priorities and Labels sections; Folders gated by `featureFlags.foldersEnabled`
+- [x] 14.2.2 `SidebarMenu.kt` — Calendars gated by `featureFlags.calendarsEnabled && selectedCalendars.isNotEmpty()`
+- [x] 14.2.3 `MainViewModel.kt` — inject `AuthPreferences`; expose `featureFlags`
+- [x] 14.2.4 `MainScreen.kt` — pass `featureFlags` to SidebarMenu; remove label callbacks from sidebar
+- [x] 14.2.5 `SidebarPreferences.kt` — removed `labelsOpen`/`prioritiesOpen`; kept `foldersOpen`/`calendarsOpen`
+
+---
+
+### 14.3 Filter bar
+
+- [x] 14.3.1 `AllTasksScreen.kt` `FilterBar` — `featureFlags` parameter gates Priority/Label/Folder chips; `CompletedScreen` also updated
+- [x] 14.3.2 `AllTasksViewModel.kt` — inject `AuthPreferences`; `featureFlags` StateFlow; auto-clear filters on feature disable
+- [x] 14.3.3 `UpcomingScreen.kt` — FilterBar + TaskItem updated with featureFlags
+- [x] 14.3.4 `UpcomingViewModel.kt` — same pattern as AllTasksViewModel
+
+---
+
+### 14.4 Task item display
+
+- [x] 14.4.1 `TaskItem.kt` — `featureFlags` parameter; checkbox uses Normal priority color when `!prioritiesEnabled`; row 2 respects showLabels/showFolder flags
+- [x] 14.4.2 `TaskItem.kt` `TaskMobileMenu` — `showPriority`/`showLabels` params; menu items hidden when disabled
+- [x] 14.4.3 Updated TaskItem call sites: AllTasksScreen, UpcomingScreen, FolderScreen, CompletedScreen
+
+---
+
+### 14.5 Task creation / editing form
+
+- [x] 14.5.1 `TaskFormViewModel.kt` — `featureFlags: StateFlow<FeatureFlags>` exposed
+- [x] 14.5.2 `TaskFormSheet.kt` — Folder/Labels/Priority sections gated by `featureFlags`
+- [x] 14.5.3 `TaskFormSheet.kt` `parseSmartTitle()` — disabled features get empty list; priority suppressed when disabled
+
+---
+
+### 14.6 Widgets
+
+- [x] 14.6.1 `WidgetConfigActivity.kt` — `featureFlags` state; FolderSelectorContent shows "disabled" message when `!foldersEnabled`; PackageManager disables FolderWidgetReceiver
+- [x] 14.6.2 `WidgetConfigActivity.kt` `TaskListFilterContent` — Folder/Label/Priority sections gated by featureFlags
+- [ ] 14.6.3 `FolderWidget.kt` — show "Folders disabled" empty state when disabled (deferred)
+
+---
+
+### 14.7 Navigation cleanup
+
+- [x] 14.7.1 `MainScreen.kt` — removed LABEL and PRIORITY composable routes; removed unused imports
+- [x] 14.7.2 `Screen.kt` — removed LABEL/PRIORITY constants and labelRoute/priorityRoute helpers
+- [x] 14.7.3 Deleted `LabelScreen.kt`, `LabelViewModel.kt`, `PriorityScreen.kt`, `PriorityViewModel.kt`
+
+---
+
+### 14.8 Calendar toggle (already done — tracking here for completeness)
+
+- [x] 14.8.1 `AuthPreferences.kt` — `CALENDARS_ENABLED` key + flow + setter
+- [x] 14.8.2 `CalendarRepositoryImpl.getSelectedCalendarIds()` — combine with `calendarsEnabled`, emit `emptySet()` when disabled
+- [x] 14.8.3 `SyncWorker` — skip `syncCalendars()` when disabled
+- [x] 14.8.4 `SettingsScreen` / `SettingsViewModel` — Switch toggle for calendars; clear Room events on disable
+- [x] 14.8.5 `TaskFormSheet` — hide EVENT button when disabled
+- [x] 14.8.6 `AllTasksViewModel` / `UpcomingViewModel` — auto-clear calendar filter when disabled
+- [x] 14.8.7 `WidgetConfigActivity` — show "disabled" message in CalendarSelectorContent
+- [x] 14.8.8 `SettingsViewModel` — `PackageManager.setComponentEnabledSetting` for `CalendarWidgetReceiver`
+
+---
+
+## Stage 15 — Settings UX Improvements & Folder Management in Settings
+
+_Branch: `flexibility` (continuation)._
+
+**Goal:** Unify data management (Folders + Labels) in Settings; sidebar becomes navigation-only. Also fix Settings UX issues: back button, toggle visibility, section headers, ordering.
+
+### 15.1 Settings UX fixes
+
+- [x] 15.1.1 `SettingsScreen.kt` — `BackHandler` intercepts physical back button → calls `onNavigateBack` (was exiting the app)
+- [x] 15.1.2 `SettingsScreen.kt` — `switchColors()` helper: explicit `uncheckedThumbColor = onSurfaceVariant`, `uncheckedBorderColor = outline`, `uncheckedTrackColor = surfaceVariant`; applied to all Switches; visible in light theme
+- [x] 15.1.3 `SettingsScreen.kt` — removed all section headers (FEATURES / SPREADSHEET / LABELS / CALENDARS); context is clear without them
+- [x] 15.1.4 `SettingsScreen.kt` — reordered sections: Spreadsheet → Priorities → Labels → Folders → Calendars; `Spacer(12.dp)` between cards
+- [x] 15.1.5 `SettingsScreen.kt` — Labels toggle moved into the Labels card header row (like Calendars); Add "+" button appears next to toggle when enabled
+
+### 15.2 Folder management in Settings
+
+- [x] 15.2.1 `SettingsViewModel.kt` — add `folders: StateFlow<List<Folder>>` + `createFolder/updateFolder/deleteFolder`
+- [x] 15.2.2 `SettingsScreen.kt` — Folders card: toggle in header row + AnimatedVisibility list; folder icon (Inbox/Folder tinted with color) + name + Edit/Delete (Inbox excluded); Add "+" in header when enabled
+- [x] 15.2.3 `SettingsScreen.kt` — import and show `FolderFormDialog` / `DeleteFolderDialog`; dialog state vars `showFolderForm`, `editingFolder`, `deletingFolder`
+
+### 15.3 Sidebar cleanup — navigation only
+
+- [x] 15.3.1 `SidebarMenu.kt` — removed `onAddFolder`, `onEditFolder`, `onDeleteFolder` params; signature now only has `onAddTask` callback
+- [x] 15.3.2 `SidebarMenu.kt` — `FolderNavItem` simplified: removed DropdownMenu badge (Edit/Delete); pure navigation item
+- [x] 15.3.3 `SidebarMenu.kt` — `SectionHeader` simplified: removed `onAdd` param (no longer shows "+" in sidebar); used for both Folders and Calendars sections
+- [x] 15.3.4 `MainViewModel.kt` — removed `createFolder`, `updateFolder`, `deleteFolder` (moved to SettingsViewModel)
+- [x] 15.3.5 `MainScreen.kt` — removed `FolderDialogMode` sealed interface, `folderDialog` state, folder dialog when-block; removed unused `Folder`/`Label` imports

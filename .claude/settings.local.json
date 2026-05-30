@@ -57,7 +57,8 @@
       "Bash(git commit *)",
       "Read(//d/Projects/Tasks-PWA/src/store/**)",
       "Read(//d/Projects/Tasks-PWA/src/**)",
-      "Read(//d/Projects/Tasks-PWA/**)"
+      "Read(//d/Projects/Tasks-PWA/**)",
+      "Bash(Get-ChildItem -Path \"D:\\\\Projects\\\\Tasks-Android\\\\app\\\\src\\\\main\\\\java\\\\com\\\\stler\\\\tasks\\\\widget\" -File -Recurse)"
     ]
   }
 }

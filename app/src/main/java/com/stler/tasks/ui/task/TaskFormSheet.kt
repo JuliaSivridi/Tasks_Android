@@ -275,20 +275,30 @@ fun TaskFormSheet(
     val calendars        by viewModel.selectedCalendars.collectAsStateWithLifecycle()
     val calendarsLoading by viewModel.calendarsLoading.collectAsStateWithLifecycle()
     val calendarsEnabled by viewModel.calendarsEnabled.collectAsStateWithLifecycle()
+    val featureFlags     by viewModel.featureFlags.collectAsStateWithLifecycle()
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
     fun submitTask() {
         val trimmed = title.trim()
         if (trimmed.isBlank()) { titleError = true; return }
-        val parsed = parseSmartTitle(trimmed, folders, labels, folderId, selectedLabelIds)
+        // Suppress smart-parsing for disabled features by passing empty lists
+        val ff = featureFlags
+        val parsed = parseSmartTitle(
+            raw          = trimmed,
+            folders      = if (ff.foldersEnabled) folders else emptyList(),
+            labels       = if (ff.labelsEnabled)  labels  else emptyList(),
+            baseFolderId = folderId,
+            baseLabelIds = selectedLabelIds,
+        )
         onConfirm(
             TaskFormResult(
                 title         = parsed.title,
                 folderId      = parsed.folderId,
                 parentId      = task?.parentId ?: initialParentId,
-                priority      = parsed.priority ?: priority,
-                labelIds      = parsed.labelIds,
+                // When priorities disabled, always use current priority (Normal by default)
+                priority      = if (ff.prioritiesEnabled) (parsed.priority ?: priority) else priority,
+                labelIds      = if (ff.labelsEnabled) parsed.labelIds else emptyList(),
                 deadlineDate  = deadlineDate,
                 deadlineTime  = deadlineTime,
                 isRecurring   = isRecurring,
@@ -788,92 +798,95 @@ fun TaskFormSheet(
             // ── TASK-mode fields ──────────────────────────────────────────
             if (viewModel.formMode == FormMode.TASK) {
 
-                // Folder
-                SectionLabel("Folder")
-                val folderName  = folders.find { it.id == folderId }?.name ?: "Inbox"
-                val folderColor = folders.find { it.id == folderId }?.color
-                val fColor      = folderColor?.toComposeColor()
-                                  ?: MaterialTheme.colorScheme.primary
-                FilterChip(
-                    selected    = true,
-                    onClick     = { showFolderPicker = true },
-                    label       = {
-                        Text(folderName, style = MaterialTheme.typography.bodyMedium, color = fColor)
-                    },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Folder, null, Modifier.size(13.dp), tint = fColor)
-                    },
-                    colors      = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor   = fColor.copy(alpha = 0.18f),
-                        selectedLabelColor       = fColor,
-                        selectedLeadingIconColor = fColor,
-                    ),
-                )
-
-                // Labels — trigger row (styled like SectionLabel + chevron)
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable { showLabelPicker = true }
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "Labels",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    if (selectedLabelIds.isNotEmpty()) {
-                        Text(
-                            "${selectedLabelIds.size}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.width(2.dp))
-                    }
-                    Icon(
-                        Icons.Outlined.ChevronRight, null,
-                        modifier = Modifier.size(14.dp),
-                        tint     = MaterialTheme.colorScheme.onSurfaceVariant,
+                // Folder — hidden when folders feature is disabled
+                if (featureFlags.foldersEnabled) {
+                    SectionLabel("Folder")
+                    val folderName  = folders.find { it.id == folderId }?.name ?: "Inbox"
+                    val folderColor = folders.find { it.id == folderId }?.color
+                    val fColor      = folderColor?.toComposeColor()
+                                      ?: MaterialTheme.colorScheme.primary
+                    FilterChip(
+                        selected    = true,
+                        onClick     = { showFolderPicker = true },
+                        label       = {
+                            Text(folderName, style = MaterialTheme.typography.bodyMedium, color = fColor)
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Outlined.Folder, null, Modifier.size(13.dp), tint = fColor)
+                        },
+                        colors      = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor   = fColor.copy(alpha = 0.18f),
+                            selectedLabelColor       = fColor,
+                            selectedLeadingIconColor = fColor,
+                        ),
                     )
                 }
 
-                // Selected-label chips (quick-remove via ×)
-                if (selectedLabelIds.isNotEmpty()) {
-                    val selectedLabels = selectedLabelIds.mapNotNull { id ->
-                        labels.find { it.id == id }
-                    }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        selectedLabels.forEach { lbl ->
-                            val lColor = lbl.color.toComposeColor()
-                            FilterChip(
-                                selected    = true,
-                                onClick     = { selectedLabelIds = selectedLabelIds - lbl.id },
-                                label       = {
-                                    Text(lbl.name,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = lColor)
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Outlined.Label, null,
-                                        modifier = Modifier.size(13.dp), tint = lColor)
-                                },
-                                trailingIcon = {
-                                    Icon(Icons.Outlined.Close, contentDescription = "Remove",
-                                        modifier = Modifier.size(12.dp))
-                                },
-                                colors      = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor   = lColor.copy(alpha = 0.18f),
-                                    selectedLabelColor       = lColor,
-                                    selectedLeadingIconColor = lColor,
-                                ),
+                // Labels — hidden when labels feature is disabled
+                if (featureFlags.labelsEnabled) {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { showLabelPicker = true }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "Labels",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        if (selectedLabelIds.isNotEmpty()) {
+                            Text(
+                                "${selectedLabelIds.size}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
+                            Spacer(Modifier.width(2.dp))
+                        }
+                        Icon(
+                            Icons.Outlined.ChevronRight, null,
+                            modifier = Modifier.size(14.dp),
+                            tint     = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (selectedLabelIds.isNotEmpty()) {
+                        val selectedLabels = selectedLabelIds.mapNotNull { id ->
+                            labels.find { it.id == id }
+                        }
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            selectedLabels.forEach { lbl ->
+                                val lColor = lbl.color.toComposeColor()
+                                FilterChip(
+                                    selected    = true,
+                                    onClick     = { selectedLabelIds = selectedLabelIds - lbl.id },
+                                    label       = {
+                                        Text(lbl.name,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = lColor)
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Outlined.Label, null,
+                                            modifier = Modifier.size(13.dp), tint = lColor)
+                                    },
+                                    trailingIcon = {
+                                        Icon(Icons.Outlined.Close, contentDescription = "Remove",
+                                            modifier = Modifier.size(12.dp))
+                                    },
+                                    colors      = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor   = lColor.copy(alpha = 0.18f),
+                                        selectedLabelColor       = lColor,
+                                        selectedLeadingIconColor = lColor,
+                                    ),
+                                )
+                            }
                         }
                     }
                 }
 
-                // Priority
+                // Priority — hidden when priorities feature is disabled
+                if (featureFlags.prioritiesEnabled) {
                 SectionLabel("Priority")
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -908,6 +921,7 @@ fun TaskFormSheet(
                         )
                     }
                 }
+                } // end if (featureFlags.prioritiesEnabled)
             }
 
             // ── EVENT-mode fields ─────────────────────────────────────────

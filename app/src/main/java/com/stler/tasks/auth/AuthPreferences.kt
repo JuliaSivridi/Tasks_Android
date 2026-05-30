@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -38,6 +39,9 @@ class AuthPreferences @Inject constructor(
         private val USER_AVATAR_URL        = stringPreferencesKey("user_avatar_url")
         private val SELECTED_CALENDAR_IDS  = stringSetPreferencesKey("selected_calendar_ids")
         private val CALENDARS_ENABLED       = booleanPreferencesKey("calendars_enabled")
+        private val FOLDERS_ENABLED         = booleanPreferencesKey("folders_enabled")
+        private val LABELS_ENABLED          = booleanPreferencesKey("labels_enabled")
+        private val PRIORITIES_ENABLED      = booleanPreferencesKey("priorities_enabled")
     }
 
     val accessToken: Flow<String>      = context.authDataStore.data.map { it[ACCESS_TOKEN]     ?: "" }
@@ -49,7 +53,22 @@ class AuthPreferences @Inject constructor(
     val userAvatarUrl: Flow<String>       = context.authDataStore.data.map { it[USER_AVATAR_URL]       ?: "" }
     val selectedCalendarIds: Flow<Set<String>> = context.authDataStore.data.map { it[SELECTED_CALENDAR_IDS] ?: emptySet() }
     /** Whether Google Calendar integration is enabled. Defaults to true for existing users. */
-    val calendarsEnabled: Flow<Boolean> = context.authDataStore.data.map { it[CALENDARS_ENABLED] ?: true }
+    val calendarsEnabled: Flow<Boolean>   = context.authDataStore.data.map { it[CALENDARS_ENABLED]  ?: true }
+    val foldersEnabled: Flow<Boolean>     = context.authDataStore.data.map { it[FOLDERS_ENABLED]    ?: true }
+    val labelsEnabled: Flow<Boolean>      = context.authDataStore.data.map { it[LABELS_ENABLED]     ?: true }
+    val prioritiesEnabled: Flow<Boolean>  = context.authDataStore.data.map { it[PRIORITIES_ENABLED] ?: true }
+
+    /** Combined snapshot of all feature flags — single subscription point for ViewModels. */
+    val featureFlags: Flow<FeatureFlags> = combine(
+        foldersEnabled, labelsEnabled, prioritiesEnabled, calendarsEnabled,
+    ) { folders, labels, priorities, calendars ->
+        FeatureFlags(
+            foldersEnabled    = folders,
+            labelsEnabled     = labels,
+            prioritiesEnabled = priorities,
+            calendarsEnabled  = calendars,
+        )
+    }
 
     suspend fun saveAll(
         accessToken: String,
@@ -92,6 +111,18 @@ class AuthPreferences @Inject constructor(
 
     suspend fun setCalendarsEnabled(enabled: Boolean) {
         context.authDataStore.edit { it[CALENDARS_ENABLED] = enabled }
+    }
+
+    suspend fun setFoldersEnabled(enabled: Boolean) {
+        context.authDataStore.edit { it[FOLDERS_ENABLED] = enabled }
+    }
+
+    suspend fun setLabelsEnabled(enabled: Boolean) {
+        context.authDataStore.edit { it[LABELS_ENABLED] = enabled }
+    }
+
+    suspend fun setPrioritiesEnabled(enabled: Boolean) {
+        context.authDataStore.edit { it[PRIORITIES_ENABLED] = enabled }
     }
 
     suspend fun saveSpreadsheetId(spreadsheetId: String) {

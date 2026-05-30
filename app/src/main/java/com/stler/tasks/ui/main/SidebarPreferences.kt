@@ -13,9 +13,7 @@ import javax.inject.Singleton
 private val Context.sidebarDataStore by preferencesDataStore(name = "sidebar_prefs")
 
 data class SidebarState(
-    val prioritiesOpen: Boolean = true,
-    val foldersOpen: Boolean = true,
-    val labelsOpen: Boolean = true,
+    val foldersOpen  : Boolean = true,
     val calendarsOpen: Boolean = true,
 )
 
@@ -24,28 +22,22 @@ class SidebarPreferences @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
     companion object {
-        private val PRIORITIES_OPEN = booleanPreferencesKey("priorities_open")
-        private val FOLDERS_OPEN    = booleanPreferencesKey("folders_open")
-        private val LABELS_OPEN     = booleanPreferencesKey("labels_open")
-        private val CALENDARS_OPEN  = booleanPreferencesKey("calendars_open")
+        private val FOLDERS_OPEN   = booleanPreferencesKey("folders_open")
+        private val CALENDARS_OPEN = booleanPreferencesKey("calendars_open")
     }
 
     val sidebarState: Flow<SidebarState> = context.sidebarDataStore.data.map { prefs ->
         SidebarState(
-            prioritiesOpen = prefs[PRIORITIES_OPEN] ?: true,
-            foldersOpen    = prefs[FOLDERS_OPEN]    ?: true,
-            labelsOpen     = prefs[LABELS_OPEN]     ?: true,
-            calendarsOpen  = prefs[CALENDARS_OPEN]  ?: true,
+            foldersOpen   = prefs[FOLDERS_OPEN]   ?: true,
+            calendarsOpen = prefs[CALENDARS_OPEN] ?: true,
         )
     }
 
     suspend fun toggleSection(section: String) {
         context.sidebarDataStore.edit { prefs ->
             when (section) {
-                "priorities" -> prefs[PRIORITIES_OPEN] = !(prefs[PRIORITIES_OPEN] ?: true)
-                "folders"    -> prefs[FOLDERS_OPEN]    = !(prefs[FOLDERS_OPEN]    ?: true)
-                "labels"     -> prefs[LABELS_OPEN]     = !(prefs[LABELS_OPEN]     ?: true)
-                "calendars"  -> prefs[CALENDARS_OPEN]  = !(prefs[CALENDARS_OPEN]  ?: true)
+                "folders"   -> prefs[FOLDERS_OPEN]   = !(prefs[FOLDERS_OPEN]   ?: true)
+                "calendars" -> prefs[CALENDARS_OPEN] = !(prefs[CALENDARS_OPEN] ?: true)
             }
         }
     }

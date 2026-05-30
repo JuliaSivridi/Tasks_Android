@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.stler.tasks.data.remote.dto.CalendarEventRequest
 import com.stler.tasks.data.remote.dto.EventDateTime
 import com.stler.tasks.auth.AuthPreferences
+import com.stler.tasks.auth.FeatureFlags
 import com.stler.tasks.data.repository.CalendarRepository
 import com.stler.tasks.data.repository.TaskRepository
 import com.stler.tasks.domain.model.CalendarItem
@@ -54,7 +55,11 @@ class TaskFormViewModel @Inject constructor(
     private val authPreferences    : AuthPreferences,
 ) : BaseViewModel() {
 
-    /** Mirrors [AuthPreferences.calendarsEnabled] — used to hide Event mode in the form. */
+    /** Full feature flags snapshot — used to hide fields in the form. */
+    val featureFlags: StateFlow<FeatureFlags> = authPreferences.featureFlags
+        .stateIn(viewModelScope, SharingStarted.Eagerly, FeatureFlags())
+
+    /** Convenience shortcut for the EVENT-mode toggle gate. */
     val calendarsEnabled: StateFlow<Boolean> = authPreferences.calendarsEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 

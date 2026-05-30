@@ -83,6 +83,7 @@ fun UpcomingScreen(
     val folderFilter       by viewModel.folderFilter.collectAsStateWithLifecycle()
     val calendarFilter     by viewModel.calendarFilter.collectAsStateWithLifecycle()
     val calendarsInEvents  by viewModel.calendarsInEvents.collectAsStateWithLifecycle()
+    val featureFlags       by viewModel.featureFlags.collectAsStateWithLifecycle()
 
     ErrorSnackbarEffect(viewModel)
 
@@ -252,6 +253,7 @@ fun UpcomingScreen(
             folderFilter     = folderFilter,
             calendars        = calendarsInEvents,
             calendarFilter   = calendarFilter,
+            featureFlags     = featureFlags,
             onTogglePriority = { viewModel.togglePriorityFilter(it) },
             onToggleLabel    = { viewModel.toggleLabelFilter(it) },
             onToggleFolder   = { viewModel.toggleFolderFilter(it) },
@@ -297,11 +299,13 @@ fun UpcomingScreen(
                             is ListItem.TaskItem -> {
                                 val task = item.task
                                 TaskItem(
-                                    task = task,
-                                    labels = labels,
-                                    showFolder = true,
+                                    task               = task,
+                                    labels             = labels,
+                                    showFolder         = featureFlags.foldersEnabled,
+                                    showLabels         = featureFlags.labelsEnabled,
+                                    featureFlags       = featureFlags,
                                     showDateInDeadline = false,
-                                    folderName = folders.find { it.id == task.folderId }?.name,
+                                    folderName  = folders.find { it.id == task.folderId }?.name,
                                     folderColor = folders.find { it.id == task.folderId }?.color,
                                     onCheckedChange = { checked ->
                                         if (checked) viewModel.completeTask(task.id)

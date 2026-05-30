@@ -30,16 +30,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.stler.tasks.domain.model.CalendarEvent
-import com.stler.tasks.domain.model.Folder
-import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.Task
 import com.stler.tasks.ui.alltasks.AllTasksScreen
 import com.stler.tasks.ui.calendar.CalendarScreen
 import com.stler.tasks.ui.completed.CompletedScreen
 import com.stler.tasks.ui.folder.FolderScreen
-import com.stler.tasks.ui.label.LabelScreen
 import com.stler.tasks.ui.navigation.Screen
-import com.stler.tasks.ui.priority.PriorityScreen
 import com.stler.tasks.ui.task.TaskFormResult
 import com.stler.tasks.ui.task.TaskFormSheet
 import com.stler.tasks.ui.task.TaskFormViewModel
@@ -52,15 +48,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-private sealed interface FolderDialogMode {
-    data object Create : FolderDialogMode
-    data class  Edit(val folder: Folder) : FolderDialogMode
-}
-
-private sealed interface LabelDialogMode {
-    data object Create : LabelDialogMode
-    data class  Edit(val label: Label) : LabelDialogMode
-}
 
 @Composable
 fun MainScreen(
@@ -99,12 +86,11 @@ fun MainScreen(
     val authData          by viewModel.authData.collectAsStateWithLifecycle()
     val sidebarState      by viewModel.sidebarState.collectAsStateWithLifecycle()
     val selectedCalendars by viewModel.selectedCalendars.collectAsStateWithLifecycle()
+    val featureFlags      by viewModel.featureFlags.collectAsStateWithLifecycle()
 
-    val backStackEntry   by navController.currentBackStackEntryAsState()
-    val currentRoute     = backStackEntry?.destination?.route
-    val currentFolderId  = backStackEntry?.arguments?.getString("folderId")
-    val currentLabelId   = backStackEntry?.arguments?.getString("labelId")
-    val currentPriority  = backStackEntry?.arguments?.getString("priority")
+    val backStackEntry    by navController.currentBackStackEntryAsState()
+    val currentRoute      = backStackEntry?.destination?.route
+    val currentFolderId   = backStackEntry?.arguments?.getString("folderId")
     val currentCalendarId = backStackEntry?.arguments?.getString("calendarId")
 
     val screenTitle = when {
@@ -112,17 +98,9 @@ fun MainScreen(
         currentRoute == Screen.ALL_TASKS -> "All Tasks"
         currentRoute == Screen.COMPLETED -> "Completed"
         currentRoute == Screen.FOLDER    -> folders.find { it.id == currentFolderId }?.name ?: "Folder"
-        currentRoute == Screen.LABEL     -> labels.find { it.id == currentLabelId }?.name ?: "Label"
-        currentRoute == Screen.PRIORITY  -> when (currentPriority) {
-            "urgent" -> "Urgent"; "important" -> "Important"; else -> "Normal"
-        }
         currentRoute == Screen.CALENDAR  -> selectedCalendars.find { it.id == currentCalendarId }?.summary ?: "Calendar"
         else -> "Stler Tasks"
     }
-
-    // ── Folder / Label dialog state ───────────────────────────────────────────
-    var folderDialog  by remember { mutableStateOf<FolderDialogMode?>(null) }
-    var labelDialog   by remember { mutableStateOf<LabelDialogMode?>(null) }
 
     // ── Task form state ───────────────────────────────────────────────────────
     var showForm                     by remember { mutableStateOf(false) }
@@ -276,22 +254,14 @@ fun MainScreen(
             SidebarMenu(
                 currentRoute      = currentRoute,
                 currentFolderId   = currentFolderId,
-                currentLabelId    = currentLabelId,
-                currentPriority   = currentPriority,
                 currentCalendarId = currentCalendarId,
                 folders           = folders,
-                labels            = labels,
                 selectedCalendars = selectedCalendars,
+                featureFlags      = featureFlags,
                 sidebarState      = sidebarState,
                 onNavigate      = ::navigateTo,
                 onToggleSection = viewModel::toggleSection,
                 onAddTask       = { openCreate(sidebarFolderContext); scope.launch { drawerState.close() } },
-                onAddFolder     = { folderDialog = FolderDialogMode.Create },
-                onAddLabel      = { labelDialog  = LabelDialogMode.Create },
-                onEditFolder    = { folderDialog = FolderDialogMode.Edit(it) },
-                onDeleteFolder  = { viewModel.deleteFolder(it.id) },
-                onEditLabel     = { labelDialog  = LabelDialogMode.Edit(it) },
-                onDeleteLabel   = { viewModel.deleteLabel(it.id) },
             )
         },
     ) {
@@ -354,25 +324,6 @@ fun MainScreen(
                     )
                 }
                 composable(
-                    route     = Screen.LABEL,
-                    arguments = listOf(navArgument("labelId") { type = NavType.StringType }),
-                ) {
-                    LabelScreen(
-                        onEditTask   = { openEdit(it) },
-                        onAddSubtask = { openAddSubtask(it) },
-                    )
-                }
-                composable(
-                    route     = Screen.PRIORITY,
-                    arguments = listOf(navArgument("priority") { type = NavType.StringType }),
-                ) { entry ->
-                    PriorityScreen(
-                        priority     = entry.arguments?.getString("priority") ?: "normal",
-                        onEditTask   = { openEdit(it) },
-                        onAddSubtask = { openAddSubtask(it) },
-                    )
-                }
-                composable(
                     route     = Screen.CALENDAR,
                     arguments = listOf(navArgument("calendarId") { type = NavType.StringType }),
                 ) { entry ->
@@ -385,32 +336,6 @@ fun MainScreen(
                 }
             }
         }
-    }
-
-    // ── Folder / Label dialogs ────────────────────────────────────────────────
-    when (val fd = folderDialog) {
-        is FolderDialogMode.Create -> FolderFormDialog(
-            onConfirm = { name, color -> viewModel.createFolder(name, color); folderDialog = null },
-            onDismiss = { folderDialog = null },
-        )
-        is FolderDialogMode.Edit -> FolderFormDialog(
-            existing  = fd.folder,
-            onConfirm = { name, color -> viewModel.updateFolder(fd.folder, name, color); folderDialog = null },
-            onDismiss = { folderDialog = null },
-        )
-        null -> Unit
-    }
-    when (val ld = labelDialog) {
-        is LabelDialogMode.Create -> LabelFormDialog(
-            onConfirm = { name, color -> viewModel.createLabel(name, color); labelDialog = null },
-            onDismiss = { labelDialog = null },
-        )
-        is LabelDialogMode.Edit -> LabelFormDialog(
-            existing  = ld.label,
-            onConfirm = { name, color -> viewModel.updateLabel(ld.label, name, color); labelDialog = null },
-            onDismiss = { labelDialog = null },
-        )
-        null -> Unit
     }
 
     // ── Task / Event form sheet ───────────────────────────────────────────────

@@ -1,6 +1,8 @@
 package com.stler.tasks.ui.alltasks
 
 import androidx.lifecycle.viewModelScope
+import com.stler.tasks.auth.AuthPreferences
+import com.stler.tasks.auth.FeatureFlags
 import com.stler.tasks.data.repository.CalendarRepository
 import com.stler.tasks.data.repository.TaskRepository
 import com.stler.tasks.domain.model.CalendarEvent
@@ -29,6 +31,7 @@ import javax.inject.Inject
 class AllTasksViewModel @Inject constructor(
     private val repository: TaskRepository,
     private val calendarRepository: CalendarRepository,
+    private val authPreferences: AuthPreferences,
 ) : BaseViewModel() {
 
     private val from: LocalDate = LocalDate.now()
@@ -47,12 +50,21 @@ class AllTasksViewModel @Inject constructor(
     private val _calendarFilter = MutableStateFlow<Set<String>>(emptySet())
     val calendarFilter: StateFlow<Set<String>> = _calendarFilter.asStateFlow()
 
+    val featureFlags: StateFlow<FeatureFlags> = authPreferences.featureFlags
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FeatureFlags())
+
     init {
-        // When calendars are disabled (or all deselected), clear any active calendar filter
-        // so tasks are not accidentally hidden by a stale filter state.
+        // Auto-clear stale filters when the corresponding feature is disabled or data is gone
         safeLaunch {
             calendarRepository.getSelectedCalendarIds().collect { ids ->
                 if (ids.isEmpty()) _calendarFilter.value = emptySet()
+            }
+        }
+        safeLaunch {
+            authPreferences.featureFlags.collect { flags ->
+                if (!flags.prioritiesEnabled) _priorityFilter.value = emptySet()
+                if (!flags.labelsEnabled)     _labelFilter.value    = emptySet()
+                if (!flags.foldersEnabled)    _folderFilter.value   = emptySet()
             }
         }
     }

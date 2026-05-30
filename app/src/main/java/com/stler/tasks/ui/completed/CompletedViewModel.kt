@@ -1,6 +1,8 @@
 package com.stler.tasks.ui.completed
 
 import androidx.lifecycle.viewModelScope
+import com.stler.tasks.auth.AuthPreferences
+import com.stler.tasks.auth.FeatureFlags
 import com.stler.tasks.data.repository.TaskRepository
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
@@ -21,7 +23,11 @@ import javax.inject.Inject
 @HiltViewModel
 class CompletedViewModel @Inject constructor(
     private val repository: TaskRepository,
+    private val authPreferences: AuthPreferences,
 ) : BaseViewModel() {
+
+    val featureFlags: StateFlow<FeatureFlags> = authPreferences.featureFlags
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FeatureFlags())
 
     private val allTasks: StateFlow<List<Task>> = repository.observeCompletedTasks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
