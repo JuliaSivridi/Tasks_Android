@@ -401,3 +401,93 @@ _Identified by architecture + UX review agents after Stage 13._
 - [x] 13b.x `UpcomingScreen` — remove initial scroll-to-today; list always opens at index 0 so Overdue tasks visible first
 - [x] 13b.x `SyncManager.triggerSync()` — add `networkConstraints` (was missing; prevents SyncWorker running offline and retrying 4×)
 - [x] 13b.x `WidgetRefresher` — skip `updateAll()` when no validated internet connection; avoids restarting Glance sessions offline which caused "Inbox / no tasks" flash
+
+---
+
+## Stage 14 — App Flexibility (Feature Toggles + Sidebar Cleanup)
+
+_Branch: `flexibility`. Base: `main` after Stage 13b._
+
+**Goal:** Let users switch off entire feature areas (Folders, Labels, Priorities, Calendars) so the app is as simple or feature-rich as they want. Also remove rarely-used Labels and Priorities sidebar views and move label management into Settings.
+
+**Rules for all toggles:** existing task data (folder assignments, label IDs, priority values) is never touched — toggling a feature off only hides its UI. Toggling back on restores full visibility immediately. New tasks created while a feature is disabled receive sensible defaults (Inbox folder, no labels, Normal priority).
+
+---
+
+### 14.0 Architecture: `FeatureFlags`
+
+- [ ] 14.0.1 `AuthPreferences.kt` — add `booleanPreferencesKey` for `folders_enabled`, `labels_enabled`, `priorities_enabled` (all default `true`); add `featureFlags: Flow<FeatureFlags>` via `combine` of all four keys (calendars included); add individual setters `setFoldersEnabled()`, `setLabelsEnabled()`, `setPrioritiesEnabled()`
+- [ ] 14.0.2 `FeatureFlags.kt` — new data class `FeatureFlags(foldersEnabled, labelsEnabled, prioritiesEnabled, calendarsEnabled)` in `auth` package; used as single injection point instead of four separate flows
+
+---
+
+### 14.1 Settings screen
+
+- [ ] 14.1.1 `SettingsViewModel.kt` — expose `featureFlags: StateFlow<FeatureFlags>`; add `setFoldersEnabled()`, `setLabelsEnabled()`, `setPrioritiesEnabled()`; `setFoldersEnabled(false)` → disable `FolderWidgetReceiver` via `PackageManager` (same pattern as CalendarWidget); `setFoldersEnabled(true)` → re-enable it
+- [ ] 14.1.2 `SettingsScreen.kt` — add **FEATURES** section (above SPREADSHEET or between SPREADSHEET and CALENDARS): three Switch rows — "Folders", "Labels", "Priorities"; each with a one-line description subtitle
+- [ ] 14.1.3 `SettingsScreen.kt` — add **LABELS** section (below CALENDARS): visible only when `labelsEnabled = true`; shows list of existing labels (name + color dot + edit/delete) + "Add label" button at bottom; mirrors the calendar section layout. Label creation opens the existing `LabelDialog`; edit/delete reuse existing dialogs
+- [ ] 14.1.4 `SettingsViewModel.kt` — expose `labels: StateFlow<List<Label>>`; add `createLabel()`, `updateLabel()`, `deleteLabel()` delegating to `TaskRepository` (same logic as in `MainViewModel`)
+
+---
+
+### 14.2 Sidebar cleanup
+
+- [ ] 14.2.1 `SidebarMenu.kt` — remove the **Priorities** section and the **Labels** section entirely (navigation links to PriorityScreen / LabelScreen). Folders section stays (it's the primary navigation). Label/Priority management moves to Settings
+- [ ] 14.2.2 `SidebarMenu.kt` — gate the **Folders** section behind `featureFlags.foldersEnabled`; gate the **Calendars** section behind `featureFlags.calendarsEnabled` (currently gated by `selectedCalendars.isNotEmpty()` — keep both conditions)
+- [ ] 14.2.3 `MainViewModel.kt` — inject `AuthPreferences`; expose `featureFlags: StateFlow<FeatureFlags>`
+- [ ] 14.2.4 `MainScreen.kt` — pass `featureFlags` down to `SidebarMenu`; remove `onAddLabel` callback from sidebar (label creation moves to Settings); remove `onEditLabel` / `onDeleteLabel` / `onAddFolder` callbacks as appropriate
+- [ ] 14.2.5 `SidebarPreferences.kt` / `SidebarState` — remove `labelsOpen` and `prioritiesOpen` fields (sections no longer exist); keep `foldersOpen` and `calendarsOpen`
+
+---
+
+### 14.3 Filter bar
+
+- [ ] 14.3.1 `AllTasksScreen.kt` `FilterBar` — add `featureFlags: FeatureFlags` parameter (default all-true for backward compat); hide the Priority chip when `!prioritiesEnabled`; hide the Label chip when `!labelsEnabled`; hide the Folder chip when `!foldersEnabled`
+- [ ] 14.3.2 `AllTasksViewModel.kt` — inject `AuthPreferences`; expose `featureFlags`; when `foldersEnabled` becomes false, auto-clear `_folderFilter`; same for labels and priorities
+- [ ] 14.3.3 `UpcomingScreen.kt` — same `FilterBar` changes (reuses the same composable, just pass flags through)
+- [ ] 14.3.4 `UpcomingViewModel.kt` — same auto-clear logic as AllTasksViewModel
+
+---
+
+### 14.4 Task item display
+
+- [ ] 14.4.1 `TaskItem.kt` — add `featureFlags: FeatureFlags` parameter (default all-true); suppress priority color on checkbox when `!prioritiesEnabled` (draw as normal gray border); hide label badges in row 2 when `!labelsEnabled`; hide folder name in row 2 when `!foldersEnabled`
+- [ ] 14.4.2 `TaskItem.kt` `TaskMobileMenu` — hide "Priority" menu item when `!prioritiesEnabled`; hide "Labels" menu item when `!labelsEnabled`
+- [ ] 14.4.3 Pass `featureFlags` to every `TaskItem` call site: `AllTasksScreen`, `UpcomingScreen`, `FolderScreen`, `LabelScreen`, `PriorityScreen`, `CompletedScreen`
+
+---
+
+### 14.5 Task creation / editing form
+
+- [ ] 14.5.1 `TaskFormViewModel.kt` — already has `AuthPreferences`; expose `featureFlags: StateFlow<FeatureFlags>`
+- [ ] 14.5.2 `TaskFormSheet.kt` — collect `featureFlags`; hide Folder picker row when `!foldersEnabled` (new task goes to Inbox); hide Labels row when `!labelsEnabled`; hide Priority row when `!prioritiesEnabled` (new task gets Normal)
+- [ ] 14.5.3 `TaskFormSheet.kt` `parseTitle()` call — when `!foldersEnabled` pass empty folders list so `@Name` tokens are ignored; when `!labelsEnabled` pass empty labels list so `#Name` tokens are ignored; when `!prioritiesEnabled` ignore the parsed priority even if `!N` was typed (leave task at Normal)
+
+---
+
+### 14.6 Widgets
+
+- [ ] 14.6.1 `WidgetConfigActivity.kt` — inject `AuthPreferences`; read `featureFlags` as state; hide `WidgetType.FOLDER` option when `!foldersEnabled` (don't show it in the type-selector); show "Folders are disabled" message in `FolderSelectorContent` as a fallback
+- [ ] 14.6.2 `WidgetConfigActivity.kt` `TaskListFilterContent` — hide Folder filter section when `!foldersEnabled`; hide Label filter section when `!labelsEnabled`; hide Priority filter section when `!prioritiesEnabled`
+- [ ] 14.6.3 `FolderWidget.kt` / `FolderWidgetReceiver` — when `foldersEnabled = false`, show a "Folders disabled" empty state instead of task list (existing widgets on home screen don't crash)
+
+---
+
+### 14.7 Navigation cleanup
+
+- [ ] 14.7.1 `MainScreen.kt` — remove `composable(Screen.LABEL)` and `composable(Screen.PRIORITY)` routes (no longer reachable via sidebar; deeplinks to these screens can 404 gracefully or redirect to AllTasks)
+- [ ] 14.7.2 `Screen.kt` — remove `LABEL`, `PRIORITY`, `labelRoute()`, `priorityRoute()` constants; update `MainScreen` NavHost accordingly
+- [ ] 14.7.3 Delete `LabelScreen.kt`, `LabelViewModel.kt`, `PriorityScreen.kt`, `PriorityViewModel.kt` — no longer needed (labels managed in Settings; priorities accessible via AllTasks filter)
+
+---
+
+### 14.8 Calendar toggle (already done — tracking here for completeness)
+
+- [x] 14.8.1 `AuthPreferences.kt` — `CALENDARS_ENABLED` key + flow + setter
+- [x] 14.8.2 `CalendarRepositoryImpl.getSelectedCalendarIds()` — combine with `calendarsEnabled`, emit `emptySet()` when disabled
+- [x] 14.8.3 `SyncWorker` — skip `syncCalendars()` when disabled
+- [x] 14.8.4 `SettingsScreen` / `SettingsViewModel` — Switch toggle for calendars; clear Room events on disable
+- [x] 14.8.5 `TaskFormSheet` — hide EVENT button when disabled
+- [x] 14.8.6 `AllTasksViewModel` / `UpcomingViewModel` — auto-clear calendar filter when disabled
+- [x] 14.8.7 `WidgetConfigActivity` — show "disabled" message in CalendarSelectorContent
+- [x] 14.8.8 `SettingsViewModel` — `PackageManager.setComponentEnabledSetting` for `CalendarWidgetReceiver`
