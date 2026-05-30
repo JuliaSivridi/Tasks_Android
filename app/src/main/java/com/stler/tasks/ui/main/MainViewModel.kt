@@ -16,17 +16,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import com.stler.tasks.sync.SyncManager
 import com.stler.tasks.sync.SyncState
-import java.util.UUID
 import dagger.hilt.android.lifecycle.HiltViewModel
+
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-
-private fun generateId(prefix: String): String =
-    "${prefix}_${UUID.randomUUID().toString().replace("-", "").take(8)}"
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
@@ -102,22 +99,5 @@ class MainViewModel @Inject constructor(
     }
 
     fun triggerSync() = syncManager.triggerSync()
-
-    // ── Folder CRUD ───────────────────────────────────────────────────────
-
-    fun createFolder(name: String, color: String) = safeLaunch {
-        val nextOrder = (folders.value.maxOfOrNull { it.sortOrder } ?: -1) + 1
-        taskRepository.createFolder(
-            Folder(id = generateId("fld"), name = name, color = color, sortOrder = nextOrder)
-        )
-    }
-
-    fun updateFolder(folder: Folder, name: String, color: String) = safeLaunch {
-        taskRepository.updateFolder(folder.copy(name = name, color = color))
-    }
-
-    fun deleteFolder(folderId: String) = safeLaunch {
-        taskRepository.deleteFolder(folderId)
-    }
 
 }

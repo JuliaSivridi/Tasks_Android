@@ -491,3 +491,33 @@ _Branch: `flexibility`. Base: `main` after Stage 13b._
 - [x] 14.8.6 `AllTasksViewModel` / `UpcomingViewModel` — auto-clear calendar filter when disabled
 - [x] 14.8.7 `WidgetConfigActivity` — show "disabled" message in CalendarSelectorContent
 - [x] 14.8.8 `SettingsViewModel` — `PackageManager.setComponentEnabledSetting` for `CalendarWidgetReceiver`
+
+---
+
+## Stage 15 — Settings UX Improvements & Folder Management in Settings
+
+_Branch: `flexibility` (continuation)._
+
+**Goal:** Unify data management (Folders + Labels) in Settings; sidebar becomes navigation-only. Also fix Settings UX issues: back button, toggle visibility, section headers, ordering.
+
+### 15.1 Settings UX fixes
+
+- [x] 15.1.1 `SettingsScreen.kt` — `BackHandler` intercepts physical back button → calls `onNavigateBack` (was exiting the app)
+- [x] 15.1.2 `SettingsScreen.kt` — `switchColors()` helper: explicit `uncheckedThumbColor = onSurfaceVariant`, `uncheckedBorderColor = outline`, `uncheckedTrackColor = surfaceVariant`; applied to all Switches; visible in light theme
+- [x] 15.1.3 `SettingsScreen.kt` — removed all section headers (FEATURES / SPREADSHEET / LABELS / CALENDARS); context is clear without them
+- [x] 15.1.4 `SettingsScreen.kt` — reordered sections: Spreadsheet → Priorities → Labels → Folders → Calendars; `Spacer(12.dp)` between cards
+- [x] 15.1.5 `SettingsScreen.kt` — Labels toggle moved into the Labels card header row (like Calendars); Add "+" button appears next to toggle when enabled
+
+### 15.2 Folder management in Settings
+
+- [x] 15.2.1 `SettingsViewModel.kt` — add `folders: StateFlow<List<Folder>>` + `createFolder/updateFolder/deleteFolder`
+- [x] 15.2.2 `SettingsScreen.kt` — Folders card: toggle in header row + AnimatedVisibility list; folder icon (Inbox/Folder tinted with color) + name + Edit/Delete (Inbox excluded); Add "+" in header when enabled
+- [x] 15.2.3 `SettingsScreen.kt` — import and show `FolderFormDialog` / `DeleteFolderDialog`; dialog state vars `showFolderForm`, `editingFolder`, `deletingFolder`
+
+### 15.3 Sidebar cleanup — navigation only
+
+- [x] 15.3.1 `SidebarMenu.kt` — removed `onAddFolder`, `onEditFolder`, `onDeleteFolder` params; signature now only has `onAddTask` callback
+- [x] 15.3.2 `SidebarMenu.kt` — `FolderNavItem` simplified: removed DropdownMenu badge (Edit/Delete); pure navigation item
+- [x] 15.3.3 `SidebarMenu.kt` — `SectionHeader` simplified: removed `onAdd` param (no longer shows "+" in sidebar); used for both Folders and Calendars sections
+- [x] 15.3.4 `MainViewModel.kt` — removed `createFolder`, `updateFolder`, `deleteFolder` (moved to SettingsViewModel)
+- [x] 15.3.5 `MainScreen.kt` — removed `FolderDialogMode` sealed interface, `folderDialog` state, folder dialog when-block; removed unused `Folder`/`Label` imports

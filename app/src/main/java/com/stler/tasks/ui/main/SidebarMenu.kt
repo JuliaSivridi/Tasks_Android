@@ -1,7 +1,6 @@
 package com.stler.tasks.ui.main
 
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,16 +17,11 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FormatListBulleted
 import androidx.compose.material.icons.outlined.Inbox
-import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,10 +31,6 @@ import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -65,9 +55,6 @@ fun SidebarMenu(
     onNavigate       : (String) -> Unit,
     onToggleSection  : (String) -> Unit,
     onAddTask        : () -> Unit,
-    onAddFolder      : () -> Unit,
-    onEditFolder     : (Folder) -> Unit,
-    onDeleteFolder   : (Folder) -> Unit,
 ) {
     ModalDrawerSheet(modifier = Modifier.fillMaxWidth(0.70f)) {
         Column(
@@ -119,7 +106,6 @@ fun SidebarMenu(
                     title    = "Folders",
                     isOpen   = sidebarState.foldersOpen,
                     onToggle = { onToggleSection("folders") },
-                    onAdd    = onAddFolder,
                 )
                 if (sidebarState.foldersOpen) {
                     folders.forEach { folder ->
@@ -127,8 +113,6 @@ fun SidebarMenu(
                             folder     = folder,
                             isSelected = currentRoute == Screen.FOLDER && currentFolderId == folder.id,
                             onClick    = { onNavigate(Screen.folderRoute(folder.id)) },
-                            onEdit     = { onEditFolder(folder) },
-                            onDelete   = { onDeleteFolder(folder) },
                         )
                     }
                 }
@@ -142,7 +126,6 @@ fun SidebarMenu(
                     title    = "Calendars",
                     isOpen   = sidebarState.calendarsOpen,
                     onToggle = { onToggleSection("calendars") },
-                    onAdd    = null,
                 )
                 if (sidebarState.calendarsOpen) {
                     selectedCalendars.forEach { cal ->
@@ -201,10 +184,7 @@ private fun FolderNavItem(
     folder    : Folder,
     isSelected: Boolean,
     onClick   : () -> Unit,
-    onEdit    : () -> Unit,
-    onDelete  : () -> Unit,
 ) {
-    var showMenu by remember { mutableStateOf(false) }
     val folderColor = folder.color.toComposeColor()
     val icon = if (folder.isInbox) Icons.Outlined.Inbox else Icons.Outlined.Folder
 
@@ -214,27 +194,6 @@ private fun FolderNavItem(
         selected = isSelected,
         onClick  = onClick,
         colors   = sidebarItemColors(),
-        badge = {
-            Box {
-                IconButton(onClick = { showMenu = true }) {
-                    Icon(Icons.Outlined.MoreVert, contentDescription = "Options", modifier = Modifier.size(20.dp))
-                }
-                DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
-                    DropdownMenuItem(
-                        text = { Text("Edit") },
-                        onClick = { showMenu = false; onEdit() },
-                        leadingIcon = { Icon(Icons.Outlined.Edit, null) },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                        onClick = { showMenu = false; onDelete() },
-                        leadingIcon = {
-                            Icon(Icons.Outlined.Delete, null, tint = MaterialTheme.colorScheme.error)
-                        },
-                    )
-                }
-            }
-        },
         modifier = Modifier.padding(horizontal = 12.dp),
     )
 }
@@ -244,7 +203,6 @@ private fun SectionHeader(
     title   : String,
     isOpen  : Boolean,
     onToggle: () -> Unit,
-    onAdd   : (() -> Unit)?,
 ) {
     Row(
         modifier = Modifier
@@ -265,10 +223,5 @@ private fun SectionHeader(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
         )
-        if (onAdd != null) {
-            IconButton(onClick = onAdd) {
-                Icon(Icons.Outlined.Add, contentDescription = "Add", modifier = Modifier.size(18.dp))
-            }
-        }
     }
 }

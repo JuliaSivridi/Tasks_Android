@@ -17,6 +17,7 @@ import com.stler.tasks.data.remote.dto.DriveFile
 import com.stler.tasks.data.repository.CalendarRepository
 import com.stler.tasks.data.repository.TaskRepository
 import com.stler.tasks.domain.model.CalendarItem
+import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.sync.SyncManager
 import com.stler.tasks.widget.CalendarWidgetReceiver
@@ -127,6 +128,28 @@ class SettingsViewModel @Inject constructor(
                 _switching.value = false
             }
         }
+    }
+
+    // ── Folders (managed in Settings) ────────────────────────────────────
+
+    val folders: StateFlow<List<Folder>> = taskRepository.observeFolders()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun createFolder(name: String, color: String) {
+        viewModelScope.launch {
+            val nextOrder = (folders.value.maxOfOrNull { it.sortOrder } ?: -1) + 1
+            taskRepository.createFolder(
+                Folder(id = generateId("fld"), name = name, color = color, sortOrder = nextOrder)
+            )
+        }
+    }
+
+    fun updateFolder(folder: Folder, name: String, color: String) {
+        viewModelScope.launch { taskRepository.updateFolder(folder.copy(name = name, color = color)) }
+    }
+
+    fun deleteFolder(folderId: String) {
+        viewModelScope.launch { taskRepository.deleteFolder(folderId) }
     }
 
     // ── Labels (managed in Settings) ──────────────────────────────────────

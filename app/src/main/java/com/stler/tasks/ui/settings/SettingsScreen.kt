@@ -1,5 +1,6 @@
 package com.stler.tasks.ui.settings
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,6 +25,8 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.TableChart
 import androidx.compose.material3.Checkbox
@@ -37,8 +40,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -54,8 +57,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
+import com.stler.tasks.ui.main.DeleteFolderDialog
 import com.stler.tasks.ui.main.DeleteLabelDialog
+import com.stler.tasks.ui.main.FolderFormDialog
 import com.stler.tasks.ui.main.LabelFormDialog
 import com.stler.tasks.util.toComposeColor
 
@@ -65,7 +71,11 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
+    // Physical back button → go back to main screen (not exit the app)
+    BackHandler(onBack = onNavigateBack)
+
     val featureFlags     by viewModel.featureFlags.collectAsStateWithLifecycle()
+    val folders          by viewModel.folders.collectAsStateWithLifecycle()
     val spreadsheetId    by viewModel.spreadsheetId.collectAsStateWithLifecycle()
     val spreadsheetName  by viewModel.spreadsheetName.collectAsStateWithLifecycle()
     val files            by viewModel.files.collectAsStateWithLifecycle()
@@ -78,17 +88,42 @@ fun SettingsScreen(
 
     var pickerExpanded by remember { mutableStateOf(false) }
 
-    // Label dialog state
-    var showLabelForm   by remember { mutableStateOf(false) }
-    var editingLabel    by remember { mutableStateOf<Label?>(null) }
-    var deletingLabel   by remember { mutableStateOf<Label?>(null) }
+    // Folder dialog state
+    var showFolderForm by remember { mutableStateOf(false) }
+    var editingFolder  by remember { mutableStateOf<Folder?>(null) }
+    var deletingFolder by remember { mutableStateOf<Folder?>(null) }
 
-    // Load calendars when enabled and on first display
+    // Label dialog state
+    var showLabelForm by remember { mutableStateOf(false) }
+    var editingLabel  by remember { mutableStateOf<Label?>(null) }
+    var deletingLabel by remember { mutableStateOf<Label?>(null) }
+
+    // Load calendars when enabled
     LaunchedEffect(calendarsEnabled) {
         if (calendarsEnabled) viewModel.loadCalendars()
     }
 
-    // Dialogs
+    // Dialogs — Folders
+    if (showFolderForm || editingFolder != null) {
+        FolderFormDialog(
+            existing  = editingFolder,
+            onConfirm = { name, color ->
+                if (editingFolder != null) viewModel.updateFolder(editingFolder!!, name, color)
+                else viewModel.createFolder(name, color)
+                showFolderForm = false; editingFolder = null
+            },
+            onDismiss = { showFolderForm = false; editingFolder = null },
+        )
+    }
+    deletingFolder?.let { fld ->
+        DeleteFolderDialog(
+            folder    = fld,
+            onConfirm = { viewModel.deleteFolder(fld.id); deletingFolder = null },
+            onDismiss = { deletingFolder = null },
+        )
+    }
+
+    // Dialogs — Labels
     if (showLabelForm || editingLabel != null) {
         LabelFormDialog(
             existing  = editingLabel,
@@ -126,41 +161,9 @@ fun SettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState()),
         ) {
+            Spacer(Modifier.height(8.dp))
 
-            // ══ FEATURES ══════════════════════════════════════════════════════
-
-            SectionHeader(text = "FEATURES")
-
-            OutlinedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp),
-            ) {
-                FeatureToggleRow(
-                    title       = "Folders",
-                    subtitle    = "Organize tasks into folders",
-                    checked     = featureFlags.foldersEnabled,
-                    onToggle    = viewModel::setFoldersEnabled,
-                )
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                FeatureToggleRow(
-                    title       = "Labels",
-                    subtitle    = "Tag tasks with colored labels",
-                    checked     = featureFlags.labelsEnabled,
-                    onToggle    = viewModel::setLabelsEnabled,
-                )
-                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                FeatureToggleRow(
-                    title       = "Priorities",
-                    subtitle    = "Mark tasks as Urgent, Important, or Normal",
-                    checked     = featureFlags.prioritiesEnabled,
-                    onToggle    = viewModel::setPrioritiesEnabled,
-                )
-            }
-
-            // ══ SPREADSHEET ════════════════════════════════════════════════════
-
-            SectionHeader(text = "SPREADSHEET")
+            // ── 1. Spreadsheet ─────────────────────────────────────────────────
 
             OutlinedCard(
                 modifier = Modifier
@@ -276,20 +279,67 @@ fun SettingsScreen(
                 }
             }
 
-            // ══ LABELS ═════════════════════════════════════════════════════════
+            Spacer(Modifier.height(12.dp))
 
-            AnimatedVisibility(visible = featureFlags.labelsEnabled) {
-                Column {
-                    SectionHeader(text = "LABELS")
+            // ── 2. Priorities ──────────────────────────────────────────────────
 
-                    OutlinedCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp),
-                    ) {
+            OutlinedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp),
+            ) {
+                FeatureToggleRow(
+                    title    = "Priorities",
+                    subtitle = "Mark tasks as Urgent, Important, or Normal",
+                    checked  = featureFlags.prioritiesEnabled,
+                    onToggle = viewModel::setPrioritiesEnabled,
+                )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // ── 3. Labels (toggle + list, like Calendars) ──────────────────────
+
+            OutlinedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp),
+            ) {
+                // Header row: title + switch + add button (when enabled)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Labels",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = featureFlags.labelsEnabled,
+                        onCheckedChange = viewModel::setLabelsEnabled,
+                        colors = switchColors(),
+                    )
+                    AnimatedVisibility(visible = featureFlags.labelsEnabled) {
+                        IconButton(onClick = { showLabelForm = true }) {
+                            Icon(
+                                Icons.Outlined.Add,
+                                contentDescription = "Add label",
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                }
+
+                // Label list
+                AnimatedVisibility(visible = featureFlags.labelsEnabled) {
+                    Column {
+                        HorizontalDivider()
                         if (labels.isEmpty()) {
                             Text(
-                                text = "No labels yet.",
+                                text = "No labels yet. Tap + to add one.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(16.dp),
@@ -336,31 +386,117 @@ fun SettingsScreen(
                                 HorizontalDivider(modifier = Modifier.padding(start = 44.dp))
                             }
                         }
-                        // Add label button
-                        TextButton(
-                            onClick = { showLabelForm = true },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                        ) {
-                            Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Add label")
-                        }
                     }
                 }
             }
 
-            // ══ CALENDARS ══════════════════════════════════════════════════════
+            Spacer(Modifier.height(12.dp))
 
-            SectionHeader(text = "CALENDARS")
+            // ── 4. Folders (toggle + list, like Labels/Calendars) ──────────────
 
             OutlinedCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp),
             ) {
-                // Header row: title + enable/disable switch + refresh button
+                // Header row: title + switch + add button (when enabled)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Folders",
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Switch(
+                        checked = featureFlags.foldersEnabled,
+                        onCheckedChange = viewModel::setFoldersEnabled,
+                        colors = switchColors(),
+                    )
+                    AnimatedVisibility(visible = featureFlags.foldersEnabled) {
+                        IconButton(onClick = { showFolderForm = true }) {
+                            Icon(
+                                Icons.Outlined.Add,
+                                contentDescription = "Add folder",
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                }
+
+                // Folder list
+                AnimatedVisibility(visible = featureFlags.foldersEnabled) {
+                    Column {
+                        HorizontalDivider()
+                        if (folders.isEmpty()) {
+                            Text(
+                                text = "No folders yet. Tap + to add one.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(16.dp),
+                            )
+                        } else {
+                            folders.forEach { folder ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = if (folder.isInbox) Icons.Outlined.Inbox
+                                                      else Icons.Outlined.Folder,
+                                        contentDescription = null,
+                                        tint = folder.color.toComposeColor(),
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Text(
+                                        text = folder.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.weight(1f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    if (!folder.isInbox) {
+                                        IconButton(onClick = { editingFolder = folder }) {
+                                            Icon(
+                                                Icons.Outlined.Edit,
+                                                contentDescription = "Edit",
+                                                modifier = Modifier.size(18.dp),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                        IconButton(onClick = { deletingFolder = folder }) {
+                                            Icon(
+                                                Icons.Outlined.Delete,
+                                                contentDescription = "Delete",
+                                                modifier = Modifier.size(18.dp),
+                                                tint = MaterialTheme.colorScheme.error,
+                                            )
+                                        }
+                                    }
+                                }
+                                HorizontalDivider(modifier = Modifier.padding(start = 46.dp))
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // ── 5. Calendars ───────────────────────────────────────────────────
+
+            OutlinedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp),
+            ) {
+                // Header row: title + switch + refresh button
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -375,6 +511,7 @@ fun SettingsScreen(
                     Switch(
                         checked = calendarsEnabled,
                         onCheckedChange = viewModel::setCalendarsEnabled,
+                        colors = switchColors(),
                     )
                     AnimatedVisibility(visible = calendarsEnabled) {
                         IconButton(
@@ -384,7 +521,11 @@ fun SettingsScreen(
                             if (calendarsLoading) {
                                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                             } else {
-                                Icon(Icons.Outlined.Refresh, contentDescription = "Refresh calendars", modifier = Modifier.size(20.dp))
+                                Icon(
+                                    Icons.Outlined.Refresh,
+                                    contentDescription = "Refresh calendars",
+                                    modifier = Modifier.size(20.dp),
+                                )
                             }
                         }
                     }
@@ -452,15 +593,13 @@ fun SettingsScreen(
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+/** Switch colors with a visible thumb in both light and dark themes. */
 @Composable
-private fun SectionHeader(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 4.dp),
-    )
-}
+private fun switchColors() = SwitchDefaults.colors(
+    uncheckedThumbColor  = MaterialTheme.colorScheme.onSurfaceVariant,
+    uncheckedBorderColor = MaterialTheme.colorScheme.outline,
+    uncheckedTrackColor  = MaterialTheme.colorScheme.surfaceVariant,
+)
 
 @Composable
 private fun FeatureToggleRow(
@@ -485,6 +624,10 @@ private fun FeatureToggleRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Switch(checked = checked, onCheckedChange = onToggle)
+        Switch(
+            checked  = checked,
+            onCheckedChange = onToggle,
+            colors   = switchColors(),
+        )
     }
 }

@@ -30,8 +30,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.stler.tasks.domain.model.CalendarEvent
-import com.stler.tasks.domain.model.Folder
-import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.Task
 import com.stler.tasks.ui.alltasks.AllTasksScreen
 import com.stler.tasks.ui.calendar.CalendarScreen
@@ -49,11 +47,6 @@ import com.stler.tasks.ui.util.LocalSnackbarHostState
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-
-private sealed interface FolderDialogMode {
-    data object Create : FolderDialogMode
-    data class  Edit(val folder: Folder) : FolderDialogMode
-}
 
 
 @Composable
@@ -108,9 +101,6 @@ fun MainScreen(
         currentRoute == Screen.CALENDAR  -> selectedCalendars.find { it.id == currentCalendarId }?.summary ?: "Calendar"
         else -> "Stler Tasks"
     }
-
-    // ── Folder / Label dialog state ───────────────────────────────────────────
-    var folderDialog  by remember { mutableStateOf<FolderDialogMode?>(null) }
 
     // ── Task form state ───────────────────────────────────────────────────────
     var showForm                     by remember { mutableStateOf(false) }
@@ -272,9 +262,6 @@ fun MainScreen(
                 onNavigate      = ::navigateTo,
                 onToggleSection = viewModel::toggleSection,
                 onAddTask       = { openCreate(sidebarFolderContext); scope.launch { drawerState.close() } },
-                onAddFolder     = { folderDialog = FolderDialogMode.Create },
-                onEditFolder    = { folderDialog = FolderDialogMode.Edit(it) },
-                onDeleteFolder  = { viewModel.deleteFolder(it.id) },
             )
         },
     ) {
@@ -351,19 +338,6 @@ fun MainScreen(
         }
     }
 
-    // ── Folder / Label dialogs ────────────────────────────────────────────────
-    when (val fd = folderDialog) {
-        is FolderDialogMode.Create -> FolderFormDialog(
-            onConfirm = { name, color -> viewModel.createFolder(name, color); folderDialog = null },
-            onDismiss = { folderDialog = null },
-        )
-        is FolderDialogMode.Edit -> FolderFormDialog(
-            existing  = fd.folder,
-            onConfirm = { name, color -> viewModel.updateFolder(fd.folder, name, color); folderDialog = null },
-            onDismiss = { folderDialog = null },
-        )
-        null -> Unit
-    }
     // ── Task / Event form sheet ───────────────────────────────────────────────
     if (showForm) {
         TaskFormSheet(
