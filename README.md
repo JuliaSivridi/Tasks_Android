@@ -1,56 +1,67 @@
 # Stler Tasks — Android
 
+[![Live PWA](https://img.shields.io/badge/Stler_Tasks-Live_PWA-E07E38?style=for-the-badge)](https://stler-tasks.vercel.app)
+[![Releases](https://img.shields.io/github/v/release/JuliaSivridi/Tasks_Android?style=for-the-badge&logo=github&logoColor=white&color=181717)](https://github.com/JuliaSivridi/Tasks_Android/releases)
+
+![Kotlin](https://img.shields.io/badge/Kotlin_2.2-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)
+![Android](https://img.shields.io/badge/Android_8.0+-34A853?style=for-the-badge&logo=android&logoColor=white)
+![Jetpack Compose](https://img.shields.io/badge/Jetpack_Compose-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white)
+![Room](https://img.shields.io/badge/Room_SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)
+![Google Sheets](https://img.shields.io/badge/Google_Sheets_API-34A853?style=for-the-badge&logo=googlesheets&logoColor=white)
+![Google Calendar](https://img.shields.io/badge/Google_Calendar_API-4285F4?style=for-the-badge&logo=googlecalendar&logoColor=white)
+![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)
+
 A native Android task manager — the companion app to [Stler Tasks PWA](https://stler-tasks.vercel.app). Both apps share the same `db_tasks` Google Spreadsheet, so tasks, folders, and labels stay in sync between web and phone automatically.
 
 ---
 
 ## Features
 
-**Task management**
+**📋 Task management**
 - Create tasks with title, priority, deadline (date + optional time), labels, and folder
 - Subtasks at any depth with expand/collapse; progress counter on the parent row
 - Recurring tasks — daily / weekly / monthly; completing a recurring task advances the deadline automatically, not marks it done
 - Smart input: type `@FolderName`, `#LabelName`, or `!1`/`!2`/`!3` in the title to set folder / label / priority instantly
 
-**Organization**
+**🗂️ Organization**
 - **Folders** — group tasks; drag to reorder within a folder; hierarchical subtask tree
 - **Labels** — colored tags, multiple per task; filterable across all views
 - **Priority** — Urgent / Important / Normal; color-coded flags on every task row
 
-**App flexibility**
+**🎛️ App flexibility**
 - Each feature area (Folders, Labels, Priorities, Calendars) can be individually toggled on/off in Settings
 - All task data is preserved regardless of toggle state — turning a feature back on restores full visibility instantly
 - Folders and Labels are managed directly in Settings (create, rename, delete)
 
-**Views**
+**👁️ Views**
 - **Upcoming** — tasks + calendar events grouped by day with a scrollable week strip; overdue section at the top
 - **All Tasks** — flat list of all pending tasks and calendar events, interleaved by date and priority
 - **Folder** — dedicated task list per folder with drag-to-reorder
 - **Calendar** — event list for each connected calendar
 - **Completed** — archive of done tasks with one-tap restore
 
-**Deadlines**
+**⏰ Deadlines**
 - Color-coded by urgency: overdue · today · tomorrow · this week · future
 - Swipe left on any task to open the deadline picker instantly
 - Postpone button inside the deadline picker (advances by the task's own recurrence interval)
 
-**Swipe gestures**
+**👆 Swipe gestures**
 - Swipe right → complete (green flash, then task disappears or deadline advances)
 - Swipe left → open deadline picker (snaps back after closing)
 
-**Google Calendar integration**
+**📅 Google Calendar integration**
 - Connect one or more Google Calendars in Settings
 - Calendar events displayed inline with tasks in Upcoming and All Tasks, unified by date
 - Create, edit, and delete events (including recurring) directly from the app
 - Recurring events show a loop icon; delete "this event only" or "all in series"
 
-**Widgets** — four home screen widgets via Jetpack Glance:
+**🪄 Widgets** — four home screen widgets via Jetpack Glance:
 - **Upcoming** — next 7 days of tasks + calendar events grouped by date
 - **Folder** — any single folder, hierarchical with expand/collapse
 - **Task List** — configurable by folder / label / priority
 - **Calendar** — mixed task + event timeline for the next 7 days
 
-**Sync & offline**
+**🔄 Sync & offline**
 - Full read/write offline via Room (SQLite); sync queue flushes when back online
 - Background sync every 30 minutes via WorkManager
 - Sync status shown in the top bar: cloud-done (synced) · cloud-upload with counter (pending) · spinning arrows (syncing)
