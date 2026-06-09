@@ -1,6 +1,6 @@
 # Stler Tasks Android — Task Decomposition
 
-**Updated:** 2026-04-27
+**Updated:** 2026-06-09
 **Spec:** `docs/architecture-spec.md` · `docs/architecture-cal-spec.md`
 **Source reference:** PWA at `D:\Projects\Tasks` (scanned for full UI parity)
 
@@ -521,3 +521,18 @@ _Branch: `flexibility` (continuation)._
 - [x] 15.3.3 `SidebarMenu.kt` — `SectionHeader` simplified: removed `onAdd` param (no longer shows "+" in sidebar); used for both Folders and Calendars sections
 - [x] 15.3.4 `MainViewModel.kt` — removed `createFolder`, `updateFolder`, `deleteFolder` (moved to SettingsViewModel)
 - [x] 15.3.5 `MainScreen.kt` — removed `FolderDialogMode` sealed interface, `folderDialog` state, folder dialog when-block; removed unused `Folder`/`Label` imports
+
+
+## Stage 16 — UX Fixes (June 2026)
+
+_Version 2.6_
+
+### 16.1 Help & Feedback — physical back button
+
+- [x] 16.1.1 `HelpScreen.kt` — `BackHandler(onBack = onNavigateBack)` added; physical back button returns to main screen (was exiting the app)
+- [x] 16.1.2 `FeedbackScreen.kt` — same fix
+
+### 16.2 Calendar FAB — smart open mode
+
+- [x] 16.2.1 `TaskFormSheet.kt` — new `initialCalendarId: String?` parameter; when non-null, `LaunchedEffect` sets `formMode = EVENT` and `selectedCalendarId = initialCalendarId` instead of defaulting to TASK mode
+- [x] 16.2.2 `MainScreen.kt` — `formInitialCalendarId: String?` state; `openCreateEvent(calendarId)` function; FAB on `Screen.CALENDAR` checks `accessRole in listOf("owner", "writer")` → `openCreateEvent(currentCalendarId)`; read-only or not on calendar screen → `openCreate()` (TASK mode)

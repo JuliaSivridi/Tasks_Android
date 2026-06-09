@@ -127,6 +127,11 @@ fun TaskFormSheet(
     scheduleOnly    : Boolean = false,
     initialFolderId : String = "fld-inbox",
     initialParentId : String = "",
+    /**
+     * When non-null, the form opens in EVENT mode with this calendar pre-selected.
+     * Ignored when [calendarEvent] is non-null (edit mode already sets the calendar).
+     */
+    initialCalendarId : String? = null,
     labels          : List<Label>,
     folders         : List<Folder>,
     onConfirm       : (TaskFormResult) -> Unit,
@@ -262,10 +267,18 @@ fun TaskFormSheet(
             }
         } else {
             viewModel.endTime = ""
-            // Always open in TASK mode unless explicitly editing a calendar event.
-            // Resets mode for both new creates and task edits, so EVENT mode never
-            // carries over from a previous form session.
-            viewModel.formMode = FormMode.TASK
+            if (initialCalendarId != null) {
+                // FAB pressed from a Calendar view — open in EVENT mode with the
+                // current calendar pre-selected, ready for the user to fill in details.
+                viewModel.formMode           = FormMode.EVENT
+                viewModel.selectedCalendarId = initialCalendarId
+                viewModel.loadCalendars()
+            } else {
+                // Always open in TASK mode unless explicitly editing a calendar event.
+                // Resets mode for both new creates and task edits, so EVENT mode never
+                // carries over from a previous form session.
+                viewModel.formMode = FormMode.TASK
+            }
         }
     }
 

@@ -1,6 +1,6 @@
 # Stler Tasks Android — Technical Specification
 
-**Version:** 2.5 (May 2026)  
+**Version:** 2.6 (June 2026)  
 **Repository:** github.com/JuliaSivridi/Tasks_Android  
 **Stack:** Kotlin · Jetpack Compose · Room · Hilt · WorkManager · Glance · Google Sheets API v4 · Google Calendar API v3  
 **Min SDK:** 26 (Android 8.0) · **Target SDK:** 36
@@ -94,7 +94,7 @@ In addition to tasks, the app integrates with **Google Calendar API v3**: events
 | Navigation | Navigation Compose | — | Single NavHost inside MainScreen |
 | Lifecycle | Lifecycle ViewModel / Runtime | — | `WhileSubscribed(5000)` sharing strategy |
 
-**Build config:** `applicationId = "com.stler.tasks"`, `versionCode = 25`, `versionName = "2.5"`, `minSdk = 26`, `targetSdk = 36`. KSP with `room.schemaLocation = "$projectDir/schemas"`. Signing via environment variables `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` (only wired if `KEYSTORE_PATH` is non-blank, so debug builds are unaffected).
+**Build config:** `applicationId = "com.stler.tasks"`, `versionCode = 26`, `versionName = "2.6"`, `minSdk = 26`, `targetSdk = 36`. KSP with `room.schemaLocation = "$projectDir/schemas"`. Signing via environment variables `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` (only wired if `KEYSTORE_PATH` is non-blank, so debug builds are unaffected).
 
 ---
 
@@ -693,6 +693,7 @@ All methods live in `CalendarRepositoryImpl`. Mutations bypass the SyncQueue ent
 **StateFlows:** `groupedEvents: Map<LocalDate, List<CalendarEvent>>`, `isLoading`  
 **Layout:** `LazyColumn` with date headers. Overdue items grouped under `LocalDate.MIN`.  
 **Actions:** delete event, delete event series (via `CalendarEventItem`).  
+**FAB behavior:** pressing the global FAB on this screen checks `CalendarItem.accessRole` for the current calendar. If `"owner"` or `"writer"` → `openCreateEvent(currentCalendarId)` — form opens in EVENT mode with this calendar pre-selected (`initialCalendarId`). If read-only (`"reader"` / `"freeBusyReader"`) or calendar not found → falls back to `openCreate()` (TASK mode, Inbox).  
 **Empty state:** `EmptyState` with `CalendarMonth` icon.
 
 ---
@@ -730,7 +731,8 @@ fun CalendarEventItem(
 **Start destination:** `Screen.UPCOMING`  
 **Routes:** `UPCOMING`, `ALL_TASKS`, `COMPLETED`, `FOLDER/{folderId}`, `CALENDAR/{calendarId}`  
 **Overlay screens** (replace entire content, no NavBackStack entry): Settings, Help, Feedback — toggled via `showSettings`, `showHelp`, `showFeedback` local state.  
-**Task form:** `TaskFormSheet` shown as overlay when `showForm = true`. Supports create, edit, add-subtask, edit-calendar-event, edit-event-schedule-only modes.  
+**FAB:** opens `TaskFormSheet`. On `FOLDER` screen → task in current folder. On `CALENDAR` screen → checks `accessRole`: `"owner"`/`"writer"` → EVENT mode with calendar pre-selected; read-only → TASK mode (Inbox). All other screens → task in Inbox.  
+**Task form:** `TaskFormSheet` shown as overlay when `showForm = true`. Supports create, edit, add-subtask, edit-calendar-event, edit-event-schedule-only, and create-event-for-calendar (`initialCalendarId`) modes.  
 **Deep links:** Handled in `LaunchedEffect(initialDeepLinkUri)`.  
 **Sidebar:** `SidebarMenu` — navigation-only; folder CRUD moved to Settings. Folders/Calendars sections gated by `featureFlags`.
 
@@ -791,13 +793,15 @@ Priority/label/folder chips are hidden when the corresponding `featureFlags.*Ena
 
 ### HelpScreen
 
-No ViewModel. Static scrollable content in cards: Getting started, Tasks, Views, Calendar & events, Sync & offline, Widgets.
+No ViewModel. Static scrollable content in cards: Getting started, Tasks, Views, Calendar & events, Sync & offline, Widgets.  
+**Physical back button:** `BackHandler(onBack = onNavigateBack)` — returns to main screen, does not exit app.
 
 ---
 
 ### FeedbackScreen
 
 **ViewModel:** `FeedbackViewModel`  
+**Physical back button:** `BackHandler(onBack = onNavigateBack)` — returns to main screen, does not exit app.  
 **State:** `sendResult: StateFlow<SendResult?>` — `null`, `Sending`, `Success`, `Error`  
 **Transport:** HTTP POST to Google Apps Script URL with form-encoded body (`app=Tasks`, `email=...`, `message=...`). `instanceFollowRedirects = false` (Apps Script returns 302 on success; following it converts POST to GET and the script never executes).  
 **Success:** clears message field, shows snackbar.
@@ -834,7 +838,7 @@ A large composable used in all task list screens and widgets. Key parameters:
 ## 10. TaskFormSheet
 
 **ViewModel:** `TaskFormViewModel`  
-**Mode:** Determined by what is passed — `task != null` = edit task; `calendarEvent != null` = edit/create event; neither = create task. `scheduleOnly = true` restricts the event form to date/time/repeat only.  
+**Mode:** Determined by what is passed — `task != null` = edit task; `calendarEvent != null` = edit/create event; `initialCalendarId != null` = create event with calendar pre-selected (EVENT tab opens, calendar pre-filled); neither = create task. `scheduleOnly = true` restricts the event form to date/time/repeat only.  
 **Fields (task mode):** title (BasicTextField), priority (SegmentedButton), deadline (DatePicker + TimePicker + recurrence), folder (ExposedDropdownMenu), labels (LabelPickerSheet), parent (implicit via `initialParentId`).  
 **Fields (event mode):** title, calendar (ExposedDropdownMenu), start date + time, end time, repeat (recurrence picker with RRULE builder).  
 **Label sentinel:** New labels are encoded as `"__new__:colorHex:name"` — `TaskFormViewModel.resolveLabelSentinels()` creates the label in Room/Sheets and returns the real ID.  

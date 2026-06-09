@@ -1,5 +1,6 @@
 package com.stler.tasks.ui.help
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -32,6 +33,7 @@ import androidx.compose.ui.unit.dp
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HelpScreen(onNavigateBack: () -> Unit) {
+    BackHandler(onBack = onNavigateBack)
     Scaffold(
         topBar = {
             TopAppBar(

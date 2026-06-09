@@ -109,6 +109,7 @@ fun MainScreen(
     var editingCalendarEventScheduleOnly by remember { mutableStateOf(false) }
     var formFolderId                 by remember { mutableStateOf("fld-inbox") }
     var formParentId                 by remember { mutableStateOf("") }
+    var formInitialCalendarId        by remember { mutableStateOf<String?>(null) }
 
     fun openCreate(folderId: String = "fld-inbox", parentId: String = "") {
         editingTask                      = null
@@ -116,6 +117,15 @@ fun MainScreen(
         editingCalendarEventScheduleOnly = false
         formFolderId                     = folderId
         formParentId                     = parentId
+        formInitialCalendarId            = null
+        showForm                         = true
+    }
+    /** Opens the form in EVENT mode with [calendarId] pre-selected. */
+    fun openCreateEvent(calendarId: String) {
+        editingTask                      = null
+        editingCalendarEvent             = null
+        editingCalendarEventScheduleOnly = false
+        formInitialCalendarId            = calendarId
         showForm                         = true
     }
     fun openEdit(task: Task) {
@@ -282,7 +292,19 @@ fun MainScreen(
                 )
             },
             floatingActionButton = {
-                FloatingActionButton(onClick = { openCreate(sidebarFolderContext) }) {
+                FloatingActionButton(onClick = {
+                    if (currentRoute == Screen.CALENDAR && currentCalendarId != null) {
+                        val cal = selectedCalendars.find { it.id == currentCalendarId }
+                        if (cal != null && cal.accessRole in listOf("owner", "writer")) {
+                            openCreateEvent(currentCalendarId)
+                        } else {
+                            // Read-only calendar — open task form as default
+                            openCreate(sidebarFolderContext)
+                        }
+                    } else {
+                        openCreate(sidebarFolderContext)
+                    }
+                }) {
                     Icon(Icons.Outlined.Add, contentDescription = "Add task")
                 }
             },
@@ -341,15 +363,21 @@ fun MainScreen(
     // ── Task / Event form sheet ───────────────────────────────────────────────
     if (showForm) {
         TaskFormSheet(
-            task            = editingTask,
-            calendarEvent   = editingCalendarEvent,
-            scheduleOnly    = editingCalendarEventScheduleOnly,
-            initialFolderId = formFolderId,
-            initialParentId = formParentId,
-            labels          = labels,
-            folders         = folders,
-            onConfirm       = { handleFormResult(it) },
-            onDismiss       = { showForm = false; editingCalendarEvent = null; editingCalendarEventScheduleOnly = false },
+            task              = editingTask,
+            calendarEvent     = editingCalendarEvent,
+            scheduleOnly      = editingCalendarEventScheduleOnly,
+            initialFolderId   = formFolderId,
+            initialParentId   = formParentId,
+            initialCalendarId = formInitialCalendarId,
+            labels            = labels,
+            folders           = folders,
+            onConfirm         = { handleFormResult(it) },
+            onDismiss         = {
+                showForm                         = false
+                editingCalendarEvent             = null
+                editingCalendarEventScheduleOnly = false
+                formInitialCalendarId            = null
+            },
         )
     }
     } // end CompositionLocalProvider(LocalSnackbarHostState)

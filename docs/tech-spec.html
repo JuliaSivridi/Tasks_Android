@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Stler Tasks Android — Technical Specification v2.5</title>
+<title>Stler Tasks Android — Technical Specification v2.6</title>
 <style>
   @page { margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -227,7 +227,7 @@
   <div class="subtitle">Technical Specification</div>
   <div class="accent-line"></div>
   <div class="meta">
-    <strong>Version:</strong> 2.5 (May 2026)<br>
+    <strong>Version:</strong> 2.6 (June 2026)<br>
     <strong>Repository:</strong> github.com/JuliaSivridi/Tasks_Android<br>
     <strong>Stack:</strong> Kotlin · Jetpack Compose · Room · Hilt · WorkManager · Glance · Google Sheets API v4 · Google Calendar API v3<br>
     <strong>Min SDK:</strong> 26 (Android 8.0) &nbsp;·&nbsp; <strong>Target SDK:</strong> 36
@@ -922,7 +922,7 @@ shown events = if (calFiltersActive)  → events filtered by calendarId ∈ cale
   <li>All overdue events (<code>startDate &lt; today</code>) collapsed into a single <code>"Overdue"</code> group (key = <code>LocalDate.MIN</code>)</li>
   <li><code>ShimmerTaskList</code> while loading; <code>EmptyState</code> when no events</li>
   <li>One <code>CalendarEventItem</code> per event (see §8.7)</li>
-  <li>No FAB inside <code>CalendarScreen</code> itself; the global <code>MainScreen</code> FAB is still visible and opens <strong>task</strong> creation (TASK mode), not event creation</li>
+  <li>The global <code>MainScreen</code> FAB is visible. Pressing it checks <code>CalendarItem.accessRole</code> for the current calendar: <code>"owner"</code> or <code>"writer"</code> → opens form in <strong>EVENT mode</strong> with this calendar pre-selected (<code>initialCalendarId</code>); read-only (<code>"reader"</code> / <code>"freeBusyReader"</code>) or not found → falls back to TASK mode (Inbox)</li>
 </ul>
 
 <h2 id="s8-7">8.7 CalendarEventItem</h2>
@@ -962,13 +962,13 @@ shown events = if (calFiltersActive)  → events filtered by calendarId ∈ cale
 </table>
 
 <h2 id="s8-8">8.8 MainScreen — Global FAB and Navigation</h2>
-<p><strong>FAB</strong> — the single <code>FloatingActionButton</code> in the <code>MainScreen</code> <code>Scaffold</code>. Visible on <strong>all</strong> screens. Opens <code>TaskFormSheet</code> in TASK mode:</p>
+<p><strong>FAB</strong> — the single <code>FloatingActionButton</code> in the <code>MainScreen</code> <code>Scaffold</code>. Visible on <strong>all</strong> screens. Smart open mode:</p>
 <ul>
-  <li>On the Folder screen — creates a task in the current folder (<code>sidebarFolderContext = currentFolderId</code>)</li>
+  <li>On the <strong>Folder</strong> screen — creates a task in the current folder (<code>sidebarFolderContext = currentFolderId</code>)</li>
+  <li>On the <strong>Calendar</strong> screen — checks <code>CalendarItem.accessRole</code>: <code>"owner"</code> or <code>"writer"</code> → <code>openCreateEvent(currentCalendarId)</code> (EVENT mode, calendar pre-selected); read-only → <code>openCreate()</code> (TASK mode, Inbox)</li>
   <li>On all other screens — creates a task in Inbox (<code>folderId = "fld-inbox"</code>)</li>
-  <li>Mode is always TASK — event creation is not wired to the FAB</li>
 </ul>
-<p><strong>Settings</strong> — opened not via a NavHost route but as an overlay: <code>showSettings = true</code> in <code>MainScreen</code> replaces the main content with <code>SettingsScreen</code>. Triggered by the settings icon in <code>TasksTopAppBar</code>.</p>
+<p><strong>Overlay screens</strong> (Settings, Help, Feedback) — opened not via NavHost but by toggling <code>showSettings</code> / <code>showHelp</code> / <code>showFeedback</code> state, replacing the main content. All three implement <code>BackHandler</code> so the physical back button returns to the main screen rather than exiting the app.</p>
 
 <h2 id="s8-9">8.9 Settings Screen</h2>
 <p><strong>ViewModel:</strong> <code>SettingsViewModel</code>. Opens as an overlay on top of the main content (not via NavHost); <code>BackHandler</code> intercepts the system back button to return to the main screen without exiting the app.</p>
@@ -1076,16 +1076,17 @@ Row 2: FlowRow { [recurring+deadline grouped] [label chips?] [folder?] [subtask 
 
 <h2>10.1 Parameters</h2>
 <pre>fun TaskFormSheet(
-    task            : Task? = null,          // non-null → edit task mode
-    calendarEvent   : CalendarEvent? = null, // non-null → edit event mode
-    scheduleOnly    : Boolean = false,       // true → show only date/time/repeat, hide title + calendar
-    initialFolderId : String = "fld-inbox",
-    initialParentId : String = "",
-    labels          : List&lt;Label&gt;,
-    folders         : List&lt;Folder&gt;,
-    onConfirm       : (TaskFormResult) -&gt; Unit,
-    onDismiss       : () -&gt; Unit,
-    viewModel       : TaskFormViewModel = hiltViewModel(),
+    task              : Task? = null,          // non-null → edit task mode
+    calendarEvent     : CalendarEvent? = null, // non-null → edit event mode
+    scheduleOnly      : Boolean = false,       // true → show only date/time/repeat, hide title + calendar
+    initialFolderId   : String = "fld-inbox",
+    initialParentId   : String = "",
+    initialCalendarId : String? = null,        // non-null → open in EVENT mode with calendar pre-selected
+    labels            : List&lt;Label&gt;,
+    folders           : List&lt;Folder&gt;,
+    onConfirm         : (TaskFormResult) -&gt; Unit,
+    onDismiss         : () -&gt; Unit,
+    viewModel         : TaskFormViewModel = hiltViewModel(),
 )</pre>
 <p>Derived flags: <code>isEditing = task != null</code>, <code>isEditingEvent = calendarEvent != null</code>.</p>
 

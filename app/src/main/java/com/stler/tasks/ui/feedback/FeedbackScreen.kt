@@ -1,5 +1,6 @@
 package com.stler.tasks.ui.feedback
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -40,6 +41,8 @@ fun FeedbackScreen(
     onNavigateBack: () -> Unit,
     viewModel: FeedbackViewModel = hiltViewModel(),
 ) {
+    BackHandler(onBack = onNavigateBack)
+
     val sendResult by viewModel.sendResult.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var message by remember { mutableStateOf("") }
