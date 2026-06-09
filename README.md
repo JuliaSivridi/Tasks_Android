@@ -1,6 +1,6 @@
 # Stler Tasks — Android
 
-[![Live PWA](https://img.shields.io/badge/Stler_Tasks-Live_PWA-E07E38?style=for-the-badge)](https://stler-tasks.vercel.app)
+[![Live PWA](https://img.shields.io/badge/Stler_Tasks-Live_PWA-E07E38?style=for-the-badge)](https://juliasivridi.github.io/Tasks_PWA/)
 [![Releases](https://img.shields.io/github/v/release/JuliaSivridi/Tasks_Android?style=for-the-badge&logo=github&logoColor=white&color=181717)](https://github.com/JuliaSivridi/Tasks_Android/releases)
 
 ![Kotlin](https://img.shields.io/badge/Kotlin_2.2-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)
@@ -11,7 +11,7 @@
 ![Google Calendar](https://img.shields.io/badge/Google_Calendar_API-4285F4?style=for-the-badge&logo=googlecalendar&logoColor=white)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white)
 
-A native Android task manager — the companion app to [Stler Tasks PWA](https://stler-tasks.vercel.app). Both apps share the same `db_tasks` Google Spreadsheet, so tasks, folders, and labels stay in sync between web and phone automatically.
+A native Android task manager — the companion app to [Stler Tasks PWA](https://juliasivridi.github.io/Tasks_PWA/). Both apps share the same `db_tasks` Google Spreadsheet, so tasks, folders, and labels stay in sync between web and phone automatically.
 
 ---
 
@@ -174,6 +174,6 @@ Required secrets: `KEYSTORE_BASE64` · `KEYSTORE_PASSWORD` · `KEY_ALIAS` · `KE
 
 ## Related
 
-- **PWA version:** [github.com/JuliaSivridi/Tasks](https://github.com/JuliaSivridi/Tasks) — React + TypeScript, same Google Sheets backend
-- **Live PWA:** [stler-tasks.vercel.app](https://stler-tasks.vercel.app)
+- **PWA version:** [github.com/JuliaSivridi/Tasks_PWA](https://github.com/JuliaSivridi/Tasks_PWA) — React + TypeScript, same Google Sheets backend
+- **Live PWA:** [juliasivridi.github.io/Tasks_PWA](https://juliasivridi.github.io/Tasks_PWA/)
 - **Technical specification:** [`docs/tech-spec.md`](docs/tech-spec.md)
