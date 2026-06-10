@@ -24,6 +24,10 @@ interface LabelDao {
     @Query("DELETE FROM labels WHERE id = :id")
     suspend fun deleteById(id: String)
 
+    /** Prune labels deleted on another device (absent from Sheets). */
+    @Query("DELETE FROM labels WHERE id NOT IN (:ids)")
+    suspend fun deleteNotIn(ids: List<String>)
+
     @Query("DELETE FROM labels")
     suspend fun deleteAll()
 }

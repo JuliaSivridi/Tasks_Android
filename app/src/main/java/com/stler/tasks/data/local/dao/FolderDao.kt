@@ -31,6 +31,10 @@ interface FolderDao {
     @Query("DELETE FROM folders WHERE id = :id")
     suspend fun deleteById(id: String)
 
+    /** Prune folders deleted on another device (absent from Sheets). */
+    @Query("DELETE FROM folders WHERE id NOT IN (:ids)")
+    suspend fun deleteNotIn(ids: List<String>)
+
     @Query("DELETE FROM folders")
     suspend fun deleteAll()
 }

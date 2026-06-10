@@ -243,15 +243,22 @@ class TaskRepositoryImpl @Inject constructor(
                 ?.filter { it.id !in pendingIds }
                 ?.let { taskDao.upsertAll(it) }
 
+            // Folders/labels are deleted by clearing their sheet row, so a row
+            // missing from the pull means "deleted on another device" — prune it
+            // locally. Entities with queued local changes are kept.
             ranges.getOrNull(1)?.values?.drop(1)
                 ?.mapNotNull { mapper.rowToFolder(it) }
-                ?.filter { it.id !in pendingIds }
-                ?.let { folderDao.upsertAll(it) }
+                ?.let { remote ->
+                    folderDao.upsertAll(remote.filter { it.id !in pendingIds })
+                    folderDao.deleteNotIn(remote.map { it.id } + pendingIds)
+                }
 
             ranges.getOrNull(2)?.values?.drop(1)
                 ?.mapNotNull { mapper.rowToLabel(it) }
-                ?.filter { it.id !in pendingIds }
-                ?.let { labelDao.upsertAll(it) }
+                ?.let { remote ->
+                    labelDao.upsertAll(remote.filter { it.id !in pendingIds })
+                    labelDao.deleteNotIn(remote.map { it.id } + pendingIds)
+                }
         }
     }
 
