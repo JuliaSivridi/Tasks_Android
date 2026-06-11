@@ -254,8 +254,11 @@ class GoogleAuthRepository @Inject constructor(
         AuthorizationRequest.builder()
             .setRequestedScopes(
                 listOf(
-                    Scope("https://www.googleapis.com/auth/spreadsheets"),
-                    Scope("https://www.googleapis.com/auth/drive.metadata.readonly"),
+                    // drive.file: access only to files this app (project) created or the
+                    // user picked via the Google Picker in the web client. The Drive
+                    // search in findAndSaveSpreadsheetId still works — it just only
+                    // sees files already granted to the project.
+                    Scope("https://www.googleapis.com/auth/drive.file"),
                     // Narrower than full 'calendar': list/read calendars + event writes,
                     // no access to calendar settings or sharing
                     Scope("https://www.googleapis.com/auth/calendar.readonly"),
