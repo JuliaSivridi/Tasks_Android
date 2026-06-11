@@ -189,7 +189,18 @@ class GoogleAuthRepository @Inject constructor(
             Log.w(TAG, "findAndSaveSpreadsheetId: no access token")
             return ""
         }
-        val id = findSpreadsheetId(token)
+        var id = findSpreadsheetId(token)
+
+        // Empty result can mean a stale/revoked token (Drive answers 401) —
+        // silently re-authorize once and retry before giving up.
+        if (id.isBlank()) {
+            val fresh = refreshToken()
+            if (fresh != null && fresh != token) {
+                Log.i(TAG, "findAndSaveSpreadsheetId: retrying with refreshed token")
+                id = findSpreadsheetId(fresh)
+            }
+        }
+
         if (id.isNotBlank()) {
             authPreferences.setSpreadsheet(id, "db_tasks")
             Log.i(TAG, "findAndSaveSpreadsheetId: saved spreadsheetId=$id")
