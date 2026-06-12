@@ -1,6 +1,6 @@
 # Stler Tasks Android — Technical Specification
 
-**Version:** 2.6 (June 2026)  
+**Version:** 2.7 (June 2026)  
 **Repository:** github.com/JuliaSivridi/Tasks_Android  
 **Stack:** Kotlin · Jetpack Compose · Room · Hilt · WorkManager · Glance · Google Sheets API v4 · Google Calendar API v3  
 **Min SDK:** 26 (Android 8.0) · **Target SDK:** 36
@@ -94,7 +94,7 @@ In addition to tasks, the app integrates with **Google Calendar API v3**: events
 | Navigation | Navigation Compose | — | Single NavHost inside MainScreen |
 | Lifecycle | Lifecycle ViewModel / Runtime | — | `WhileSubscribed(5000)` sharing strategy |
 
-**Build config:** `applicationId = "com.stler.tasks"`, `versionCode = 26`, `versionName = "2.6"`, `minSdk = 26`, `targetSdk = 36`. KSP with `room.schemaLocation = "$projectDir/schemas"`. Signing via environment variables `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` (only wired if `KEYSTORE_PATH` is non-blank, so debug builds are unaffected).
+**Build config:** `applicationId = "com.stler.tasks"`, `versionCode = 27`, `versionName = "2.7"`, `minSdk = 26`, `targetSdk = 36`. KSP with `room.schemaLocation = "$projectDir/schemas"`. Signing via environment variables `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` (only wired if `KEYSTORE_PATH` is non-blank, so debug builds are unaffected).
 
 ---
 
@@ -459,16 +459,16 @@ Present in spreadsheet structure (created at onboarding); not currently read/wri
 
 ### 6.1 OAuth Scopes
 
-- `https://www.googleapis.com/auth/spreadsheets` — full Sheets read/write + create
-- `https://www.googleapis.com/auth/drive.metadata.readonly` — search Drive for existing spreadsheet
-- `https://www.googleapis.com/auth/calendar` — read/write Google Calendar events
+- `https://www.googleapis.com/auth/drive.file` — read/write files this app created or that the user picked via the Picker in the web client; covers Sheets API access for `db_tasks`
+- `https://www.googleapis.com/auth/calendar.readonly` — list calendars and read calendar metadata (no access to calendar settings or sharing)
+- `https://www.googleapis.com/auth/calendar.events` — create, update, and delete calendar events
 
 ### 6.2 Sign-In Flow
 
 1. **`AuthViewModel` init** — reads `GoogleAuthRepository.isSignedIn` (one-shot `first()`). If already signed in, emits `AuthUiState.SignedIn`; otherwise emits `AuthUiState.SignedOut`.
 2. **User taps "Sign in with Google"** → `AuthViewModel.startSignIn(context)` → `GoogleAuthRepository.signIn(context)`.
 3. **Step 1 — Google ID Token:** `CredentialManager.getCredential()` with `GetGoogleIdOption` (all accounts, not just pre-authorized). Returns `GoogleIdTokenCredential` containing `id` (email), `displayName`, `profilePictureUri`.
-4. **Step 2 — Scope authorization:** `Identity.getAuthorizationClient(context).authorize(...)` requesting scopes: `https://www.googleapis.com/auth/spreadsheets`, `https://www.googleapis.com/auth/drive.metadata.readonly`, `https://www.googleapis.com/auth/calendar`.
+4. **Step 2 — Scope authorization:** `Identity.getAuthorizationClient(context).authorize(...)` requesting scopes: `drive.file`, `calendar.readonly`, `calendar.events` (see §6.1).
 5. **If `hasResolution()` is true** — user has not yet approved the scopes. User info is saved to DataStore (without token/spreadsheetId). `AuthUiState.NeedsAuthorization(pendingIntent)` is emitted. `AuthScreen` launches the intent via `ActivityResultContracts.StartIntentSenderForResult`. On `RESULT_OK`, `AuthViewModel.finalizeAuth(intent)` is called.
 6. **If no resolution needed** (scopes already approved) — `accessToken` is extracted directly. Proceeds to step 7.
 7. **`completeSignIn(token, credential)` / `finalizeAuth(intent)`** — calls `findOrCreateSpreadsheetWithName(token)` → Drive API search. If `db_tasks` found, returns its ID. If not found, calls `createSpreadsheet(token)`.
@@ -518,7 +518,15 @@ All seed tasks: `status=pending`, `isExpanded=true`, `isRecurring=false`, `creat
 
 `isExpiredSoon(expiry)` returns true if `Instant.now()` is within 300 seconds of the stored expiry. Refresh is done via `Identity.getAuthorizationClient(context).authorize(buildAuthRequest())` in `refreshToken()`. If `hasResolution()` is true (interactive re-auth needed), returns null. On success, saves new token with new 1-hour expiry. The OkHttp `Authenticator` calls `refreshToken()` once on 401.
 
-### 6.6 Sign-Out
+### 6.6 Backup Exclusion
+
+The `auth_prefs` DataStore file (holds the Google access token) is excluded from Android Auto Backup and device transfers:
+- `backup_rules.xml` (API < 31): `<exclude domain="file" path="datastore/auth_prefs.preferences_pb"/>`
+- `data_extraction_rules.xml` (API ≥ 31): same exclusion in both `<cloud-backup>` and `<device-transfer>` sections
+
+All other app data (Room DB, widget config) is backed up normally.
+
+### 6.7 Sign-Out
 
 `GoogleAuthRepository.signOut()`: clears all DataStore prefs, then deletes all rows from `tasks`, `folders`, `labels`, and `sync_queue` tables. Calendar events are NOT explicitly cleared (they are pure cache and contain no user-generated data).
 
@@ -553,7 +561,7 @@ Displayed in `TasksTopAppBar` as a sync icon button: `Idle` → `CloudDone` icon
 
 ### SyncWorker Execution Order
 
-1. Read `spreadsheetId` from DataStore. If blank, call `authRepository.findAndSaveSpreadsheetId()` (Drive search).
+1. Read `spreadsheetId` from DataStore. If blank, call `authRepository.findAndSaveSpreadsheetId()` (Drive search). If the Drive search returns empty (possible stale/revoked token returning 401), the method silently re-authorizes once via `refreshToken()` and retries the search before returning.
 2. If still blank, return `Result.success()` (abort silently).
 3. **Push phase** — drain `SyncQueue`:
    - Load all queue items in order.
@@ -566,7 +574,8 @@ Displayed in `TasksTopAppBar` as a sync icon button: `Idle` → `CloudDone` icon
 5. **Pull phase** — `taskRepository.fetchAllAndSave(spreadsheetId)`:
    - `sheetsApi.batchGet(spreadsheetId, listOf("tasks", "folders", "labels"))`.
    - Collect IDs of items still in the sync queue (pending unsent changes → these rows are skipped to prevent local edits being overwritten).
-   - `db.withTransaction { taskDao.upsertAll(...); folderDao.upsertAll(...); labelDao.upsertAll(...) }`.
+   - Upsert tasks from remote (skipping pending-queue IDs).
+   - Folders and labels: upsert remote rows, then **prune** any local entity whose ID is absent from the remote sheet and has no queued changes — this propagates deletions made on another device. (`folderDao.deleteNotIn(remoteIds + pendingIds)` / `labelDao.deleteNotIn(...)`)
 6. **Calendar sync** — if selected calendar IDs are non-empty:
    - `calendarRepository.fetchEventsAndSave(selectedIds, from = now - 1 day, to = now + 366 days)`.
    - Internally: `calendarApi.listCalendars()` (populates metadata cache), then per-calendar `listEvents(timeMin, timeMax)`.
@@ -1135,12 +1144,24 @@ function executeOperation(item, spreadsheetId, rowsCache):
 ```pseudocode
 // At sign-in, after Drive search for "db_tasks":
 function findOrCreateSpreadsheetWithName(accessToken):
-    found = findSpreadsheetId(accessToken)   // Drive API search
+    found = findAndSaveSpreadsheetId(accessToken)   // Drive API search with token retry
     if found.isNotBlank():
         return (found, "db_tasks")
     // No spreadsheet found → first-time user
     created = createSpreadsheet(accessToken)
     return (created, "db_tasks")
+
+function findAndSaveSpreadsheetId(accessToken):
+    id = findSpreadsheetId(accessToken)
+    if id.isBlank():
+        // Empty may mean Drive returned 401 for a stale/revoked token —
+        // refresh once and retry before giving up.
+        fresh = refreshToken()
+        if fresh != null and fresh != accessToken:
+            id = findSpreadsheetId(fresh)
+    if id.isNotBlank():
+        authPreferences.setSpreadsheet(id, "db_tasks")
+    return id
 
 function findSpreadsheetId(accessToken):
     query = "name='db_tasks' AND mimeType='application/vnd.google-apps.spreadsheet' AND trashed=false"
