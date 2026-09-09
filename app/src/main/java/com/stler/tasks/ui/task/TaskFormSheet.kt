@@ -198,8 +198,9 @@ fun TaskFormSheet(
     var showEndsDatePicker    by remember { mutableStateOf(false) }
     var showFolderPicker      by remember { mutableStateOf(false) }
     var showLabelPicker       by remember { mutableStateOf(false) }
-    var showEditSeriesDialog  by remember { mutableStateOf(false) }
-    var showDeleteDialog      by remember { mutableStateOf(false) }
+    var showEditSeriesDialog   by remember { mutableStateOf(false) }
+    var showDeleteDialog       by remember { mutableStateOf(false) }
+    var showDeleteEventDialog  by remember { mutableStateOf(false) }
     var titleError            by remember { mutableStateOf(false) }
     var startDateError        by remember { mutableStateOf(false) }
     var endTimeError          by remember { mutableStateOf(false) }
@@ -1073,16 +1074,27 @@ fun TaskFormSheet(
             // ── Buttons ───────────────────────────────────────────────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = if (viewModel.formMode == FormMode.TASK && isEditing)
+                horizontalArrangement = if ((viewModel.formMode == FormMode.TASK && isEditing) || isEditingEvent)
                                             Arrangement.SpaceBetween
                                         else
                                             Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Left: Delete — only in TASK edit mode
+                // Left: Delete — in TASK edit mode or EVENT edit mode
                 if (viewModel.formMode == FormMode.TASK && isEditing) {
                     TextButton(
                         onClick = { showDeleteDialog = true },
+                        colors  = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                    ) {
+                        Icon(Icons.Outlined.Delete, null, Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Delete")
+                    }
+                } else if (isEditingEvent) {
+                    TextButton(
+                        onClick = { showDeleteEventDialog = true },
                         colors  = ButtonDefaults.textButtonColors(
                             contentColor = MaterialTheme.colorScheme.error,
                         ),
@@ -1131,6 +1143,46 @@ fun TaskFormSheet(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    // ── Delete event dialog ───────────────────────────────────────────────
+    if (showDeleteEventDialog && calendarEvent != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteEventDialog = false },
+            title = {
+                Text(if (calendarEvent.isRecurring) "Delete recurring event" else "Delete event")
+            },
+            text = { Text("\"${calendarEvent.title}\"") },
+            confirmButton = {
+                if (calendarEvent.isRecurring) {
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        TextButton(onClick = {
+                            showDeleteEventDialog = false
+                            viewModel.deleteEvent(calendarEvent.calendarId, calendarEvent.id)
+                            onDismiss()
+                        }) { Text("Delete this event only") }
+                        TextButton(onClick = {
+                            showDeleteEventDialog = false
+                            viewModel.deleteEventSeries(calendarEvent.calendarId, calendarEvent.recurringEventId)
+                            onDismiss()
+                        }) { Text("Delete all in series", color = MaterialTheme.colorScheme.error) }
+                        TextButton(onClick = { showDeleteEventDialog = false }) { Text("Cancel") }
+                    }
+                } else {
+                    TextButton(onClick = {
+                        showDeleteEventDialog = false
+                        viewModel.deleteEvent(calendarEvent.calendarId, calendarEvent.id)
+                        onDismiss()
+                    }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            dismissButton = if (calendarEvent.isRecurring) null else {
+                { TextButton(onClick = { showDeleteEventDialog = false }) { Text("Cancel") } }
             },
         )
     }
