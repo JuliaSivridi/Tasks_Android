@@ -1,6 +1,6 @@
 # Stler Tasks Android — Technical Specification
 
-**Version:** 2.7 (June 2026)  
+**Version:** 2.8 (September 2026)  
 **Repository:** github.com/JuliaSivridi/Tasks_Android  
 **Stack:** Kotlin · Jetpack Compose · Room · Hilt · WorkManager · Glance · Google Sheets API v4 · Google Calendar API v3  
 **Min SDK:** 26 (Android 8.0) · **Target SDK:** 36
@@ -94,7 +94,7 @@ In addition to tasks, the app integrates with **Google Calendar API v3**: events
 | Navigation | Navigation Compose | — | Single NavHost inside MainScreen |
 | Lifecycle | Lifecycle ViewModel / Runtime | — | `WhileSubscribed(5000)` sharing strategy |
 
-**Build config:** `applicationId = "com.stler.tasks"`, `versionCode = 27`, `versionName = "2.7"`, `minSdk = 26`, `targetSdk = 36`. KSP with `room.schemaLocation = "$projectDir/schemas"`. Signing via environment variables `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` (only wired if `KEYSTORE_PATH` is non-blank, so debug builds are unaffected).
+**Build config:** `applicationId = "com.stler.tasks"`, `versionCode = 28`, `versionName = "2.8"`, `minSdk = 26`, `targetSdk = 36`. KSP with `room.schemaLocation = "$projectDir/schemas"`. Signing via environment variables `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` (only wired if `KEYSTORE_PATH` is non-blank, so debug builds are unaffected).
 
 ---
 
@@ -245,6 +245,7 @@ com.stler.tasks/
 - Completing a recurring task advances `deadlineDate` by `recurValue × recurType` instead of marking it `COMPLETED`
 - Completing a non-recurring task recursively completes all non-deleted descendants
 - Deleting a task sets `status = "deleted"` and recursively sets descendants to `"deleted"` (soft delete)
+- Restoring a task sets `status = "pending"` and recursively restores all `completed` descendants; `deleted` descendants are left unchanged
 - `deleted` tasks are filtered from all DAO queries (queries check `status = 'pending'` or `status = 'completed'`)
 
 ### 5.2 Folder
@@ -853,6 +854,30 @@ A large composable used in all task list screens and widgets. Key parameters:
 **Label sentinel:** New labels are encoded as `"__new__:colorHex:name"` — `TaskFormViewModel.resolveLabelSentinels()` creates the label in Room/Sheets and returns the real ID.  
 **Output:** `TaskFormResult(title, folderId, parentId, priority, labelIds, deadlineDate, deadlineTime, isRecurring, recurType, recurValue)` — passed back via `onConfirm` lambda to `MainScreen.handleFormResult()`.
 
+### Deadline label row (task edit mode)
+
+The "Deadline" heading row doubles as an action row when a deadline is set. Layout: "Deadline" label left-aligned → `Spacer(weight(1f))` → **Clear** TextButton → 8 dp gap → **Postpone** TextButton (visible only when `isRecurring = true`).
+
+- **Clear** — resets `deadlineDate`, `deadlineTime`, `isRecurring` to blank/false and clears recurrence fields immediately (no dialog).
+- **Postpone** — advances `deadlineDate` by `recurValue × recurType` (same logic as recurring completion) and saves.
+- Both buttons use `ButtonDefaults.textButtonColors(contentColor = primary)` with a 14 dp icon and the button text beside it (`Icon + Spacer(4 dp) + Text`).
+
+### Bottom action row (task edit mode)
+
+When editing an existing task (`isEditing = true`), the bottom row uses `Arrangement.SpaceBetween`:
+- **Left:** Delete `TextButton` with `contentColor = MaterialTheme.colorScheme.error`, 16 dp `Icons.Outlined.Delete` icon + "Delete" text. Tapping shows a confirmation `AlertDialog` ("Delete task and all subtasks?") before calling `viewModel.deleteTask(task.id)` and closing the sheet.
+- **Right:** Cancel + Save buttons (unchanged from create mode).
+
+When creating a new task, the bottom row is `Arrangement.End` (Cancel + Save only).
+
+### DeadlinePickerDialog
+
+A separate bottom sheet (`ui/task/DeadlinePickerDialog.kt`) used for inline deadline editing triggered by swipe-left or tapping the deadline chip on a task row (not part of `TaskFormSheet`). It has its own local state and the same deadline label row pattern:
+
+- Title "Deadline" left-aligned → Spacer → **Clear** (calls `onConfirm("", "", false, DAYS, 1)` immediately) → 8 dp gap → **Postpone** (calls `onConfirm(advancedDate, ...)` immediately, saving without a separate Save tap).
+- Bottom action row: `Arrangement.End` with **Cancel** + **Save** only.
+- `onConfirm` callback signature: `(date, time, isRecurring, recurType, recurValue) → Unit`.
+
 **Smart title parsing (TASK mode only):**
 
 | Token | Match rule | Behavior |
@@ -1037,7 +1062,7 @@ Centered `Column`: 64dp icon (40% opacity) + message (`titleMedium`) + optional 
 2. `actions/setup-java@v4.7.0` — JDK 17 (Temurin distribution)
 3. `chmod +x ./gradlew`
 4. Decode keystore: `echo "$KEYSTORE_BASE64" | base64 --decode > keystore.jks`
-5. `./gradlew assembleRelease` with env vars `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`
+5. `./gradlew assembleRelease` with env vars `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`, `GRADLE_OPTS="-Dorg.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=512m"` (D8 dex merge requires ≥ 4 GB; 2 GB causes OOM on release builds)
 6. Rename APK: `app-release.apk` → `stler-tasks.apk`
 7. `softprops/action-gh-release@v2` — creates GitHub Release and attaches `stler-tasks.apk`
 
@@ -1086,6 +1111,29 @@ function buildDisplayList(tasks, completedCounts):
         addTask(root, 0)
 
     return result
+```
+
+### Restore Task + Descendants (TaskRepositoryImpl.restoreTask)
+
+```pseudocode
+function restoreTask(id):
+    entity = taskDao.getById(id) ?? return
+    now = nowIso()
+    allTasks = taskDao.getAll()   // load once — no N+1
+    updated = entity.copy(status = "pending", completedAt = "", updatedAt = now)
+    taskDao.upsert(updated)
+    enqueue("task", "UPDATE", id, updated)
+    restoreDescendants(id, now, allTasks)
+    widgetRefresher.refreshAll()
+
+function restoreDescendants(parentId, now, allTasks):
+    // Only restore "completed" children — "deleted" children stay deleted
+    children = allTasks.filter(parentId == parentId AND status == "completed")
+    for child in children:
+        restored = child.copy(status = "pending", completedAt = "", updatedAt = now)
+        taskDao.upsert(restored)
+        enqueue("task", "UPDATE", child.id, restored)
+        restoreDescendants(child.id, now, allTasks)  // recurse
 ```
 
 ### Task Reorder (FolderViewModel.reorderSiblings)
