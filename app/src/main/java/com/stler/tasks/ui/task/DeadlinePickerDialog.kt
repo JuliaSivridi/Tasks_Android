@@ -1,7 +1,6 @@
 package com.stler.tasks.ui.task
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -121,63 +120,54 @@ fun DeadlinePickerDialog(
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // ── Sheet title with inline Close / Postpone ─────────────────────
-            if (selectedDate.isNotBlank()) {
-                Row(
-                    modifier          = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "Deadline",
-                        modifier = Modifier.weight(1f),
-                        style    = MaterialTheme.typography.bodyMedium,
-                        color    = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        TextButton(
-                            onClick = { onConfirm("", "", false, RecurType.DAYS, 1) },
-                            colors  = ButtonDefaults.textButtonColors(
-                                contentColor = MaterialTheme.colorScheme.primary,
-                            ),
-                        ) {
-                            Icon(Icons.Outlined.Close, null, Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Close")
-                        }
-                    }
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                        if (isRecurring) {
-                            TextButton(
-                                onClick = {
-                                    runCatching {
-                                        val n = recurValue.toIntOrNull() ?: 1
-                                        val base = LocalDate.parse(selectedDate)
-                                        val postponed = when (recurType) {
-                                            RecurType.WEEKS  -> base.plusWeeks(n.toLong())
-                                            RecurType.MONTHS -> base.plusMonths(n.toLong())
-                                            RecurType.YEARS  -> base.plusYears(n.toLong())
-                                            else             -> base.plusDays(n.toLong())
-                                        }.toString()
-                                        onConfirm(postponed, selectedTime, true, recurType, n)
-                                    }
-                                },
-                                colors = ButtonDefaults.textButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.primary,
-                                ),
-                            ) {
-                                Icon(Icons.Outlined.SkipNext, null, Modifier.size(14.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Postpone")
-                            }
-                        }
-                    }
-                }
-            } else {
+            // ── Sheet title with inline Clear / Postpone ─────────────────────
+            Row(
+                modifier          = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
                     "Deadline",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (selectedDate.isNotBlank()) {
+                    Spacer(Modifier.weight(1f))
+                    TextButton(
+                        onClick = { onConfirm("", "", false, RecurType.DAYS, 1) },
+                        colors  = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.primary,
+                        ),
+                    ) {
+                        Icon(Icons.Outlined.Close, null, Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Clear")
+                    }
+                    if (isRecurring) {
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(
+                            onClick = {
+                                runCatching {
+                                    val n = recurValue.toIntOrNull() ?: 1
+                                    val base = LocalDate.parse(selectedDate)
+                                    val postponed = when (recurType) {
+                                        RecurType.WEEKS  -> base.plusWeeks(n.toLong())
+                                        RecurType.MONTHS -> base.plusMonths(n.toLong())
+                                        RecurType.YEARS  -> base.plusYears(n.toLong())
+                                        else             -> base.plusDays(n.toLong())
+                                    }.toString()
+                                    onConfirm(postponed, selectedTime, true, recurType, n)
+                                }
+                            },
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.primary,
+                            ),
+                        ) {
+                            Icon(Icons.Outlined.SkipNext, null, Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Postpone")
+                        }
+                    }
+                }
             }
 
             // ── Row 1: Date chip + Time chip ──────────────────────────────────

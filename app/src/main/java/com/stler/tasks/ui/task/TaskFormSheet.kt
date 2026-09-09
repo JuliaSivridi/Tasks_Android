@@ -484,68 +484,58 @@ fun TaskFormSheet(
 
             // ── Deadline ──────────────────────────────────────────────────
             val dlStatus = deadlineStatus(deadlineDate, deadlineTime)
-            if (viewModel.formMode == FormMode.TASK && isEditing && deadlineDate.isNotBlank()) {
-                // 3-column: [Deadline] [Close] [Postpone]
-                Row(
-                    modifier          = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "Deadline",
-                        modifier = Modifier.weight(1f),
-                        style    = MaterialTheme.typography.bodyMedium,
-                        color    = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                        TextButton(
-                            onClick = {
-                                deadlineDate = ""
-                                deadlineTime = ""
-                                isRecurring  = false
-                                recurType    = RecurType.DAYS
-                                recurValue   = "1"
-                            },
-                            colors = ButtonDefaults.textButtonColors(
-                                contentColor = MaterialTheme.colorScheme.primary,
-                            ),
-                        ) {
-                            Icon(Icons.Outlined.Close, null, Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Close")
-                        }
-                    }
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                        if (isRecurring) {
-                            TextButton(
-                                onClick = {
-                                    runCatching {
-                                        val n    = recurValue.toIntOrNull() ?: 1
-                                        val base = LocalDate.parse(deadlineDate)
-                                        deadlineDate = when (recurType) {
-                                            RecurType.WEEKS  -> base.plusWeeks(n.toLong())
-                                            RecurType.MONTHS -> base.plusMonths(n.toLong())
-                                            RecurType.YEARS  -> base.plusYears(n.toLong())
-                                            else             -> base.plusDays(n.toLong())
-                                        }.toString()
-                                    }
-                                },
-                                colors = ButtonDefaults.textButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.primary,
-                                ),
-                            ) {
-                                Icon(Icons.Outlined.SkipNext, null, Modifier.size(14.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Postpone")
-                            }
-                        }
-                    }
-                }
-            } else {
+            Row(
+                modifier          = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
                     "Deadline",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (viewModel.formMode == FormMode.TASK && isEditing && deadlineDate.isNotBlank()) {
+                    Spacer(Modifier.weight(1f))
+                    TextButton(
+                        onClick = {
+                            deadlineDate = ""
+                            deadlineTime = ""
+                            isRecurring  = false
+                            recurType    = RecurType.DAYS
+                            recurValue   = "1"
+                        },
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.primary,
+                        ),
+                    ) {
+                        Icon(Icons.Outlined.Close, null, Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Clear")
+                    }
+                    if (isRecurring) {
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(
+                            onClick = {
+                                runCatching {
+                                    val n    = recurValue.toIntOrNull() ?: 1
+                                    val base = LocalDate.parse(deadlineDate)
+                                    deadlineDate = when (recurType) {
+                                        RecurType.WEEKS  -> base.plusWeeks(n.toLong())
+                                        RecurType.MONTHS -> base.plusMonths(n.toLong())
+                                        RecurType.YEARS  -> base.plusYears(n.toLong())
+                                        else             -> base.plusDays(n.toLong())
+                                    }.toString()
+                                }
+                            },
+                            colors = ButtonDefaults.textButtonColors(
+                                contentColor = MaterialTheme.colorScheme.primary,
+                            ),
+                        ) {
+                            Icon(Icons.Outlined.SkipNext, null, Modifier.size(14.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Postpone")
+                        }
+                    }
+                }
             }
 
             if (viewModel.formMode == FormMode.EVENT) {
