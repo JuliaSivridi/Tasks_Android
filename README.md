@@ -154,15 +154,13 @@ git clone https://github.com/JuliaSivridi/Tasks_Android.git
 cd Tasks_Android
 ```
 
-Add your Web Client ID to `app/src/main/res/values/strings.xml`:
-
-```xml
-<string name="google_web_client_id">YOUR_WEB_CLIENT_ID.apps.googleusercontent.com</string>
-```
+The Web Client ID is stored in `app/src/main/res/values/oauth.xml`. If you are using your own Google Cloud project, replace the value there with your own Web application Client ID.
 
 Open in Android Studio and run on a device or emulator (API 26+).
 
-On first sign-in the app automatically finds or creates the `db_tasks` spreadsheet — no manual spreadsheet setup required.
+On first sign-in the app automatically creates the `db_tasks` spreadsheet — no manual spreadsheet setup required.
+
+> **PWA + Android on the same account:** the app uses the `drive.file` scope, which gives access only to files created by this OAuth client. If `db_tasks` was created by the PWA (a different OAuth client), the Android app won't be able to find it and will create a new one. To share one spreadsheet, either start from the Android app and open it in the PWA, or use the spreadsheet picker in Settings to point both apps at the same file.
 
 ### Release builds
 
