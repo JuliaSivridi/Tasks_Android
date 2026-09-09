@@ -231,6 +231,19 @@ class TaskRepositoryImpl @Inject constructor(
     override suspend fun deleteLabel(id: String) {
         labelDao.deleteById(id)
         enqueue("label", "DELETE", id, null)
+        // Strip the deleted label from all tasks that reference it
+        val now = nowIso()
+        taskDao.getAll()
+            .filter { it.labels.split(",").map(String::trim).contains(id) }
+            .forEach { task ->
+                val updated = task.copy(
+                    labels    = task.labels.split(",").map(String::trim)
+                        .filter { it != id && it.isNotBlank() }.joinToString(","),
+                    updatedAt = now,
+                )
+                taskDao.upsert(updated)
+                enqueue("task", "UPDATE", task.id, updated)
+            }
     }
 
     // ── Sync ──────────────────────────────────────────────────────────────

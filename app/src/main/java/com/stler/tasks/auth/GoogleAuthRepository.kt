@@ -296,10 +296,6 @@ class GoogleAuthRepository @Inject constructor(
         return created to "db_tasks"
     }
 
-    // Keep for backward-compat with findAndSaveSpreadsheetId
-    private suspend fun findOrCreateSpreadsheet(accessToken: String): String =
-        findOrCreateSpreadsheetWithName(accessToken).first
-
     /**
      * Creates a new Google Spreadsheet named `db_tasks` with three sheets
      * (tasks, folders, labels), writes header rows, and seeds the Inbox folder.
