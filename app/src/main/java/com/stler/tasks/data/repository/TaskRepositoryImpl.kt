@@ -167,10 +167,23 @@ class TaskRepositoryImpl @Inject constructor(
 
     override suspend fun restoreTask(id: String) {
         val entity = taskDao.getById(id) ?: return
-        val updated = entity.copy(status = "pending", completedAt = "", updatedAt = nowIso())
+        val now = nowIso()
+        val allTasks = taskDao.getAll()
+        val updated = entity.copy(status = "pending", completedAt = "", updatedAt = now)
         taskDao.upsert(updated)
         enqueue("task", "UPDATE", id, updated)
-        widgetRefresher.refreshAll()   // was missing — widget now updates after restore
+        restoreDescendants(id, now, allTasks)
+        widgetRefresher.refreshAll()
+    }
+
+    private suspend fun restoreDescendants(parentId: String, now: String, allTasks: List<com.stler.tasks.data.local.entity.TaskEntity>) {
+        val children = allTasks.filter { it.parentId == parentId && it.status == "completed" }
+        for (child in children) {
+            val restored = child.copy(status = "pending", completedAt = "", updatedAt = now)
+            taskDao.upsert(restored)
+            enqueue("task", "UPDATE", child.id, restored)
+            restoreDescendants(child.id, now, allTasks)
+        }
     }
 
     // ── Folder mutations ──────────────────────────────────────────────────

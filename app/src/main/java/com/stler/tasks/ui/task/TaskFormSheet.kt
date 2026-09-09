@@ -31,10 +31,12 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Flag
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
@@ -197,6 +199,7 @@ fun TaskFormSheet(
     var showFolderPicker      by remember { mutableStateOf(false) }
     var showLabelPicker       by remember { mutableStateOf(false) }
     var showEditSeriesDialog  by remember { mutableStateOf(false) }
+    var showDeleteDialog      by remember { mutableStateOf(false) }
     var titleError            by remember { mutableStateOf(false) }
     var startDateError        by remember { mutableStateOf(false) }
     var endTimeError          by remember { mutableStateOf(false) }
@@ -480,8 +483,55 @@ fun TaskFormSheet(
             }
 
             // ── Deadline ──────────────────────────────────────────────────
-            SectionLabel("Deadline")
             val dlStatus = deadlineStatus(deadlineDate, deadlineTime)
+            Row(
+                modifier          = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (viewModel.formMode == FormMode.TASK && isEditing && deadlineDate.isNotBlank()) {
+                    IconButton(
+                        onClick  = {
+                            deadlineDate = ""
+                            deadlineTime = ""
+                            isRecurring  = false
+                            recurType    = RecurType.DAYS
+                            recurValue   = "1"
+                        },
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Icon(Icons.Outlined.Close, contentDescription = "Clear deadline",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (isRecurring) {
+                        Spacer(Modifier.width(2.dp))
+                        IconButton(
+                            onClick  = {
+                                runCatching {
+                                    val n    = recurValue.toIntOrNull() ?: 1
+                                    val base = LocalDate.parse(deadlineDate)
+                                    deadlineDate = when (recurType) {
+                                        RecurType.WEEKS  -> base.plusWeeks(n.toLong())
+                                        RecurType.MONTHS -> base.plusMonths(n.toLong())
+                                        RecurType.YEARS  -> base.plusYears(n.toLong())
+                                        else             -> base.plusDays(n.toLong())
+                                    }.toString()
+                                }
+                            },
+                            modifier = Modifier.size(28.dp),
+                        ) {
+                            Icon(Icons.Outlined.SkipNext, contentDescription = "Postpone",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                Text(
+                    text  = "Deadline",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             if (viewModel.formMode == FormMode.EVENT) {
                 // EVENT mode: [ Date ] [ Start time ] — [ End time ]
@@ -1018,35 +1068,17 @@ fun TaskFormSheet(
             // ── Buttons ───────────────────────────────────────────────────
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = if (viewModel.formMode == FormMode.TASK && isEditing)
+                                            Arrangement.SpaceBetween
+                                        else
+                                            Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Left: Clear / Postpone — only in TASK edit mode
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (viewModel.formMode == FormMode.TASK) {
-                        if (isEditing && (deadlineDate.isNotBlank() || deadlineTime.isNotBlank())) {
-                            TextButton(onClick = {
-                                deadlineDate = ""
-                                deadlineTime = ""
-                                isRecurring  = false
-                                recurType    = RecurType.DAYS
-                                recurValue   = "1"
-                            }) { Text("Clear") }
-                        }
-                        if (isEditing && isRecurring && deadlineDate.isNotBlank()) {
-                            TextButton(onClick = {
-                                runCatching {
-                                    val n    = recurValue.toIntOrNull() ?: 1
-                                    val base = LocalDate.parse(deadlineDate)
-                                    deadlineDate = when (recurType) {
-                                        RecurType.WEEKS  -> base.plusWeeks(n.toLong())
-                                        RecurType.MONTHS -> base.plusMonths(n.toLong())
-                                        RecurType.YEARS  -> base.plusYears(n.toLong())
-                                        else             -> base.plusDays(n.toLong())
-                                    }.toString()
-                                }
-                            }) { Text("Postpone") }
-                        }
+                // Left: Delete (Trash) — only in TASK edit mode
+                if (viewModel.formMode == FormMode.TASK && isEditing) {
+                    IconButton(onClick = { showDeleteDialog = true }) {
+                        Icon(Icons.Outlined.Delete, contentDescription = "Delete task",
+                            tint = MaterialTheme.colorScheme.error)
                     }
                 }
                 // Right: Cancel + Save/Create
@@ -1069,6 +1101,27 @@ fun TaskFormSheet(
                 }
             }
         }
+    }
+
+    // ── Delete confirmation dialog ────────────────────────────────────────
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete task") },
+            text  = { Text("Delete task and all subtasks?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                    viewModel.deleteTask(task!!.id)
+                    onDismiss()
+                }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+            },
+        )
     }
 
     // ── Edit recurring event dialog ───────────────────────────────────────

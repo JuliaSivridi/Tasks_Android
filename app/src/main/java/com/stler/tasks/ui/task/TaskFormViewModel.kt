@@ -275,7 +275,9 @@ class TaskFormViewModel @Inject constructor(
         )
     }
 
-    // ── Task operations (unchanged) ───────────────────────────────────────
+    // ── Task operations ───────────────────────────────────────────────────
+
+    fun deleteTask(id: String) = safeLaunch { repository.deleteTask(id) }
 
     /**
      * Creates a new task (and any new labels embedded as sentinels in [result.labelIds]).
