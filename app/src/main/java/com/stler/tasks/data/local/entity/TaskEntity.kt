@@ -42,7 +42,11 @@ fun TaskEntity.toDomain() = Task(
     parentId = parentId,
     folderId = folderId,
     title = title,
-    status = if (status == "completed") TaskStatus.COMPLETED else TaskStatus.PENDING,
+    status = when (status) {
+        "completed" -> TaskStatus.COMPLETED
+        "deleted"   -> TaskStatus.DELETED
+        else        -> TaskStatus.PENDING
+    },
     priority = when (priority) {
         "urgent" -> Priority.URGENT
         "important" -> Priority.IMPORTANT

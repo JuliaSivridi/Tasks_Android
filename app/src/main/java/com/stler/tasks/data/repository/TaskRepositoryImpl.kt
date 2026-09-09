@@ -125,9 +125,9 @@ class TaskRepositoryImpl @Inject constructor(
     override suspend fun toggleExpanded(id: String, isExpanded: Boolean) {
         val entity = taskDao.getById(id) ?: return
         // Copy isExpanded only — do NOT touch updatedAt (spec §4.5)
+        // Expansion is local UX state: not synced to Sheets
         val updated = entity.copy(isExpanded = isExpanded)
         taskDao.upsert(updated)
-        enqueue("task", "UPDATE", id, updated)
         widgetRefresher.refreshAll()
     }
 
@@ -240,8 +240,10 @@ class TaskRepositoryImpl @Inject constructor(
         db.withTransaction {
             ranges.getOrNull(0)?.values?.drop(1)
                 ?.mapNotNull { mapper.rowToTask(it) }
-                ?.filter { it.id !in pendingIds }
-                ?.let { taskDao.upsertAll(it) }
+                ?.let { remote ->
+                    taskDao.upsertAll(remote.filter { it.id !in pendingIds })
+                    taskDao.deleteNotIn(remote.map { it.id } + pendingIds)
+                }
 
             // Folders/labels are deleted by clearing their sheet row, so a row
             // missing from the pull means "deleted on another device" — prune it
@@ -273,6 +275,13 @@ class TaskRepositoryImpl @Inject constructor(
                 payloadJson = if (payload != null) gson.toJson(payload) else "",
             )
         )
+    }
+
+    override suspend fun clearAllLocalData() {
+        taskDao.deleteAll()
+        folderDao.deleteAll()
+        labelDao.deleteAll()
+        syncQueueDao.deleteAll()
     }
 
     private fun nowIso(): String = Instant.now().toString()

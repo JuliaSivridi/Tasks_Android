@@ -116,10 +116,15 @@ class CalendarRepositoryImpl @Inject constructor(
         for (calendarId in calendarIds) {
             runCatching {
                 val meta = calendarMetaMap[calendarId] ?: CalMeta(calendarId, "#4285f4")
-                val response = calendarApi.listEvents(calendarId, timeMin, timeMax)
-                val entities = response.items.mapNotNull { dto ->
-                    CalendarMapper.dtoToEntity(dto, calendarId, meta.name, meta.color, meta.accessRole)
-                }
+                val entities = mutableListOf<com.stler.tasks.data.local.entity.CalendarEventEntity>()
+                var pageToken: String? = null
+                do {
+                    val response = calendarApi.listEvents(calendarId, timeMin, timeMax, pageToken = pageToken)
+                    response.items.mapNotNullTo(entities) { dto ->
+                        CalendarMapper.dtoToEntity(dto, calendarId, meta.name, meta.color, meta.accessRole)
+                    }
+                    pageToken = response.nextPageToken
+                } while (pageToken != null)
                 // Atomically replace: delete old rows AFTER fetch succeeds to avoid
                 // losing data if the network call fails mid-loop.
                 calendarEventDao.deleteAndReplace(calendarId, entities)

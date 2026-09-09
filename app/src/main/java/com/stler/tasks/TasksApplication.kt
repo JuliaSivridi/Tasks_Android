@@ -15,12 +15,8 @@ class TasksApplication : Application(), Configuration.Provider {
     @Inject lateinit var syncManager: SyncManager
     @Inject lateinit var widgetRefresher: WidgetRefresher
 
-    // Manual DI container retained for non-Hilt singletons (if any).
-    lateinit var container: AppContainer
-
     override fun onCreate() {
         super.onCreate()
-        container = AppContainer(this)
         // Schedule the 30-minute periodic sync
         syncManager.initialize()
         // Re-register Glance sessions immediately so stale SessionWorker jobs

@@ -35,6 +35,7 @@ interface CalendarApi {
         @Query("timeMax") timeMax: String,
         @Query("singleEvents") singleEvents: Boolean = true,
         @Query("orderBy") orderBy: String = "startTime",
+        @Query("pageToken") pageToken: String? = null,
     ): CalendarEventsResponse
 
     /** Creates a new event in the specified calendar. */

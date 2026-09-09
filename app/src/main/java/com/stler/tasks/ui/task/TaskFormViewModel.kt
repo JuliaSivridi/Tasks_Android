@@ -39,7 +39,7 @@ import javax.inject.Inject
 
 /** Generates a short ID matching PWA format: prefix_XXXXXXXX (8 lowercase hex chars). */
 private fun generateId(prefix: String): String =
-    "${prefix}_${UUID.randomUUID().toString().replace("-", "").take(8)}"
+    "${prefix}_${UUID.randomUUID().toString().replace("-", "")}"
 
 /**
  * Handles create / edit / "add subtask" task form submissions,
@@ -103,16 +103,20 @@ class TaskFormViewModel @Inject constructor(
         if (calendarsLoaded) return
         calendarsLoaded = true
         safeLaunch {
-            _calendarsLoading.value = true
-            val all = calendarRepository.fetchCalendarsAndSave()   // throws on failure → safeLaunch handles it
-            // Only calendars the user can write to (owner/writer); filters out holidays, subscriptions, etc.
-            val selected = all.filter { it.isSelected && it.accessRole in listOf("writer", "owner") }
-            _selectedCalendars.value = selected
-            // Keep "primary" if it's in the list; otherwise fall back to the first available.
-            if (selected.none { it.id == selectedCalendarId }) {
-                selectedCalendarId = selected.firstOrNull()?.id ?: "primary"
+            try {
+                _calendarsLoading.value = true
+                val all = calendarRepository.fetchCalendarsAndSave()
+                val selected = all.filter { it.isSelected && it.accessRole in listOf("writer", "owner") }
+                _selectedCalendars.value = selected
+                if (selected.none { it.id == selectedCalendarId }) {
+                    selectedCalendarId = selected.firstOrNull()?.id ?: "primary"
+                }
+            } catch (e: Exception) {
+                calendarsLoaded = false   // allow retry after failure
+                throw e                   // re-throw so safeLaunch surfaces the error
+            } finally {
+                _calendarsLoading.value = false
             }
-            _calendarsLoading.value = false
         }
     }
 
@@ -276,7 +280,7 @@ class TaskFormViewModel @Inject constructor(
     /**
      * Creates a new task (and any new labels embedded as sentinels in [result.labelIds]).
      */
-    fun createTask(result: TaskFormResult, sortOrder: Int = 0) = viewModelScope.launch {
+    fun createTask(result: TaskFormResult, sortOrder: Int = 0) = safeLaunch {
         val resolvedLabelIds = resolveLabelSentinels(result.labelIds)
         val now = nowIso()
         repository.createTask(
@@ -304,7 +308,7 @@ class TaskFormViewModel @Inject constructor(
      * Updates an existing task in place, preserving fields not present in the form
      * (status, completedAt, isExpanded, etc.).
      */
-    fun updateTask(original: Task, result: TaskFormResult) = viewModelScope.launch {
+    fun updateTask(original: Task, result: TaskFormResult) = safeLaunch {
         val resolvedLabelIds = resolveLabelSentinels(result.labelIds)
         repository.updateTask(
             original.copy(

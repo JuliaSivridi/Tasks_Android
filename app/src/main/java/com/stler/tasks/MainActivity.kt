@@ -1,7 +1,6 @@
 package com.stler.tasks
 
 import android.content.Intent
-import android.content.res.Configuration
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -29,20 +28,13 @@ import java.util.Locale
 class MainActivity : ComponentActivity() {
 
     /**
-     * Force English (UK) locale for the entire activity.
-     * Reasons:
-     *  • Locks all UI strings to English regardless of device language.
-     *  • en-GB starts the week on Monday, which fixes the Material3 DatePicker
-     *    first-day-of-week for users whose device locale is en-US (Sunday-first).
-     *  • Material3 DatePicker uses Locale.getDefault() internally, so this
-     *    override is the only reliable way to control the week start day.
+     * Set en-GB as the default locale so Material3 DatePicker starts the week on Monday.
+     * Locale.getDefault() is what DatePicker reads internally; we don't override the
+     * configuration context so the system language still applies to resources.
      */
     override fun attachBaseContext(newBase: android.content.Context) {
-        val locale = Locale("en", "GB")
-        Locale.setDefault(locale)
-        val config = Configuration(newBase.resources.configuration)
-        config.setLocale(locale)
-        super.attachBaseContext(newBase.createConfigurationContext(config))
+        Locale.setDefault(Locale("en", "GB"))
+        super.attachBaseContext(newBase)
     }
 
     /**

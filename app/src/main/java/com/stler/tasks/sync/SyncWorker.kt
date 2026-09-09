@@ -72,7 +72,6 @@ class SyncWorker @AssistedInject constructor(
             if (hadPendingChanges) delay(1_000L)
             taskRepository.fetchAllAndSave(spreadsheetId)
             syncCalendars()
-            // TODO Stage 9: GlanceAppWidgetManager.getInstance(applicationContext).updateAll()
             Log.d(TAG, "Sync complete")
             Result.success()
         } catch (e: Exception) {
@@ -106,12 +105,11 @@ class SyncWorker @AssistedInject constructor(
         val rowsCache = mutableMapOf<String, List<List<Any?>>>()
 
         for (item in queue) {
+            if (item.retryCount >= MAX_RETRIES) continue   // exhausted: skip but keep in queue to protect pull
             runCatching { executeOperation(item, spreadsheetId, rowsCache) }
                 .onSuccess { syncQueueDao.deleteById(item.id) }
                 .onFailure { syncQueueDao.incrementRetry(item.id) }
         }
-
-        syncQueueDao.deleteExhausted()   // remove items that exceeded retry limit
     }
 
     private suspend fun executeOperation(
@@ -132,19 +130,32 @@ class SyncWorker @AssistedInject constructor(
                     range = appendRange,
                     body = ValuesBody(range = appendRange, values = listOf(entityRow(item))),
                 )
+                // Invalidate cache so a subsequent UPDATE for the same entity can find the new row
+                rowsCache.remove(sheetName)
             }
             "UPDATE" -> {
                 val rows = cachedRows(sheetName, spreadsheetId, rowsCache)
-                val rowNum = mapper.findRowNumber(rows, item.entityId) ?: return
-                val range = "$sheetName!A$rowNum:${lastColOf(item.entityType)}$rowNum"
-                sheetsApi.batchUpdate(
-                    spreadsheetId,
-                    BatchUpdateValuesBody(data = listOf(ValuesBody(range, values = listOf(entityRow(item))))),
-                )
+                val rowNum = mapper.findRowNumber(rows, item.entityId)
+                if (rowNum == null) {
+                    // Row absent — INSERT instead (handles INSERT+UPDATE race within the same push)
+                    val appendRange = "$sheetName!A:${lastColOf(item.entityType)}"
+                    sheetsApi.append(
+                        spreadsheetId = spreadsheetId,
+                        range = appendRange,
+                        body = ValuesBody(range = appendRange, values = listOf(entityRow(item))),
+                    )
+                    rowsCache.remove(sheetName)
+                } else {
+                    val range = "$sheetName!A$rowNum:${lastColOf(item.entityType)}$rowNum"
+                    sheetsApi.batchUpdate(
+                        spreadsheetId,
+                        BatchUpdateValuesBody(data = listOf(ValuesBody(range, values = listOf(entityRow(item))))),
+                    )
+                }
             }
             "DELETE" -> {
                 val rows = cachedRows(sheetName, spreadsheetId, rowsCache)
-                val rowNum = mapper.findRowNumber(rows, item.entityId) ?: return
+                val rowNum = mapper.findRowNumber(rows, item.entityId) ?: return   // already absent — idempotent
                 val range = "$sheetName!A$rowNum:${lastColOf(item.entityType)}$rowNum"
                 sheetsApi.clear(spreadsheetId, range)
             }
@@ -187,5 +198,6 @@ class SyncWorker @AssistedInject constructor(
 
     companion object {
         private const val TAG = "SyncWorker"
+        private const val MAX_RETRIES = 5
     }
 }

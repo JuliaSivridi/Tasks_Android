@@ -7,3 +7,8 @@
 /captures
 .externalNativeBuild
 .cxx
+*.jks
+*.keystore
+*.apk
+app/release/
+docs/code-review.md

@@ -17,6 +17,7 @@ data class CalendarListEntry(
 
 data class CalendarEventsResponse(
     val items: List<CalendarEventDto> = emptyList(),
+    val nextPageToken: String? = null,
 )
 
 data class CalendarEventDto(

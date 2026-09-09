@@ -22,7 +22,7 @@ data class Task(
     val isRoot: Boolean get() = parentId.isEmpty()
 }
 
-enum class TaskStatus { PENDING, COMPLETED }
+enum class TaskStatus { PENDING, COMPLETED, DELETED }
 
 enum class Priority { URGENT, IMPORTANT, NORMAL }
 

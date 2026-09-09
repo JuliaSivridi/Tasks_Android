@@ -13,6 +13,7 @@ import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.gson.Gson
 import com.stler.tasks.R
+import com.stler.tasks.data.local.dao.CalendarEventDao
 import com.stler.tasks.data.local.dao.FolderDao
 import com.stler.tasks.data.local.dao.LabelDao
 import com.stler.tasks.data.local.dao.SyncQueueDao
@@ -49,7 +50,10 @@ class GoogleAuthRepository @Inject constructor(
     private val folderDao: FolderDao,
     private val labelDao: LabelDao,
     private val syncQueueDao: SyncQueueDao,
+    private val calendarEventDao: CalendarEventDao,
 ) : TokenProvider {
+
+    private val httpClient = OkHttpClient()
 
     // ── Public state ──────────────────────────────────────────────────────
 
@@ -222,7 +226,7 @@ class GoogleAuthRepository @Inject constructor(
             if (token.isBlank()) return@runCatching emptyList()
             val query = Uri.encode("mimeType='application/vnd.google-apps.spreadsheet' and trashed=false")
             val url = "https://www.googleapis.com/drive/v3/files?q=$query&fields=files(id,name)&orderBy=modifiedTime+desc"
-            val response = OkHttpClient().newCall(
+            val response = httpClient.newCall(
                 Request.Builder().url(url).header("Authorization", "Bearer $token").build()
             ).execute()
             if (!response.isSuccessful) return@runCatching emptyList()
@@ -241,6 +245,7 @@ class GoogleAuthRepository @Inject constructor(
         folderDao.deleteAll()
         labelDao.deleteAll()
         syncQueueDao.deleteAll()
+        calendarEventDao.deleteAll()
     }
 
     // ── Private helpers ───────────────────────────────────────────────────
@@ -305,7 +310,7 @@ class GoogleAuthRepository @Inject constructor(
      */
     private suspend fun createSpreadsheet(accessToken: String): String = withContext(Dispatchers.IO) {
         runCatching {
-            val client = OkHttpClient()
+            val client = httpClient
             val jsonType = "application/json".toMediaType()
 
             // ── Step 1: create the spreadsheet with three named sheets ────────
@@ -431,7 +436,7 @@ class GoogleAuthRepository @Inject constructor(
                 .header("Authorization", "Bearer $accessToken")
                 .build()
 
-            val response = OkHttpClient().newCall(request).execute()
+            val response = httpClient.newCall(request).execute()
             val httpCode = response.code
             val body = response.body?.string() ?: ""
             Log.d(TAG, "Drive API HTTP $httpCode, body: $body")

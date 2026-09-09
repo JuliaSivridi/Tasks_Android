@@ -108,4 +108,7 @@ interface TaskDao {
 
     @Query("DELETE FROM tasks")
     suspend fun deleteAll()
+
+    @Query("DELETE FROM tasks WHERE id NOT IN (:ids)")
+    suspend fun deleteNotIn(ids: List<String>)
 }

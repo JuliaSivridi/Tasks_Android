@@ -77,4 +77,7 @@ interface TaskRepository {
 
     /** Pull all sheets → Room (called by SyncWorker) */
     suspend fun fetchAllAndSave(spreadsheetId: String)
+
+    /** Wipe all local data (tasks, folders, labels, sync queue). Used on sign-out and spreadsheet switch. */
+    suspend fun clearAllLocalData()
 }

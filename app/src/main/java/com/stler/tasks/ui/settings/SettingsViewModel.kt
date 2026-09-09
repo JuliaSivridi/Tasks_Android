@@ -4,15 +4,9 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.stler.tasks.auth.AuthPreferences
 import com.stler.tasks.auth.FeatureFlags
 import com.stler.tasks.auth.GoogleAuthRepository
-import com.stler.tasks.data.local.dao.FolderDao
-import com.stler.tasks.data.local.dao.LabelDao
-import com.stler.tasks.data.local.dao.SyncQueueDao
-import com.stler.tasks.data.local.dao.TaskDao
 import com.stler.tasks.data.remote.dto.DriveFile
 import com.stler.tasks.data.repository.CalendarRepository
 import com.stler.tasks.data.repository.TaskRepository
@@ -20,8 +14,10 @@ import com.stler.tasks.domain.model.CalendarItem
 import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.sync.SyncManager
+import com.stler.tasks.ui.BaseViewModel
 import com.stler.tasks.widget.CalendarWidgetReceiver
 import com.stler.tasks.widget.FolderWidgetReceiver
+import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,7 +32,7 @@ import java.util.UUID
 import javax.inject.Inject
 
 private fun generateId(prefix: String): String =
-    "${prefix}_${UUID.randomUUID().toString().replace("-", "").take(8)}"
+    "${prefix}_${UUID.randomUUID().toString().replace("-", "")}"
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -44,13 +40,9 @@ class SettingsViewModel @Inject constructor(
     private val authPreferences: AuthPreferences,
     private val googleAuthRepository: GoogleAuthRepository,
     private val taskRepository: TaskRepository,
-    private val taskDao: TaskDao,
-    private val folderDao: FolderDao,
-    private val labelDao: LabelDao,
-    private val syncQueueDao: SyncQueueDao,
     private val syncManager: SyncManager,
     private val calendarRepository: CalendarRepository,
-) : ViewModel() {
+) : BaseViewModel() {
 
     // ── Feature flags ─────────────────────────────────────────────────────
 
@@ -117,10 +109,8 @@ class SettingsViewModel @Inject constructor(
             _switching.value = true
             try {
                 authPreferences.setSpreadsheet(file.id, file.name)
-                taskDao.deleteAll()
-                folderDao.deleteAll()
-                labelDao.deleteAll()
-                syncQueueDao.deleteAll()
+                taskRepository.clearAllLocalData()
+                calendarRepository.clearAllEvents()
                 syncManager.triggerSync()
             } catch (e: Exception) {
                 Log.e(TAG, "switchSpreadsheet error", e)

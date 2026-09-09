@@ -94,11 +94,6 @@ class FolderViewModel @Inject constructor(
     /**
      * Reorder siblings within [parentId]: moves item at [fromIndex] to [toIndex]
      * in the siblings list, then rewrites sortOrder = index * 10.
-     * [fromIndex] / [toIndex] are indices within the *siblings* list only.
-     */
-    /**
-     * Reorder siblings within [parentId]: moves item at [fromIndex] to [toIndex]
-     * in the siblings list, then rewrites sortOrder = index * 10.
      *
      * Uses a single batch DB transaction (updateTasks) so N siblings produce
      * exactly 1 DB write, 1 widget refresh, and N sync-queue entries.
