@@ -31,9 +31,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.stler.tasks.domain.model.CalendarEvent
 import com.stler.tasks.domain.model.Task
-import com.stler.tasks.ui.alltasks.AllTasksScreen
+import com.stler.tasks.ui.alltasks.ActiveTasksScreen
 import com.stler.tasks.ui.calendar.CalendarScreen
-import com.stler.tasks.ui.completed.CompletedScreen
 import com.stler.tasks.ui.folder.FolderScreen
 import com.stler.tasks.ui.navigation.Screen
 import com.stler.tasks.ui.task.TaskFormResult
@@ -96,7 +95,6 @@ fun MainScreen(
     val screenTitle = when {
         currentRoute == Screen.UPCOMING  -> "Upcoming"
         currentRoute == Screen.ALL_TASKS -> "All Tasks"
-        currentRoute == Screen.COMPLETED -> "Completed"
         currentRoute == Screen.FOLDER    -> folders.find { it.id == currentFolderId }?.name ?: "Folder"
         currentRoute == Screen.CALENDAR  -> selectedCalendars.find { it.id == currentCalendarId }?.summary ?: "Calendar"
         else -> "Stler Tasks"
@@ -324,15 +322,12 @@ fun MainScreen(
                     )
                 }
                 composable(Screen.ALL_TASKS) {
-                    AllTasksScreen(
-                        onEditTask           = { openEdit(it) },
-                        onAddSubtask         = { openAddSubtask(it) },
-                        onEditEvent          = { openEditEvent(it) },
-                        onEditEventSchedule  = { openEditEventSchedule(it) },
+                    ActiveTasksScreen(
+                        onEditTask          = { openEdit(it) },
+                        onAddSubtask        = { openAddSubtask(it) },
+                        onEditEvent         = { openEditEvent(it) },
+                        onEditEventSchedule = { openEditEventSchedule(it) },
                     )
-                }
-                composable(Screen.COMPLETED) {
-                    CompletedScreen()
                 }
                 composable(
                     route     = Screen.FOLDER,

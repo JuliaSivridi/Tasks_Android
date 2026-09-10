@@ -15,7 +15,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Folder
@@ -91,13 +90,6 @@ fun SidebarMenu(
                 selected = currentRoute == Screen.ALL_TASKS,
                 onClick  = { onNavigate(Screen.ALL_TASKS) },
             )
-            SimpleNavItem(
-                label    = "Completed",
-                icon     = Icons.Outlined.CheckCircle,
-                selected = currentRoute == Screen.COMPLETED,
-                onClick  = { onNavigate(Screen.COMPLETED) },
-            )
-
             // ── Folders ─────────────────────────────────────────────────────
             if (featureFlags.foldersEnabled) {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
