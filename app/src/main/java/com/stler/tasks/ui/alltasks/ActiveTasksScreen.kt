@@ -7,6 +7,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import com.stler.tasks.ui.theme.ControlShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -42,12 +43,12 @@ fun ActiveTasksScreen(
             SegmentedButton(
                 selected = selectedTab == 0,
                 onClick  = { selectedTab = 0 },
-                shape    = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                shape    = SegmentedButtonDefaults.itemShape(index = 0, count = 2, baseShape = ControlShape),
             ) { Text("Active") }
             SegmentedButton(
                 selected = selectedTab == 1,
                 onClick  = { selectedTab = 1 },
-                shape    = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                shape    = SegmentedButtonDefaults.itemShape(index = 1, count = 2, baseShape = ControlShape),
             ) { Text("Done") }
         }
 

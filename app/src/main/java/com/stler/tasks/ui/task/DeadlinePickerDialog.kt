@@ -20,7 +20,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
+import com.stler.tasks.ui.common.PillChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -180,59 +180,23 @@ fun DeadlinePickerDialog(
                 verticalAlignment     = Alignment.CenterVertically,
             ) {
                 // Date chip
-                FilterChip(
-                    selected = false,
-                    onClick  = { showCalendar = true },
-                    label    = {
-                        Row(
-                            verticalAlignment     = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            val dateColor = if (selectedDate.isNotBlank())
-                                deadlineColor(deadlineStatus(selectedDate))
-                            else
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            Icon(
-                                Icons.Outlined.CalendarMonth, null,
-                                modifier = Modifier.size(13.dp),
-                                tint = dateColor,
-                            )
-                            Text(
-                                text  = if (selectedDate.isBlank()) "No date" else formatDate(selectedDate),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = dateColor,
-                            )
-                        }
-                    },
+                PillChip(
+                    selected      = false,
+                    onClick       = { showCalendar = true },
+                    label         = if (selectedDate.isBlank()) "No date" else formatDate(selectedDate),
+                    leadingContent = { Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(13.dp)) },
+                    contentColor  = if (selectedDate.isNotBlank())
+                        deadlineColor(deadlineStatus(selectedDate)) else null,
                 )
                 // Time chip — hidden until a date is set
                 if (selectedDate.isNotBlank()) {
-                    FilterChip(
-                        selected = false,
-                        onClick  = { showTimePicker = true },
-                        label    = {
-                            Row(
-                                verticalAlignment     = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                // Time chip uses the same status color as the date chip —
-                                // both chips belong to the same deadline.
-                                val timeColor = if (selectedTime.isNotBlank())
-                                    deadlineColor(deadlineStatus(selectedDate, selectedTime))
-                                else
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                Icon(
-                                    Icons.Outlined.Schedule, null,
-                                    modifier = Modifier.size(13.dp),
-                                    tint = timeColor,
-                                )
-                                Text(
-                                    text  = if (selectedTime.isBlank()) "HH:MM" else selectedTime,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = timeColor,
-                                )
-                            }
-                        },
+                    PillChip(
+                        selected      = false,
+                        onClick       = { showTimePicker = true },
+                        label         = if (selectedTime.isBlank()) "HH:MM" else selectedTime,
+                        leadingContent = { Icon(Icons.Outlined.Schedule, null, Modifier.size(13.dp)) },
+                        contentColor  = if (selectedTime.isNotBlank())
+                            deadlineColor(deadlineStatus(selectedDate, selectedTime)) else null,
                     )
                 }
             }

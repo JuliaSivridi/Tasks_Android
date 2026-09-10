@@ -61,6 +61,21 @@ val OnPrimaryContainerGrayDark = OnSelectedHighlightDark // → #f2f2f2
 // Dark mode falls back to surfaceVariant / onSurfaceVariant from the theme.
 val OnChipSelected = Color(0xFF424242)   // hsl(0 0% 26%) – dark gray chip text/icon
 
+// ── Surface container ladder (5 levels, neutral gray — no Material baseline tint) ──
+// Light: white → near-white → light gray → mid-light gray → Border
+val SurfaceContainerLowestLight  = Color(0xFFFFFFFF)  // = Background
+val SurfaceContainerLowLight     = Color(0xFFF8F8F8)
+val SurfaceContainerLight        = Color(0xFFF2F2F2)
+val SurfaceContainerHighLight    = Color(0xFFEBEBEB)
+val SurfaceContainerHighestLight = Color(0xFFE0E0E0)  // = Border
+
+// Dark: darkest bg → very dark → Popover → elevated → Surface
+val SurfaceContainerLowestDark   = Color(0xFF1C1C1C)  // = BackgroundDark
+val SurfaceContainerLowDark      = Color(0xFF222222)
+val SurfaceContainerDark         = Color(0xFF242424)  // ≈ PopoverDark
+val SurfaceContainerHighDark     = Color(0xFF2D2D2D)
+val SurfaceContainerHighestDark  = Color(0xFF363636)  // = SurfaceDark
+
 // ── Borders ───────────────────────────────────────────────────────────────────
 val Border = Color(0xFFE0E0E0)           // hsl(0 0% 88%)
 val BorderDark = Color(0xFF4A4A4A)       // hsl(0 0% 29%)

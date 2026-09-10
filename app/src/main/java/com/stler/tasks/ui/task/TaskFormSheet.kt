@@ -49,8 +49,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import com.stler.tasks.ui.common.PillChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -97,7 +96,7 @@ import com.stler.tasks.domain.model.Priority
 import com.stler.tasks.domain.model.RecurType
 import com.stler.tasks.domain.model.Task
 import com.stler.tasks.ui.theme.Border
-import com.stler.tasks.ui.theme.OnChipSelected
+import com.stler.tasks.ui.theme.ControlShape
 import com.stler.tasks.ui.util.ErrorSnackbarEffect
 import com.stler.tasks.ui.util.LocalSnackbarHostState
 import com.stler.tasks.util.toComposeColor
@@ -461,7 +460,7 @@ fun TaskFormSheet(
                 SegmentedButton(
                     selected = viewModel.formMode == FormMode.TASK,
                     onClick  = { viewModel.formMode = FormMode.TASK },
-                    shape    = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                    shape    = SegmentedButtonDefaults.itemShape(index = 0, count = 2, baseShape = ControlShape),
                     label    = { Text("Task") },
                     icon     = {
                         Icon(Icons.Outlined.CheckBox, contentDescription = null,
@@ -474,7 +473,7 @@ fun TaskFormSheet(
                         viewModel.formMode = FormMode.EVENT
                         viewModel.loadCalendars()
                     },
-                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2, baseShape = ControlShape),
                     label = { Text("Event") },
                     icon  = {
                         Icon(Icons.Outlined.CalendarMonth, contentDescription = null,
@@ -547,81 +546,42 @@ fun TaskFormSheet(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     // Date chip (required; error state if missing)
-                    FilterChip(
-                        selected = startDateError && deadlineDate.isBlank(),
-                        onClick  = { showDeadlinePicker = true; startDateError = false },
-                        label    = {
-                            Row(verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(13.dp),
-                                    tint = if (deadlineDate.isNotBlank()) deadlineColor(dlStatus)
-                                           else if (startDateError) MaterialTheme.colorScheme.error
-                                           else MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(
-                                    text  = if (deadlineDate.isBlank()) "Date *"
-                                            else formatExplicitDate(deadlineDate),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = if (deadlineDate.isNotBlank()) deadlineColor(dlStatus)
-                                            else if (startDateError) MaterialTheme.colorScheme.error
-                                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        },
+                    val eventDateSet   = deadlineDate.isNotBlank()
+                    val eventDateError = startDateError && !eventDateSet
+                    PillChip(
+                        selected      = eventDateError,
+                        onClick       = { showDeadlinePicker = true; startDateError = false },
+                        label         = if (eventDateSet) formatExplicitDate(deadlineDate) else "Date *",
+                        activeColor   = MaterialTheme.colorScheme.error,
+                        leadingContent = { Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(13.dp)) },
+                        contentColor  = if (eventDateSet) deadlineColor(dlStatus) else null,
                     )
                     // Start time chip (always visible in EVENT mode)
-                    FilterChip(
-                        selected = false,
-                        onClick  = { showTimePicker = true },
-                        label    = {
-                            Row(verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Icon(Icons.Outlined.Schedule, null, Modifier.size(13.dp),
-                                    tint = if (deadlineTime.isNotBlank()) deadlineColor(dlStatus)
-                                           else MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(
-                                    text  = if (deadlineTime.isBlank()) "HH:MM" else deadlineTime,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = if (deadlineTime.isNotBlank()) deadlineColor(dlStatus)
-                                            else MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        },
+                    PillChip(
+                        selected      = false,
+                        onClick       = { showTimePicker = true },
+                        label         = if (deadlineTime.isBlank()) "HH:MM" else deadlineTime,
+                        leadingContent = { Icon(Icons.Outlined.Schedule, null, Modifier.size(13.dp)) },
+                        contentColor  = if (deadlineTime.isNotBlank()) deadlineColor(dlStatus) else null,
                     )
                     // Dash separator
                     Text("—", color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall)
                     // End time chip (required when start time is set)
                     val endTimeHasError = endTimeError && viewModel.endTime.isBlank()
-                    // Show * proactively once start time is set, so user knows end time is required
                     val endTimeRequired = deadlineTime.isNotBlank() && viewModel.endTime.isBlank()
-                    FilterChip(
-                        selected = false,
-                        onClick  = { showEndTimePicker = true; endTimeError = false },
-                        label    = {
-                            Row(verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Icon(Icons.Outlined.Schedule, null, Modifier.size(13.dp),
-                                    tint = when {
-                                        viewModel.endTime.isNotBlank() -> deadlineColor(dlStatus)
-                                        endTimeHasError                -> MaterialTheme.colorScheme.error
-                                        else                           -> MaterialTheme.colorScheme.onSurfaceVariant
-                                    })
-                                Text(
-                                    text  = when {
-                                        viewModel.endTime.isNotBlank() -> viewModel.endTime
-                                        endTimeHasError                -> "End time *"
-                                        endTimeRequired                -> "HH:MM*"
-                                        else                           -> "HH:MM"
-                                    },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = when {
-                                        viewModel.endTime.isNotBlank() -> deadlineColor(dlStatus)
-                                        endTimeHasError                -> MaterialTheme.colorScheme.error
-                                        else                           -> MaterialTheme.colorScheme.onSurfaceVariant
-                                    },
-                                )
-                            }
+                    PillChip(
+                        selected      = endTimeHasError,
+                        onClick       = { showEndTimePicker = true; endTimeError = false },
+                        label         = when {
+                            viewModel.endTime.isNotBlank() -> viewModel.endTime
+                            endTimeHasError                -> "End time *"
+                            endTimeRequired                -> "HH:MM*"
+                            else                           -> "HH:MM"
                         },
+                        activeColor   = MaterialTheme.colorScheme.error,
+                        leadingContent = { Icon(Icons.Outlined.Schedule, null, Modifier.size(13.dp)) },
+                        contentColor  = if (viewModel.endTime.isNotBlank()) deadlineColor(dlStatus) else null,
                     )
                 }
             } else {
@@ -631,43 +591,21 @@ fun TaskFormSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    FilterChip(
-                        selected = false,
-                        onClick  = { showDeadlinePicker = true },
-                        label    = {
-                            Row(verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(13.dp),
-                                    tint = if (deadlineDate.isNotBlank()) deadlineColor(dlStatus)
-                                           else MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text(
-                                    text  = if (deadlineDate.isBlank()) "No date"
-                                            else formatExplicitDate(deadlineDate),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = if (deadlineDate.isNotBlank()) deadlineColor(dlStatus)
-                                           else MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        },
+                    PillChip(
+                        selected      = false,
+                        onClick       = { showDeadlinePicker = true },
+                        label         = if (deadlineDate.isBlank()) "No date"
+                                        else formatExplicitDate(deadlineDate),
+                        leadingContent = { Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(13.dp)) },
+                        contentColor  = if (deadlineDate.isNotBlank()) deadlineColor(dlStatus) else null,
                     )
                     if (deadlineDate.isNotBlank()) {
-                        FilterChip(
-                            selected = false,
-                            onClick  = { showTimePicker = true },
-                            label    = {
-                                Row(verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Icon(Icons.Outlined.Schedule, null, Modifier.size(13.dp),
-                                        tint = if (deadlineTime.isNotBlank()) deadlineColor(dlStatus)
-                                               else MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(
-                                        text  = if (deadlineTime.isBlank()) "HH:MM" else deadlineTime,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = if (deadlineTime.isNotBlank()) deadlineColor(dlStatus)
-                                               else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            },
+                        PillChip(
+                            selected      = false,
+                            onClick       = { showTimePicker = true },
+                            label         = if (deadlineTime.isBlank()) "HH:MM" else deadlineTime,
+                            leadingContent = { Icon(Icons.Outlined.Schedule, null, Modifier.size(13.dp)) },
+                            contentColor  = if (deadlineTime.isNotBlank()) deadlineColor(dlStatus) else null,
                         )
                     }
                 }
@@ -874,20 +812,12 @@ fun TaskFormSheet(
                     val folderColor = folders.find { it.id == folderId }?.color
                     val fColor      = folderColor?.toComposeColor()
                                       ?: MaterialTheme.colorScheme.primary
-                    FilterChip(
-                        selected    = true,
-                        onClick     = { showFolderPicker = true },
-                        label       = {
-                            Text(folderName, style = MaterialTheme.typography.bodyMedium, color = fColor)
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Outlined.Folder, null, Modifier.size(13.dp), tint = fColor)
-                        },
-                        colors      = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor   = fColor.copy(alpha = 0.18f),
-                            selectedLabelColor       = fColor,
-                            selectedLeadingIconColor = fColor,
-                        ),
+                    PillChip(
+                        selected      = true,
+                        onClick       = { showFolderPicker = true },
+                        label         = folderName,
+                        activeColor   = fColor,
+                        leadingContent = { Icon(Icons.Outlined.Folder, null, Modifier.size(13.dp)) },
                     )
                 }
 
@@ -927,27 +857,13 @@ fun TaskFormSheet(
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             selectedLabels.forEach { lbl ->
                                 val lColor = lbl.color.toComposeColor()
-                                FilterChip(
-                                    selected    = true,
-                                    onClick     = { selectedLabelIds = selectedLabelIds - lbl.id },
-                                    label       = {
-                                        Text(lbl.name,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = lColor)
-                                    },
-                                    leadingIcon = {
-                                        Icon(Icons.Outlined.Label, null,
-                                            modifier = Modifier.size(13.dp), tint = lColor)
-                                    },
-                                    trailingIcon = {
-                                        Icon(Icons.Outlined.Close, contentDescription = "Remove",
-                                            modifier = Modifier.size(12.dp))
-                                    },
-                                    colors      = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor   = lColor.copy(alpha = 0.18f),
-                                        selectedLabelColor       = lColor,
-                                        selectedLeadingIconColor = lColor,
-                                    ),
+                                PillChip(
+                                    selected      = true,
+                                    onClick       = { selectedLabelIds = selectedLabelIds - lbl.id },
+                                    label         = lbl.name,
+                                    activeColor   = lColor,
+                                    leadingContent = { Icon(Icons.Outlined.Label, null, Modifier.size(13.dp)) },
+                                    trailingContent = { Icon(Icons.Outlined.Close, "Remove", Modifier.size(12.dp)) },
                                 )
                             }
                         }
@@ -965,28 +881,21 @@ fun TaskFormSheet(
                         Priority.URGENT    to "Urgent",
                         Priority.IMPORTANT to "Important",
                         Priority.NORMAL    to "Normal",
-                    ).forEach { (p, label) ->
+                    ).forEach { (p, lbl) ->
                         val sel    = priority == p
                         val pColor = priorityColor(p)
-                        FilterChip(
-                            selected    = sel,
-                            onClick     = { priority = p },
-                            label       = {
-                                Text(label, style = MaterialTheme.typography.bodySmall)
-                            },
-                            leadingIcon = {
+                        PillChip(
+                            selected      = sel,
+                            onClick       = { priority = p },
+                            label         = lbl,
+                            activeColor   = pColor,
+                            leadingContent = {
                                 Icon(
                                     if (sel) Icons.Outlined.Check else Icons.Outlined.Flag,
                                     contentDescription = null,
                                     modifier = Modifier.size(13.dp),
-                                    tint     = pColor,
                                 )
                             },
-                            colors      = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor   = pColor.copy(alpha = 0.18f),
-                                selectedLabelColor       = pColor,
-                                selectedLeadingIconColor = pColor,
-                            ),
                         )
                     }
                 }

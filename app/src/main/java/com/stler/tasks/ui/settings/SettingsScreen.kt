@@ -34,6 +34,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import com.stler.tasks.ui.theme.ControlShape
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -302,12 +303,12 @@ fun SettingsScreen(
                         SegmentedButton(
                             selected = navMode == "bottom",
                             onClick  = { viewModel.setNavMode("bottom") },
-                            shape    = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                            shape    = SegmentedButtonDefaults.itemShape(index = 0, count = 2, baseShape = ControlShape),
                         ) { Text("Bottom bar") }
                         SegmentedButton(
                             selected = navMode == "sidebar",
                             onClick  = { viewModel.setNavMode("sidebar") },
-                            shape    = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                            shape    = SegmentedButtonDefaults.itemShape(index = 1, count = 2, baseShape = ControlShape),
                         ) { Text("Side menu") }
                     }
                 }

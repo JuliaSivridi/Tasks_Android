@@ -19,6 +19,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -296,18 +297,22 @@ fun MainScreen(
                     Screen.UPCOMING, Screen.ALL_TASKS, Screen.FOLDER, Screen.CALENDAR
                 )
                 if (showFab) {
-                    FloatingActionButton(onClick = {
-                        if (currentRoute == Screen.CALENDAR && currentCalendarId != null) {
-                            val cal = selectedCalendars.find { it.id == currentCalendarId }
-                            if (cal != null && cal.accessRole in listOf("owner", "writer")) {
-                                openCreateEvent(currentCalendarId)
+                    FloatingActionButton(
+                        onClick = {
+                            if (currentRoute == Screen.CALENDAR && currentCalendarId != null) {
+                                val cal = selectedCalendars.find { it.id == currentCalendarId }
+                                if (cal != null && cal.accessRole in listOf("owner", "writer")) {
+                                    openCreateEvent(currentCalendarId)
+                                } else {
+                                    openCreate(sidebarFolderContext)
+                                }
                             } else {
                                 openCreate(sidebarFolderContext)
                             }
-                        } else {
-                            openCreate(sidebarFolderContext)
-                        }
-                    }) {
+                        },
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor   = MaterialTheme.colorScheme.onPrimary,
+                    ) {
                         Icon(Icons.Outlined.Add, contentDescription = "Add task")
                     }
                 }

@@ -20,17 +20,14 @@ import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
+import com.stler.tasks.ui.common.PillChip
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,8 +46,6 @@ import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.ListItem
 import com.stler.tasks.domain.model.Priority
 import com.stler.tasks.ui.calendar.CalendarEventItem
-import com.stler.tasks.ui.theme.OnChipSelected
-import com.stler.tasks.ui.theme.SelectedHighlightLight
 import com.stler.tasks.ui.task.TaskItem
 import com.stler.tasks.ui.util.EmptyState
 import com.stler.tasks.ui.util.ErrorSnackbarEffect
@@ -185,15 +180,6 @@ fun AllTasksScreen(
     }
 }
 
-// ── Neutral chip colors — bypasses Material You warm tint ────────────────────
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun neutralChipColors() = FilterChipDefaults.filterChipColors(
-    selectedContainerColor   = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.primaryContainer else SelectedHighlightLight,
-    selectedLeadingIconColor = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onPrimaryContainer else OnChipSelected,
-    selectedLabelColor       = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onPrimaryContainer else OnChipSelected,
-)
-
 /**
  * Compact filter bar: three icon-only chips, each opening its own multi-select dropdown.
  *
@@ -253,15 +239,11 @@ fun FilterBar(
 
         // ── Priority chip ─────────────────────────────────────────────────
         if (featureFlags.prioritiesEnabled) Box {
-            FilterChip(
-                selected    = priorityFilter.isNotEmpty(),
-                onClick     = { priorityExpanded = true },
-                leadingIcon = { Icon(Icons.Outlined.Flag, null, Modifier.size(16.dp)) },
-                label       = {
-                    if (priorityFilter.isNotEmpty())
-                        Text(priorityFilter.size.toString(), style = MaterialTheme.typography.bodyMedium)
-                },
-                colors = neutralChipColors(),
+            PillChip(
+                selected      = priorityFilter.isNotEmpty(),
+                onClick       = { priorityExpanded = true },
+                label         = if (priorityFilter.isNotEmpty()) priorityFilter.size.toString() else "",
+                leadingContent = { Icon(Icons.Outlined.Flag, null, Modifier.size(16.dp)) },
             )
             DropdownMenu(
                 expanded         = priorityExpanded,
@@ -288,15 +270,11 @@ fun FilterBar(
         // ── Labels chip ───────────────────────────────────────────────────
         if (featureFlags.labelsEnabled && showLabelFilter && labels.isNotEmpty()) {
             Box {
-                FilterChip(
-                    selected    = labelFilter.isNotEmpty(),
-                    onClick     = { labelsExpanded = true },
-                    leadingIcon = { Icon(Icons.Outlined.Label, null, Modifier.size(16.dp)) },
-                    label       = {
-                        if (labelFilter.isNotEmpty())
-                            Text(labelFilter.size.toString(), style = MaterialTheme.typography.bodyMedium)
-                    },
-                    colors = neutralChipColors(),
+                PillChip(
+                    selected      = labelFilter.isNotEmpty(),
+                    onClick       = { labelsExpanded = true },
+                    label         = if (labelFilter.isNotEmpty()) labelFilter.size.toString() else "",
+                    leadingContent = { Icon(Icons.Outlined.Label, null, Modifier.size(16.dp)) },
                 )
                 DropdownMenu(
                     expanded         = labelsExpanded,
@@ -323,15 +301,11 @@ fun FilterBar(
         // ── Folders chip ──────────────────────────────────────────────────
         if (featureFlags.foldersEnabled && showFolderFilter && folders.isNotEmpty()) {
             Box {
-                FilterChip(
-                    selected    = folderFilter.isNotEmpty(),
-                    onClick     = { foldersExpanded = true },
-                    leadingIcon = { Icon(Icons.Outlined.Folder, null, Modifier.size(16.dp)) },
-                    label       = {
-                        if (folderFilter.isNotEmpty())
-                            Text(folderFilter.size.toString(), style = MaterialTheme.typography.bodyMedium)
-                    },
-                    colors = neutralChipColors(),
+                PillChip(
+                    selected      = folderFilter.isNotEmpty(),
+                    onClick       = { foldersExpanded = true },
+                    label         = if (folderFilter.isNotEmpty()) folderFilter.size.toString() else "",
+                    leadingContent = { Icon(Icons.Outlined.Folder, null, Modifier.size(16.dp)) },
                 )
                 DropdownMenu(
                     expanded         = foldersExpanded,
@@ -358,15 +332,11 @@ fun FilterBar(
         // ── Calendars chip — visible when events are present OR a filter is active ──
         if (calendars.isNotEmpty() || calendarFilter.isNotEmpty()) {
             Box {
-                FilterChip(
-                    selected    = calendarFilter.isNotEmpty(),
-                    onClick     = { calendarsExpanded = true },
-                    leadingIcon = { Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(16.dp)) },
-                    label       = {
-                        if (calendarFilter.isNotEmpty())
-                            Text(calendarFilter.size.toString(), style = MaterialTheme.typography.bodyMedium)
-                    },
-                    colors = neutralChipColors(),
+                PillChip(
+                    selected      = calendarFilter.isNotEmpty(),
+                    onClick       = { calendarsExpanded = true },
+                    label         = if (calendarFilter.isNotEmpty()) calendarFilter.size.toString() else "",
+                    leadingContent = { Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(16.dp)) },
                 )
                 DropdownMenu(
                     expanded         = calendarsExpanded,
