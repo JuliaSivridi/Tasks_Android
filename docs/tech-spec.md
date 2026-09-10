@@ -1,6 +1,6 @@
 # Stler Tasks Android — Technical Specification
 
-**Version:** 2.9.1 (September 2026)  
+**Version:** 3.0 (September 2026)  
 **Repository:** github.com/JuliaSivridi/Tasks_Android  
 **Stack:** Kotlin · Jetpack Compose · Room · Hilt · WorkManager · Glance · Google Sheets API v4 · Google Calendar API v3  
 **Min SDK:** 26 (Android 8.0) · **Target SDK:** 36
@@ -94,7 +94,7 @@ In addition to tasks, the app integrates with **Google Calendar API v3**: events
 | Navigation | Navigation Compose | — | Single NavHost inside MainScreen |
 | Lifecycle | Lifecycle ViewModel / Runtime | — | `WhileSubscribed(5000)` sharing strategy |
 
-**Build config:** `applicationId = "com.stler.tasks"`, `versionCode = 30`, `versionName = "2.9.1"`, `minSdk = 26`, `targetSdk = 36`. KSP with `room.schemaLocation = "$projectDir/schemas"`. Signing via environment variables `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` (only wired if `KEYSTORE_PATH` is non-blank, so debug builds are unaffected).
+**Build config:** `applicationId = "com.stler.tasks"`, `versionCode = 31`, `versionName = "3.0"`, `minSdk = 26`, `targetSdk = 36`. KSP with `room.schemaLocation = "$projectDir/schemas"`. Signing via environment variables `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` (only wired if `KEYSTORE_PATH` is non-blank, so debug builds are unaffected).
 
 ---
 
@@ -187,17 +187,18 @@ com.stler.tasks/
 │   └── SyncWorker.kt        Push + pull + calendar sync
 ├── ui/
 │   ├── auth/                AuthScreen, AuthViewModel, AuthUiState
-│   ├── main/                MainScreen (NavHost + drawer), MainViewModel, TasksTopAppBar, SidebarMenu
+│   ├── main/                MainScreen, MainViewModel, TasksTopAppBar, SidebarMenu, SidebarPreferences
+│   │                        MenuScreen, FoldersListScreen, CalendarsListScreen, AboutScreen
+│   ├── alltasks/            ActiveTasksScreen (toggle wrapper), AllTasksScreen + AllTasksViewModel, FilterBar
 │   ├── upcoming/            UpcomingScreen + UpcomingViewModel
-│   ├── alltasks/            AllTasksScreen + AllTasksViewModel + FilterBar
 │   ├── completed/           CompletedScreen + CompletedViewModel
 │   ├── folder/              FolderScreen (drag-reorder) + FolderViewModel
 │   ├── calendar/            CalendarScreen + CalendarViewModel + CalendarEventItem
 │   ├── task/                TaskFormSheet, TaskFormViewModel, TaskItem, TaskColors, pickers
-│   ├── settings/            SettingsScreen + SettingsViewModel (feature flags, folder/label/calendar mgmt)
+│   ├── settings/            SettingsScreen + SettingsViewModel (nav mode, feature flags, folder/label/calendar mgmt)
 │   ├── help/                HelpScreen (static content)
 │   ├── feedback/            FeedbackScreen + FeedbackViewModel
-│   ├── navigation/          Screen.kt (route constants)
+│   ├── navigation/          Screen.kt (route constants: UPCOMING, ALL_TASKS, FOLDERS_LIST, CALENDARS_LIST, MENU_SCREEN, FOLDER, CALENDAR)
 │   ├── theme/               Color.kt, Theme.kt, Type.kt
 │   └── util/                EmptyState, ShimmerTaskList, ErrorSnackbarEffect, LocalSnackbarHostState
 ├── widget/
@@ -736,15 +737,62 @@ fun CalendarEventItem(
 ### 8.7 MainScreen — Global FAB and Navigation
 
 **ViewModel:** `MainViewModel`, `TaskFormViewModel`  
-**StateFlows:** `folders`, `labels`, `syncState`, `authData`, `sidebarState`, `selectedCalendars`, `featureFlags`  
-**Layout:** `ModalNavigationDrawer` + `Scaffold` (TopAppBar, FAB, SnackbarHost) + `NavHost`.  
+**StateFlows:** `folders`, `labels`, `syncState`, `authData`, `sidebarState`, `selectedCalendars`, `featureFlags`, `navMode`
+
+#### Navigation modes
+
+`navMode` is persisted in DataStore (`SidebarPreferences`, key `"nav_mode"`). Default: `"bottom"`. Toggled in Settings → Navigation section.
+
+**Bottom bar mode (`navMode == "bottom"`):**
+- `NavigationBar` (icon-only, no labels) with items: Upcoming · All Tasks · Folders (if enabled) · Calendars (if enabled + non-empty) · Menu (avatar or AccountCircle icon)
+- No `ModalNavigationDrawer` — main content renders in a plain `Box`
+- TopAppBar: no hamburger, no avatar dropdown. Back arrow shown when current route is `FOLDER` or `CALENDAR` (returns to `FOLDERS_LIST` / `CALENDARS_LIST` respectively)
+- FAB hidden on `FOLDERS_LIST`, `CALENDARS_LIST`, `MENU_SCREEN` routes
+
+**Sidebar mode (`navMode == "sidebar"`):**
+- `ModalNavigationDrawer` with `SidebarMenu` — navigation-only; folder CRUD in Settings. Folders/Calendars sections gated by `featureFlags`
+- TopAppBar: hamburger + avatar dropdown (Settings · Help · Feedback · About · Sign out)
+- FAB always visible on content screens
+
+**Overlay screens** (rendered in `Box` on top of the NavHost — NavHost stays in composition so its back stack is preserved): Settings · Help · Feedback · About — pushed/popped via `overlayStack: List<String>`. `BackHandler` inside each overlay screen pops the stack; physical back and in-screen back button both call `popOverlay()`.
+
+**Routes:** `UPCOMING`, `ALL_TASKS`, `FOLDERS_LIST`, `CALENDARS_LIST`, `MENU_SCREEN`, `FOLDER/{folderId}`, `CALENDAR/{calendarId}`  
 **Start destination:** `Screen.UPCOMING`  
-**Routes:** `UPCOMING`, `ALL_TASKS`, `COMPLETED`, `FOLDER/{folderId}`, `CALENDAR/{calendarId}`  
-**Overlay screens** (replace entire content, no NavBackStack entry): Settings, Help, Feedback — toggled via `showSettings`, `showHelp`, `showFeedback` local state.  
-**FAB:** opens `TaskFormSheet`. On `FOLDER` screen → task in current folder. On `CALENDAR` screen → checks `accessRole`: `"owner"`/`"writer"` → EVENT mode with calendar pre-selected; read-only → TASK mode (Inbox). All other screens → task in Inbox.  
-**Task form:** `TaskFormSheet` shown as overlay when `showForm = true`. Supports create, edit, add-subtask, edit-calendar-event, edit-event-schedule-only, and create-event-for-calendar (`initialCalendarId`) modes.  
-**Deep links:** Handled in `LaunchedEffect(initialDeepLinkUri)`.  
-**Sidebar:** `SidebarMenu` — navigation-only; folder CRUD moved to Settings. Folders/Calendars sections gated by `featureFlags`.
+**Back stack:** `navigateTo()` uses `saveState = true` / `restoreState = true` — per-tab state is preserved when switching bottom nav tabs.
+
+**FAB:** On `CALENDAR` screen → checks `accessRole`: `"owner"`/`"writer"` → EVENT mode; read-only → TASK mode (Inbox). Otherwise → TASK mode with current folder context.  
+**Task form:** `TaskFormSheet` shown outside the `Box` overlay (always on top) when `showForm = true`.  
+**Deep links:** Handled in `LaunchedEffect(initialDeepLinkUri)`.
+
+---
+
+### 8.7a Active Tasks Screen (`ALL_TASKS` route)
+
+Wraps `AllTasksScreen` (Active) and `CompletedScreen` (Done) with a `SingleChoiceSegmentedButtonRow` toggle at the top. Both `AllTasksViewModel` and `CompletedViewModel` are instantiated at `ActiveTasksScreen` level so state is preserved while the ALL_TASKS back-stack entry is alive. Tab selection uses `rememberSaveable`.
+
+---
+
+### 8.7b Folders List Screen (`FOLDERS_LIST` route, bottom nav only)
+
+`LazyColumn` of all folders. Rows: `heightIn(min=56dp)`, `bodyLarge` text, 22dp icon, `ChevronRight`. Tapping a row navigates to `FOLDER/{folderId}` (inner-tab navigation, back arrow in TopAppBar returns here). Empty state when Folders feature is disabled or no folders exist.
+
+---
+
+### 8.7c Calendars List Screen (`CALENDARS_LIST` route, bottom nav only)
+
+`LazyColumn` of selected calendars. Each row shows `CalendarMonth` icon tinted by calendar colour. Tapping navigates to `CALENDAR/{calendarId}`. Empty state when no calendars are selected.
+
+---
+
+### 8.7d Menu Screen (`MENU_SCREEN` route, bottom nav only)
+
+Shows: user avatar (72dp, `CircleShape`, Coil `AsyncImage`) or `AccountCircle` fallback, user name (`titleMedium`), email (`bodyMedium`). Menu rows (`heightIn(min=56dp)`, `bodyLarge`, 24dp icons): Settings · Help · Feedback · About · Sign out (error colour). Each row pushes the appropriate overlay (`pushOverlay("settings")` etc.).
+
+---
+
+### 8.7e About Screen (overlay)
+
+Static screen: version string (`BuildConfig.VERSION_NAME`) + "Check for updates" `OutlinedButton` (opens GitHub releases page). No ViewModel. `BackHandler` pops overlay.
 
 ---
 
@@ -757,10 +805,11 @@ fun CalendarEventItem(
 **Section order (top → bottom, no headers):**
 
 1. **Spreadsheet** — current file name + "Change" button → expandable Drive file picker; `switchSpreadsheet()` clears all Room data and triggers sync.
-2. **Priorities** — `Switch` toggle (`featureFlags.prioritiesEnabled`); hides priority UI everywhere when off.
-3. **Labels** — `Switch` toggle + animated label list (color dot + name + Edit/Delete) + Add button in header; label CRUD inline.
-4. **Folders** — `Switch` toggle + animated folder list (icon tinted with folder color + name + Edit/Delete, Inbox excluded) + Add button in header; folder CRUD inline.
-5. **Calendars** — `Switch` toggle + Refresh button + checkbox list of Google Calendars; clearing events on disable; `PackageManager.setComponentEnabledSetting` hides `CalendarWidgetReceiver` from widget picker.
+2. **Navigation** — `SingleChoiceSegmentedButtonRow`: "Bottom bar" (index 0, default) · "Side menu" (index 1). Persisted via `SidebarPreferences.setNavMode()` in DataStore. Switching takes effect immediately without restart.
+3. **Priorities** — `Switch` toggle (`featureFlags.prioritiesEnabled`); hides priority UI everywhere when off.
+4. **Labels** — `Switch` toggle + animated label list (color dot + name + Edit/Delete) + Add button in header; label CRUD inline.
+5. **Folders** — `Switch` toggle + animated folder list (icon tinted with folder color + name + Edit/Delete, Inbox excluded) + Add button in header; folder CRUD inline.
+6. **Calendars** — `Switch` toggle + Refresh button + checkbox list of Google Calendars; clearing events on disable; `PackageManager.setComponentEnabledSetting` hides `CalendarWidgetReceiver` from widget picker.
 
 **Feature flags storage:** `AuthPreferences` DataStore keys `folders_enabled`, `labels_enabled`, `priorities_enabled`, `calendars_enabled` (all default `true`). Combined into `featureFlags: Flow<FeatureFlags>` via `combine`.
 

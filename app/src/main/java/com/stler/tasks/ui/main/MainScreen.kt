@@ -1,14 +1,16 @@
 package com.stler.tasks.ui.main
 
 import android.net.Uri
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CalendarToday
-import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FormatListBulleted
 import androidx.compose.material3.DrawerValue
@@ -20,10 +22,9 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,14 +47,14 @@ import com.stler.tasks.domain.model.CalendarEvent
 import com.stler.tasks.domain.model.Task
 import com.stler.tasks.ui.alltasks.ActiveTasksScreen
 import com.stler.tasks.ui.calendar.CalendarScreen
+import com.stler.tasks.ui.feedback.FeedbackScreen
 import com.stler.tasks.ui.folder.FolderScreen
+import com.stler.tasks.ui.help.HelpScreen
 import com.stler.tasks.ui.navigation.Screen
+import com.stler.tasks.ui.settings.SettingsScreen
 import com.stler.tasks.ui.task.TaskFormResult
 import com.stler.tasks.ui.task.TaskFormSheet
 import com.stler.tasks.ui.task.TaskFormViewModel
-import com.stler.tasks.ui.feedback.FeedbackScreen
-import com.stler.tasks.ui.help.HelpScreen
-import com.stler.tasks.ui.settings.SettingsScreen
 import com.stler.tasks.ui.upcoming.UpcomingScreen
 import com.stler.tasks.ui.util.LocalSnackbarHostState
 import kotlinx.coroutines.flow.first
@@ -69,23 +70,12 @@ fun MainScreen(
     viewModel: MainViewModel = hiltViewModel(),
     formViewModel: TaskFormViewModel = hiltViewModel(),
 ) {
-    // ── Overlay screens — shown instead of the main content when true ────────
-    var showSettings by remember { mutableStateOf(false) }
-    var showHelp     by remember { mutableStateOf(false) }
-    var showFeedback by remember { mutableStateOf(false) }
+    // ── Overlay screens (stack-based so Help/Feedback can back to Settings) ─
+    var overlayStack by remember { mutableStateOf(emptyList<String>()) }
+    val currentOverlay = overlayStack.lastOrNull()
 
-    if (showSettings) {
-        SettingsScreen(onNavigateBack = { showSettings = false })
-        return
-    }
-    if (showHelp) {
-        HelpScreen(onNavigateBack = { showHelp = false })
-        return
-    }
-    if (showFeedback) {
-        FeedbackScreen(onNavigateBack = { showFeedback = false })
-        return
-    }
+    fun pushOverlay(vararg screens: String) { overlayStack = overlayStack + screens.toList() }
+    fun popOverlay() { overlayStack = overlayStack.dropLast(1) }
 
     val navController     = rememberNavController()
     val drawerState       = rememberDrawerState(DrawerValue.Closed)
@@ -114,8 +104,8 @@ fun MainScreen(
         currentRoute == Screen.FOLDERS_LIST   -> "Folders"
         currentRoute == Screen.CALENDARS_LIST -> "Calendars"
         currentRoute == Screen.MENU_SCREEN    -> "Menu"
-        currentRoute == Screen.FOLDER         -> folders.find { it.id == currentFolderId }?.name ?: "Folder"
-        currentRoute == Screen.CALENDAR       -> selectedCalendars.find { it.id == currentCalendarId }?.summary ?: "Calendar"
+        currentRoute == Screen.FOLDER  -> folders.find { it.id == currentFolderId }?.name ?: "Folder"
+        currentRoute == Screen.CALENDAR -> selectedCalendars.find { it.id == currentCalendarId }?.summary ?: "Calendar"
         else -> "Stler Tasks"
     }
 
@@ -129,48 +119,29 @@ fun MainScreen(
     var formInitialCalendarId            by remember { mutableStateOf<String?>(null) }
 
     fun openCreate(folderId: String = "fld-inbox", parentId: String = "") {
-        editingTask                      = null
-        editingCalendarEvent             = null
-        editingCalendarEventScheduleOnly = false
-        formFolderId                     = folderId
-        formParentId                     = parentId
-        formInitialCalendarId            = null
-        showForm                         = true
+        editingTask = null; editingCalendarEvent = null; editingCalendarEventScheduleOnly = false
+        formFolderId = folderId; formParentId = parentId; formInitialCalendarId = null
+        showForm = true
     }
     fun openCreateEvent(calendarId: String) {
-        editingTask                      = null
-        editingCalendarEvent             = null
-        editingCalendarEventScheduleOnly = false
-        formInitialCalendarId            = calendarId
-        showForm                         = true
+        editingTask = null; editingCalendarEvent = null; editingCalendarEventScheduleOnly = false
+        formInitialCalendarId = calendarId; showForm = true
     }
     fun openEdit(task: Task) {
-        editingTask                      = task
-        editingCalendarEvent             = null
-        editingCalendarEventScheduleOnly = false
-        formFolderId                     = task.folderId
-        formParentId                     = task.parentId
-        showForm                         = true
+        editingTask = task; editingCalendarEvent = null; editingCalendarEventScheduleOnly = false
+        formFolderId = task.folderId; formParentId = task.parentId; showForm = true
     }
     fun openEditEvent(event: CalendarEvent) {
-        editingTask                      = null
-        editingCalendarEvent             = event
-        editingCalendarEventScheduleOnly = false
-        showForm                         = true
+        editingTask = null; editingCalendarEvent = event; editingCalendarEventScheduleOnly = false
+        showForm = true
     }
     fun openEditEventSchedule(event: CalendarEvent) {
-        editingTask                      = null
-        editingCalendarEvent             = event
-        editingCalendarEventScheduleOnly = true
-        showForm                         = true
+        editingTask = null; editingCalendarEvent = event; editingCalendarEventScheduleOnly = true
+        showForm = true
     }
     fun openAddSubtask(parent: Task) {
-        editingTask                      = null
-        editingCalendarEvent             = null
-        editingCalendarEventScheduleOnly = false
-        formFolderId                     = parent.folderId
-        formParentId                     = parent.id
-        showForm                         = true
+        editingTask = null; editingCalendarEvent = null; editingCalendarEventScheduleOnly = false
+        formFolderId = parent.folderId; formParentId = parent.id; showForm = true
     }
 
     // ── Deeplink handling ─────────────────────────────────────────────────────
@@ -181,59 +152,49 @@ fun MainScreen(
             uri.startsWith("stlertasks://task/") -> {
                 val taskId = uri.removePrefix("stlertasks://task/").trimEnd('/')
                 if (taskId.isNotBlank()) {
-                    val allPending = viewModel.allTasksForDeepLink.first()
-                    val task = allPending.find { it.id == taskId }
+                    val task = viewModel.allTasksForDeepLink.first().find { it.id == taskId }
                     if (task != null) openEdit(task)
                 }
                 onDeepLinkConsumed()
             }
             uri.startsWith("stlertasks://event/") -> {
-                val path  = uri.removePrefix("stlertasks://event/")
+                val path = uri.removePrefix("stlertasks://event/")
                 val slash = path.indexOf('/')
                 if (slash > 0) {
                     val eventId = path.substring(slash + 1).trimEnd('/')
                     if (eventId.isNotBlank()) {
-                        val allEvents = withTimeoutOrNull(2_000L) {
+                        val event = withTimeoutOrNull(2_000L) {
                             viewModel.allEventsForDeepLink.first()
-                        } ?: emptyList()
-                        val event = allEvents.find { it.id == eventId }
+                        }?.find { it.id == eventId }
                         if (event != null) openEditEvent(event)
                     }
                 }
                 onDeepLinkConsumed()
             }
             uri.startsWith("stlertasks://create") -> {
-                val folderId = Uri.parse(uri).getQueryParameter("folderId") ?: "fld-inbox"
-                openCreate(folderId)
+                openCreate(Uri.parse(uri).getQueryParameter("folderId") ?: "fld-inbox")
                 onDeepLinkConsumed()
             }
             uri == "stlertasks://upcoming" -> {
                 val cr = navController.currentBackStackEntry?.destination?.route
                 if (cr != Screen.UPCOMING) {
                     val popped = navController.popBackStack(Screen.UPCOMING, inclusive = false)
-                    if (!popped) {
-                        navController.navigate(Screen.UPCOMING) {
-                            popUpTo(navController.graph.startDestinationId)
-                            launchSingleTop = true
-                        }
+                    if (!popped) navController.navigate(Screen.UPCOMING) {
+                        popUpTo(navController.graph.startDestinationId); launchSingleTop = true
                     }
                 }
                 onDeepLinkConsumed()
             }
             uri == "stlertasks://all_tasks" -> {
                 navController.navigate(Screen.ALL_TASKS) {
-                    popUpTo(navController.graph.startDestinationId)
-                    launchSingleTop = true
+                    popUpTo(navController.graph.startDestinationId); launchSingleTop = true
                 }
                 onDeepLinkConsumed()
             }
             uri.startsWith("stlertasks://folder/") -> {
                 val folderId = uri.removePrefix("stlertasks://folder/").trimEnd('/')
-                if (folderId.isNotBlank()) {
-                    navController.navigate(Screen.folderRoute(folderId)) {
-                        popUpTo(navController.graph.startDestinationId)
-                        launchSingleTop = true
-                    }
+                if (folderId.isNotBlank()) navController.navigate(Screen.folderRoute(folderId)) {
+                    popUpTo(navController.graph.startDestinationId); launchSingleTop = true
                 }
                 onDeepLinkConsumed()
             }
@@ -245,89 +206,68 @@ fun MainScreen(
 
     fun handleFormResult(result: TaskFormResult) {
         val et = editingTask
-        if (et != null) formViewModel.updateTask(et, result)
-        else            formViewModel.createTask(result)
+        if (et != null) formViewModel.updateTask(et, result) else formViewModel.createTask(result)
         showForm = false
     }
 
-    // Top-level tab navigation — saves & restores per-tab back stacks
     fun navigateTo(route: String) {
         navController.navigate(route) {
-            popUpTo(navController.graph.startDestinationId) {
-                saveState = true
-            }
+            popUpTo(navController.graph.startDestinationId) { saveState = true }
             launchSingleTop = true
             restoreState    = true
         }
         scope.launch { drawerState.close() }
     }
 
-    // ── UI ────────────────────────────────────────────────────────────────────
-
-    CompositionLocalProvider(LocalSnackbarHostState provides snackbarHostState) {
-    ModalNavigationDrawer(
-        drawerState     = drawerState,
-        gesturesEnabled = !isBottomNav,
-        drawerContent   = {
-            if (!isBottomNav) {
-                SidebarMenu(
-                    currentRoute      = currentRoute,
-                    currentFolderId   = currentFolderId,
-                    currentCalendarId = currentCalendarId,
-                    folders           = folders,
-                    selectedCalendars = selectedCalendars,
-                    featureFlags      = featureFlags,
-                    sidebarState      = sidebarState,
-                    onNavigate        = ::navigateTo,
-                    onToggleSection   = viewModel::toggleSection,
-                    onAddTask         = { openCreate(sidebarFolderContext); scope.launch { drawerState.close() } },
-                )
-            }
-        },
-    ) {
+    // ── Shared Scaffold + NavHost (used in both nav modes) ────────────────────
+    val mainContent: @Composable () -> Unit = {
         Scaffold(
             topBar = {
                 TasksTopAppBar(
-                    title        = screenTitle,
-                    syncState    = syncState,
-                    onSyncClick  = viewModel::triggerSync,
-                    onMenuClick  = if (!isBottomNav) { { scope.launch { drawerState.open() } } } else null,
-                    userName     = authData.userName,
-                    userEmail    = authData.userEmail,
+                    title         = screenTitle,
+                    syncState     = syncState,
+                    onSyncClick   = viewModel::triggerSync,
+                    onBackClick   = if (isBottomNav && (currentRoute == Screen.FOLDER || currentRoute == Screen.CALENDAR)) {
+                        { navController.popBackStack() }
+                    } else null,
+                    onMenuClick   = if (!isBottomNav) { { scope.launch { drawerState.open() } } } else null,
+                    userName      = authData.userName,
+                    userEmail     = authData.userEmail,
                     userAvatarUrl = authData.userAvatarUrl,
-                    onSignOut    = if (!isBottomNav) onSignOut else null,
-                    onNavigateToSettings = { showSettings = true },
-                    onNavigateToHelp     = { showHelp = true },
-                    onNavigateToFeedback = { showFeedback = true },
+                    onSignOut     = if (!isBottomNav) onSignOut else null,
+                    onNavigateToSettings = { pushOverlay("settings") },
+                    onNavigateToHelp     = { pushOverlay("help") },
+                    onNavigateToFeedback = { pushOverlay("feedback") },
+                    onNavigateToAbout    = { pushOverlay("about") },
                 )
             },
             bottomBar = {
                 if (isBottomNav) {
                     NavigationBar {
                         NavigationBarItem(
-                            icon     = { Icon(Icons.Outlined.CalendarToday, contentDescription = null) },
-                            label    = { Text("Upcoming") },
+                            icon     = { Icon(Icons.Outlined.CalendarToday, null) },
+                            label    = null,
                             selected = currentRoute == Screen.UPCOMING,
                             onClick  = { navigateTo(Screen.UPCOMING) },
                         )
                         NavigationBarItem(
-                            icon     = { Icon(Icons.Outlined.FormatListBulleted, contentDescription = null) },
-                            label    = { Text("All Tasks") },
+                            icon     = { Icon(Icons.Outlined.FormatListBulleted, null) },
+                            label    = null,
                             selected = currentRoute == Screen.ALL_TASKS,
                             onClick  = { navigateTo(Screen.ALL_TASKS) },
                         )
                         if (featureFlags.foldersEnabled) {
                             NavigationBarItem(
-                                icon     = { Icon(Icons.Outlined.Folder, contentDescription = null) },
-                                label    = { Text("Folders") },
+                                icon     = { Icon(Icons.Outlined.Folder, null) },
+                                label    = null,
                                 selected = currentRoute == Screen.FOLDERS_LIST || currentRoute == Screen.FOLDER,
                                 onClick  = { navigateTo(Screen.FOLDERS_LIST) },
                             )
                         }
                         if (featureFlags.calendarsEnabled && selectedCalendars.isNotEmpty()) {
                             NavigationBarItem(
-                                icon     = { Icon(Icons.Outlined.CalendarMonth, contentDescription = null) },
-                                label    = { Text("Calendars") },
+                                icon     = { Icon(Icons.Outlined.CalendarMonth, null) },
+                                label    = null,
                                 selected = currentRoute == Screen.CALENDARS_LIST || currentRoute == Screen.CALENDAR,
                                 onClick  = { navigateTo(Screen.CALENDARS_LIST) },
                             )
@@ -341,10 +281,10 @@ fun MainScreen(
                                         modifier           = Modifier.size(26.dp).clip(CircleShape),
                                     )
                                 } else {
-                                    Icon(Icons.Outlined.AccountCircle, contentDescription = null)
+                                    Icon(Icons.Outlined.AccountCircle, null)
                                 }
                             },
-                            label    = { Text("Menu") },
+                            label    = null,
                             selected = currentRoute == Screen.MENU_SCREEN,
                             onClick  = { navigateTo(Screen.MENU_SCREEN) },
                         )
@@ -381,10 +321,10 @@ fun MainScreen(
             ) {
                 composable(Screen.UPCOMING) {
                     UpcomingScreen(
-                        onEditTask           = { openEdit(it) },
-                        onAddSubtask         = { openAddSubtask(it) },
-                        onEditEvent          = { openEditEvent(it) },
-                        onEditEventSchedule  = { openEditEventSchedule(it) },
+                        onEditTask          = { openEdit(it) },
+                        onAddSubtask        = { openAddSubtask(it) },
+                        onEditEvent         = { openEditEvent(it) },
+                        onEditEventSchedule = { openEditEventSchedule(it) },
                     )
                 }
                 composable(Screen.ALL_TASKS) {
@@ -399,27 +339,22 @@ fun MainScreen(
                     FoldersListScreen(
                         folders            = folders,
                         featureFlags       = featureFlags,
-                        onNavigateToFolder = { folderId ->
-                            navController.navigate(Screen.folderRoute(folderId))
-                        },
+                        onNavigateToFolder = { navController.navigate(Screen.folderRoute(it)) },
                     )
                 }
                 composable(Screen.CALENDARS_LIST) {
                     CalendarsListScreen(
                         calendars            = selectedCalendars,
-                        onNavigateToCalendar = { calendarId ->
-                            navController.navigate(Screen.calendarRoute(calendarId))
-                        },
+                        onNavigateToCalendar = { navController.navigate(Screen.calendarRoute(it)) },
                     )
                 }
                 composable(Screen.MENU_SCREEN) {
                     MenuScreen(
                         authData             = authData,
-                        syncState            = syncState,
-                        onSyncClick          = viewModel::triggerSync,
-                        onNavigateToSettings = { showSettings = true },
-                        onNavigateToHelp     = { showHelp = true },
-                        onNavigateToFeedback = { showFeedback = true },
+                        onNavigateToSettings = { pushOverlay("settings") },
+                        onNavigateToHelp     = { pushOverlay("help") },
+                        onNavigateToFeedback = { pushOverlay("feedback") },
+                        onNavigateToAbout    = { pushOverlay("about") },
                         onSignOut            = onSignOut,
                     )
                 }
@@ -449,25 +384,60 @@ fun MainScreen(
         }
     }
 
-    // ── Task / Event form sheet ───────────────────────────────────────────────
-    if (showForm) {
-        TaskFormSheet(
-            task              = editingTask,
-            calendarEvent     = editingCalendarEvent,
-            scheduleOnly      = editingCalendarEventScheduleOnly,
-            initialFolderId   = formFolderId,
-            initialParentId   = formParentId,
-            initialCalendarId = formInitialCalendarId,
-            labels            = labels,
-            folders           = folders,
-            onConfirm         = { handleFormResult(it) },
-            onDismiss         = {
-                showForm                         = false
-                editingCalendarEvent             = null
-                editingCalendarEventScheduleOnly = false
-                formInitialCalendarId            = null
-            },
-        )
+    // ── UI ────────────────────────────────────────────────────────────────────
+
+    CompositionLocalProvider(LocalSnackbarHostState provides snackbarHostState) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (!isBottomNav) {
+                ModalNavigationDrawer(
+                    drawerState   = drawerState,
+                    drawerContent = {
+                        SidebarMenu(
+                            currentRoute      = currentRoute,
+                            currentFolderId   = currentFolderId,
+                            currentCalendarId = currentCalendarId,
+                            folders           = folders,
+                            selectedCalendars = selectedCalendars,
+                            featureFlags      = featureFlags,
+                            sidebarState      = sidebarState,
+                            onNavigate        = ::navigateTo,
+                            onToggleSection   = viewModel::toggleSection,
+                            onAddTask         = { openCreate(sidebarFolderContext); scope.launch { drawerState.close() } },
+                        )
+                    },
+                    content = mainContent,
+                )
+            } else {
+                mainContent()
+            }
+
+            // Overlay screens rendered on top — NavHost stays in composition so back stack survives
+            when (currentOverlay) {
+                "settings" -> SettingsScreen(onNavigateBack = ::popOverlay)
+                "help"     -> HelpScreen    (onNavigateBack = ::popOverlay)
+                "feedback" -> FeedbackScreen(onNavigateBack = ::popOverlay)
+                "about"    -> AboutScreen   (onNavigateBack = ::popOverlay)
+            }
+        }
+
+        if (showForm) {
+            TaskFormSheet(
+                task              = editingTask,
+                calendarEvent     = editingCalendarEvent,
+                scheduleOnly      = editingCalendarEventScheduleOnly,
+                initialFolderId   = formFolderId,
+                initialParentId   = formParentId,
+                initialCalendarId = formInitialCalendarId,
+                labels            = labels,
+                folders           = folders,
+                onConfirm         = { handleFormResult(it) },
+                onDismiss         = {
+                    showForm = false
+                    editingCalendarEvent             = null
+                    editingCalendarEventScheduleOnly = false
+                    formInitialCalendarId            = null
+                },
+            )
+        }
     }
-    } // end CompositionLocalProvider(LocalSnackbarHostState)
 }

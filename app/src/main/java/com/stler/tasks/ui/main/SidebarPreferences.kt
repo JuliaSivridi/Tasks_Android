@@ -35,7 +35,7 @@ class SidebarPreferences @Inject constructor(
         )
     }
 
-    val navMode: Flow<String> = context.sidebarDataStore.data.map { it[NAV_MODE] ?: "sidebar" }
+    val navMode: Flow<String> = context.sidebarDataStore.data.map { it[NAV_MODE] ?: "bottom" }
 
     suspend fun toggleSection(section: String) {
         context.sidebarDataStore.edit { prefs ->

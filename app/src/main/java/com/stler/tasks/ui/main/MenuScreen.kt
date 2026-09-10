@@ -1,11 +1,5 @@
 package com.stler.tasks.ui.main
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -23,52 +17,32 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.CloudDone
-import androidx.compose.material.icons.outlined.CloudUpload
 import androidx.compose.material.icons.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Message
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Sync
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.stler.tasks.auth.AuthData
-import com.stler.tasks.sync.SyncState
 
 @Composable
 fun MenuScreen(
     authData             : AuthData,
-    syncState            : SyncState,
-    onSyncClick          : () -> Unit,
     onNavigateToSettings : () -> Unit,
     onNavigateToHelp     : () -> Unit,
     onNavigateToFeedback : () -> Unit,
+    onNavigateToAbout    : () -> Unit,
     onSignOut            : () -> Unit,
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "sync")
-    val syncRotation by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue  = 360f,
-        animationSpec = infiniteRepeatable(
-            animation  = tween(durationMillis = 1_000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "syncRotation",
-    )
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -110,67 +84,14 @@ fun MenuScreen(
 
         HorizontalDivider()
 
-        // ── Sync ───────────────────────────────────────────────────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onSyncClick)
-                .padding(horizontal = 20.dp)
-                .heightIn(min = 56.dp),
-            verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            val iconTint = MaterialTheme.colorScheme.onSurfaceVariant
-            when (syncState) {
-                SyncState.Idle -> Icon(
-                    imageVector        = Icons.Outlined.CloudDone,
-                    contentDescription = "Synced",
-                    tint               = iconTint,
-                    modifier           = Modifier.size(24.dp),
-                )
-                is SyncState.Pending -> BadgedBox(
-                    badge = {
-                        Badge(containerColor = Color.Transparent, contentColor = iconTint) {
-                            Text("${syncState.count}", style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                ) {
-                    Icon(
-                        imageVector        = Icons.Outlined.CloudUpload,
-                        contentDescription = "Sync pending",
-                        tint               = iconTint,
-                        modifier           = Modifier.size(24.dp),
-                    )
-                }
-                SyncState.Syncing -> Icon(
-                    imageVector        = Icons.Outlined.Sync,
-                    contentDescription = "Syncing…",
-                    modifier           = Modifier.size(24.dp).rotate(syncRotation),
-                    tint               = iconTint,
-                )
-            }
-            Column {
-                Text("Sync", style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text  = when (syncState) {
-                        SyncState.Idle       -> "Up to date"
-                        is SyncState.Pending -> "${syncState.count} pending"
-                        SyncState.Syncing    -> "Syncing…"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        HorizontalDivider()
-
         // ── Menu items ─────────────────────────────────────────────────────────
-        MenuRow(icon = Icons.Outlined.Settings,        label = "Settings", onClick = onNavigateToSettings)
+        MenuRow(icon = Icons.Outlined.Settings,    label = "Settings", onClick = onNavigateToSettings)
         HorizontalDivider()
-        MenuRow(icon = Icons.Outlined.HelpOutline,     label = "Help",     onClick = onNavigateToHelp)
+        MenuRow(icon = Icons.Outlined.HelpOutline, label = "Help",     onClick = onNavigateToHelp)
         HorizontalDivider()
-        MenuRow(icon = Icons.Outlined.Message,         label = "Feedback", onClick = onNavigateToFeedback)
+        MenuRow(icon = Icons.Outlined.Message,     label = "Feedback", onClick = onNavigateToFeedback)
+        HorizontalDivider()
+        MenuRow(icon = Icons.Outlined.Info,        label = "About",    onClick = onNavigateToAbout)
         HorizontalDivider()
         MenuRow(
             icon          = Icons.AutoMirrored.Outlined.Logout,

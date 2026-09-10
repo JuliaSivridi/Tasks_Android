@@ -32,13 +32,14 @@ A native Android task manager — the companion app to [Stler Tasks PWA](https:/
 - Each feature area (Folders, Labels, Priorities, Calendars) can be individually toggled on/off in Settings
 - All task data is preserved regardless of toggle state — turning a feature back on restores full visibility instantly
 - Folders and Labels are managed directly in Settings (create, rename, delete)
+- **Navigation style** — switch between bottom navigation bar and classic sidebar drawer in Settings; preference is persisted
 
 **👁️ Views**
 - **Upcoming** — tasks + calendar events grouped by day with a scrollable week strip; overdue section at the top
-- **All Tasks** — flat list of all pending tasks and calendar events, interleaved by date and priority
+- **All Tasks / Done** — segmented toggle between active tasks and completed archive
 - **Folder** — dedicated task list per folder with drag-to-reorder
 - **Calendar** — event list for each connected calendar
-- **Completed** — archive of done tasks with one-tap restore
+- **Folders list / Calendars list** — top-level navigation screens in bottom bar mode
 
 **⏰ Deadlines**
 - Color-coded by urgency: overdue · today · tomorrow · this week · future
@@ -93,13 +94,14 @@ A native Android task manager — the companion app to [Stler Tasks PWA](https:/
 
 ```
 ui/
-  main/        — Navigation drawer, top bar, main scaffold, FAB
+  main/        — MainScreen (NavHost, bottom nav / drawer), TasksTopAppBar, SidebarMenu
+               — MenuScreen, FoldersListScreen, CalendarsListScreen, AboutScreen
   upcoming/    — Week strip + day-grouped task list
-  alltasks/    — Flat task list with priority / label / folder / calendar filters
+  alltasks/    — ActiveTasksScreen (Active/Done toggle), AllTasksScreen, FilterBar
   folder/      — Hierarchical task list with drag-to-reorder
   calendar/    — Event list per calendar
   completed/   — Completed tasks with restore / delete
-  settings/    — Feature toggles, spreadsheet picker, folder/label/calendar management
+  settings/    — Nav mode toggle, feature toggles, spreadsheet picker, folder/label/calendar management
   task/        — TaskItem, TaskFormSheet, DeadlinePickerDialog, pickers
   theme/       — Color palette, Typography, Theme
 data/

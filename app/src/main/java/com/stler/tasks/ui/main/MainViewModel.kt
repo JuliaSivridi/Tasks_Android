@@ -61,7 +61,7 @@ class MainViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SidebarState())
 
     val navMode: StateFlow<String> = sidebarPreferences.navMode
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "sidebar")
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "bottom")
 
     // ── Calendars ─────────────────────────────────────────────────────────
 

@@ -49,7 +49,7 @@ class SettingsViewModel @Inject constructor(
     // ── Navigation mode ───────────────────────────────────────────────────
 
     val navMode: StateFlow<String> = sidebarPreferences.navMode
-        .stateIn(viewModelScope, SharingStarted.Eagerly, "sidebar")
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "bottom")
 
     fun setNavMode(mode: String) {
         viewModelScope.launch { sidebarPreferences.setNavMode(mode) }
