@@ -48,12 +48,12 @@ import com.stler.tasks.sync.SyncState
 fun TasksTopAppBar(
     title: String,
     syncState: SyncState,
-    userName: String,
-    userEmail: String,
-    userAvatarUrl: String,
-    onMenuClick: () -> Unit,
     onSyncClick: () -> Unit,
-    onSignOut: () -> Unit,
+    onMenuClick: (() -> Unit)? = null,
+    userName: String = "",
+    userEmail: String = "",
+    userAvatarUrl: String = "",
+    onSignOut: (() -> Unit)? = null,
     onNavigateToSettings: () -> Unit = {},
     onNavigateToHelp: () -> Unit = {},
     onNavigateToFeedback: () -> Unit = {},
@@ -74,8 +74,10 @@ fun TasksTopAppBar(
     TopAppBar(
         title = { Text(title) },
         navigationIcon = {
-            IconButton(onClick = onMenuClick) {
-                Icon(Icons.Outlined.Menu, contentDescription = "Open menu")
+            if (onMenuClick != null) {
+                IconButton(onClick = onMenuClick) {
+                    Icon(Icons.Outlined.Menu, contentDescription = "Open menu")
+                }
             }
         },
         actions = {
@@ -119,8 +121,8 @@ fun TasksTopAppBar(
                 }
             }
 
-            // Avatar → user dropdown
-            Box {
+            // Avatar → user dropdown (only in sidebar mode)
+            if (onSignOut != null) Box {
                 IconButton(onClick = { showUserMenu = true }) {
                     if (userAvatarUrl.isNotBlank()) {
                         AsyncImage(
@@ -171,7 +173,7 @@ fun TasksTopAppBar(
                     )
                     DropdownMenuItem(
                         text = { Text("Sign out", color = MaterialTheme.colorScheme.error) },
-                        onClick = { showUserMenu = false; onSignOut() },
+                        onClick = { showUserMenu = false; onSignOut!!() },
                         leadingIcon = {
                             Icon(
                                 Icons.AutoMirrored.Outlined.Logout,

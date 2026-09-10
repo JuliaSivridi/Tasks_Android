@@ -60,6 +60,9 @@ class MainViewModel @Inject constructor(
     val sidebarState: StateFlow<SidebarState> = sidebarPreferences.sidebarState
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SidebarState())
 
+    val navMode: StateFlow<String> = sidebarPreferences.navMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "sidebar")
+
     // ── Calendars ─────────────────────────────────────────────────────────
 
     /** In-memory cache of the full calendar list (loaded once on init if needed). */

@@ -3,6 +3,7 @@ package com.stler.tasks.ui.main
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -24,6 +25,7 @@ class SidebarPreferences @Inject constructor(
     companion object {
         private val FOLDERS_OPEN   = booleanPreferencesKey("folders_open")
         private val CALENDARS_OPEN = booleanPreferencesKey("calendars_open")
+        private val NAV_MODE       = stringPreferencesKey("nav_mode")
     }
 
     val sidebarState: Flow<SidebarState> = context.sidebarDataStore.data.map { prefs ->
@@ -33,6 +35,8 @@ class SidebarPreferences @Inject constructor(
         )
     }
 
+    val navMode: Flow<String> = context.sidebarDataStore.data.map { it[NAV_MODE] ?: "sidebar" }
+
     suspend fun toggleSection(section: String) {
         context.sidebarDataStore.edit { prefs ->
             when (section) {
@@ -40,5 +44,9 @@ class SidebarPreferences @Inject constructor(
                 "calendars" -> prefs[CALENDARS_OPEN] = !(prefs[CALENDARS_OPEN] ?: true)
             }
         }
+    }
+
+    suspend fun setNavMode(mode: String) {
+        context.sidebarDataStore.edit { it[NAV_MODE] = mode }
     }
 }
