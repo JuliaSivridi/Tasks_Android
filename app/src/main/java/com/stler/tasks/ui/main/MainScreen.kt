@@ -43,7 +43,11 @@ import coil.compose.AsyncImage
 import com.stler.tasks.domain.model.CalendarEvent
 import com.stler.tasks.domain.model.Task
 import com.stler.tasks.ui.alltasks.ActiveTasksScreen
+import com.stler.tasks.ui.alltasks.AllTasksViewModel
+import com.stler.tasks.ui.alltasks.TaskFilterSheet
+import com.stler.tasks.ui.alltasks.TaskFilterState
 import com.stler.tasks.ui.calendar.CalendarScreen
+import com.stler.tasks.ui.completed.CompletedViewModel
 import com.stler.tasks.ui.feedback.FeedbackScreen
 import com.stler.tasks.ui.folder.FolderScreen
 import com.stler.tasks.ui.help.HelpScreen
@@ -53,6 +57,7 @@ import com.stler.tasks.ui.task.TaskFormResult
 import com.stler.tasks.ui.task.TaskFormSheet
 import com.stler.tasks.ui.task.TaskFormViewModel
 import com.stler.tasks.ui.upcoming.UpcomingScreen
+import com.stler.tasks.ui.upcoming.UpcomingViewModel
 import com.stler.tasks.ui.util.LocalSnackbarHostState
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -77,6 +82,9 @@ fun MainScreen(
     val navController     = rememberNavController()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // ── Filter sheet ──────────────────────────────────────────────────────
+    var showFilterSheet by remember { mutableStateOf(false) }
+
     val folders           by viewModel.folders.collectAsStateWithLifecycle()
     val labels            by viewModel.labels.collectAsStateWithLifecycle()
     val syncState         by viewModel.syncState.collectAsStateWithLifecycle()
@@ -88,6 +96,25 @@ fun MainScreen(
     val currentRoute      = backStackEntry?.destination?.route
     val currentFolderId   = backStackEntry?.arguments?.getString("folderId")
     val currentCalendarId = backStackEntry?.arguments?.getString("calendarId")
+
+    // Sub-screen ViewModels for the filter sheet (same instances as the screens use).
+    // Conditional calls mirror Money's MainScreen pattern.
+    val upcomingVm  : UpcomingViewModel?  =
+        if (currentRoute == Screen.UPCOMING   && backStackEntry != null) hiltViewModel(backStackEntry!!) else null
+    val allTasksVm  : AllTasksViewModel?  =
+        if (currentRoute == Screen.ALL_TASKS  && backStackEntry != null) hiltViewModel(backStackEntry!!) else null
+    val completedVm : CompletedViewModel? =
+        if (currentRoute == Screen.ALL_TASKS  && backStackEntry != null) hiltViewModel(backStackEntry!!) else null
+
+    val upcomingFilterState  by remember(upcomingVm)  { upcomingVm?.filterState  ?: kotlinx.coroutines.flow.MutableStateFlow(TaskFilterState()) }.collectAsStateWithLifecycle()
+    val allTasksFilterState  by remember(allTasksVm)  { allTasksVm?.filterState  ?: kotlinx.coroutines.flow.MutableStateFlow(TaskFilterState()) }.collectAsStateWithLifecycle()
+
+    val currentFilterState = when (currentRoute) {
+        Screen.UPCOMING  -> upcomingFilterState
+        Screen.ALL_TASKS -> allTasksFilterState
+        else             -> TaskFilterState()
+    }
+    val filterActive = currentFilterState.hasFilters
 
     val screenTitle = when {
         currentRoute == Screen.UPCOMING       -> "Upcoming"
@@ -216,11 +243,15 @@ fun MainScreen(
             Scaffold(
             topBar = {
                 TasksTopAppBar(
-                    title       = screenTitle,
-                    syncState   = syncState,
-                    onSyncClick = viewModel::triggerSync,
-                    onBackClick = if (currentRoute == Screen.FOLDER || currentRoute == Screen.CALENDAR) {
+                    title         = screenTitle,
+                    syncState     = syncState,
+                    onSyncClick   = viewModel::triggerSync,
+                    onBackClick   = if (currentRoute == Screen.FOLDER || currentRoute == Screen.CALENDAR) {
                         { navController.popBackStack() }
+                    } else null,
+                    filterActive  = filterActive,
+                    onFilterClick = if (currentRoute == Screen.UPCOMING || currentRoute == Screen.ALL_TASKS) {
+                        { showFilterSheet = true }
                     } else null,
                 )
             },
@@ -371,6 +402,42 @@ fun MainScreen(
                 "feedback" -> FeedbackScreen(onNavigateBack = ::popOverlay)
                 "about"    -> AboutScreen   (onNavigateBack = ::popOverlay)
             }
+        }
+
+        if (showFilterSheet) {
+            TaskFilterSheet(
+                filterState      = currentFilterState,
+                labels           = labels,
+                folders          = folders,
+                calendars        = selectedCalendars,
+                featureFlags     = featureFlags,
+                showCalendars    = currentRoute != Screen.ALL_TASKS || selectedCalendars.isNotEmpty(),
+                onTogglePriority = { p ->
+                    upcomingVm?.togglePriorityFilter(p)
+                    allTasksVm?.togglePriorityFilter(p)
+                    completedVm?.togglePriorityFilter(p)
+                },
+                onToggleLabel    = { id ->
+                    upcomingVm?.toggleLabelFilter(id)
+                    allTasksVm?.toggleLabelFilter(id)
+                    completedVm?.toggleLabelFilter(id)
+                },
+                onToggleFolder   = { id ->
+                    upcomingVm?.toggleFolderFilter(id)
+                    allTasksVm?.toggleFolderFilter(id)
+                    completedVm?.toggleFolderFilter(id)
+                },
+                onToggleCalendar = { id ->
+                    upcomingVm?.toggleCalendarFilter(id)
+                    allTasksVm?.toggleCalendarFilter(id)
+                },
+                onClearAll       = {
+                    upcomingVm?.clearAllFilters()
+                    allTasksVm?.clearAllFilters()
+                    completedVm?.clearAllFilters()
+                },
+                onDismiss        = { showFilterSheet = false },
+            )
         }
 
         if (showForm) {

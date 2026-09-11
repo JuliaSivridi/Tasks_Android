@@ -11,47 +11,28 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.Flag
-import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FormatListBulleted
-import androidx.compose.material.icons.outlined.Label
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import com.stler.tasks.ui.common.PillChip
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.stler.tasks.domain.model.CalendarItem
-import com.stler.tasks.domain.model.Folder
-import com.stler.tasks.domain.model.Label
 import com.stler.tasks.domain.model.ListItem
-import com.stler.tasks.domain.model.Priority
 import com.stler.tasks.ui.calendar.CalendarEventItem
 import com.stler.tasks.ui.task.TaskItem
 import com.stler.tasks.ui.util.EmptyState
 import com.stler.tasks.ui.util.ErrorSnackbarEffect
 import com.stler.tasks.ui.util.ShimmerTaskList
-import com.stler.tasks.ui.task.priorityColor
-import com.stler.tasks.util.toComposeColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,11 +47,6 @@ fun AllTasksScreen(
     val isLoading          by viewModel.isLoading.collectAsStateWithLifecycle()
     val labels             by viewModel.labels.collectAsStateWithLifecycle()
     val folders            by viewModel.folders.collectAsStateWithLifecycle()
-    val priorityFilter     by viewModel.priorityFilter.collectAsStateWithLifecycle()
-    val labelFilter        by viewModel.labelFilter.collectAsStateWithLifecycle()
-    val folderFilter       by viewModel.folderFilter.collectAsStateWithLifecycle()
-    val calendarFilter     by viewModel.calendarFilter.collectAsStateWithLifecycle()
-    val calendarsInEvents  by viewModel.calendarsInEvents.collectAsStateWithLifecycle()
     val featureFlags       by viewModel.featureFlags.collectAsStateWithLifecycle()
 
     ErrorSnackbarEffect(viewModel)
@@ -107,21 +83,6 @@ fun AllTasksScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        FilterBar(
-            labels           = labels,
-            folders          = folders,
-            priorityFilter   = priorityFilter,
-            labelFilter      = labelFilter,
-            folderFilter     = folderFilter,
-            calendars        = calendarsInEvents,
-            calendarFilter   = calendarFilter,
-            featureFlags     = featureFlags,
-            onTogglePriority = { viewModel.togglePriorityFilter(it) },
-            onToggleLabel    = { viewModel.toggleLabelFilter(it) },
-            onToggleFolder   = { viewModel.toggleFolderFilter(it) },
-            onToggleCalendar = { viewModel.toggleCalendarFilter(it) },
-            onClearAll       = { viewModel.clearAllFilters() },
-        )
         when {
             isLoading -> ShimmerTaskList(modifier = Modifier.fillMaxSize())
             filteredItems.isEmpty() -> EmptyState(
@@ -180,185 +141,3 @@ fun AllTasksScreen(
     }
 }
 
-/**
- * Compact filter bar: three icon-only chips, each opening its own multi-select dropdown.
- *
- *   [✕]  [🚩]  [🏷]  [📁]
- *
- * When a filter is active the chip renders selected (filled background) and shows
- * a small count badge in the label slot — no long text, so the row never wraps.
- * The [✕] reset button is visible only when at least one filter is active.
- *
- * Parameters [showLabelFilter] / [showFolderFilter] hide the respective chip when
- * not relevant (e.g. LabelScreen hides the label chip, FolderScreen hides folder chip).
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun FilterBar(
-    labels          : List<Label>,
-    folders         : List<Folder> = emptyList(),
-    priorityFilter  : Set<Priority>,
-    labelFilter     : Set<String>,
-    folderFilter    : Set<String> = emptySet(),
-    calendars       : List<CalendarItem> = emptyList(),
-    calendarFilter  : Set<String> = emptySet(),
-    featureFlags    : com.stler.tasks.auth.FeatureFlags = com.stler.tasks.auth.FeatureFlags(),
-    onTogglePriority: (Priority) -> Unit,
-    onToggleLabel   : (String) -> Unit,
-    onToggleFolder  : (String) -> Unit = {},
-    onToggleCalendar: (String) -> Unit = {},
-    onClearAll      : () -> Unit = {},
-    showLabelFilter : Boolean = true,
-    showFolderFilter: Boolean = true,
-) {
-    val hasFilters = priorityFilter.isNotEmpty() || labelFilter.isNotEmpty() ||
-        folderFilter.isNotEmpty() || calendarFilter.isNotEmpty()
-
-    var priorityExpanded  by remember { mutableStateOf(false) }
-    var labelsExpanded    by remember { mutableStateOf(false) }
-    var foldersExpanded   by remember { mutableStateOf(false) }
-    var calendarsExpanded by remember { mutableStateOf(false) }
-
-    Row(
-        modifier              = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment     = Alignment.CenterVertically,
-    ) {
-
-        // ── Clear-all button — visible only when a filter is active ───────
-        if (hasFilters) {
-            IconButton(onClick = onClearAll, modifier = Modifier.size(32.dp)) {
-                Icon(
-                    imageVector = Icons.Outlined.Close,
-                    contentDescription = "Clear all filters",
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        // ── Priority chip ─────────────────────────────────────────────────
-        if (featureFlags.prioritiesEnabled) Box {
-            PillChip(
-                selected      = priorityFilter.isNotEmpty(),
-                onClick       = { priorityExpanded = true },
-                label         = if (priorityFilter.isNotEmpty()) priorityFilter.size.toString() else "",
-                leadingContent = { Icon(Icons.Outlined.Flag, null, Modifier.size(16.dp)) },
-            )
-            DropdownMenu(
-                expanded         = priorityExpanded,
-                onDismissRequest = { priorityExpanded = false },
-            ) {
-                listOf(Priority.URGENT to "Urgent", Priority.IMPORTANT to "Important", Priority.NORMAL to "Normal")
-                    .forEach { (p, name) ->
-                        val active = p in priorityFilter
-                        DropdownMenuItem(
-                            text         = { Text(name) },
-                            onClick      = { onTogglePriority(p) },
-                            leadingIcon  = {
-                                Icon(Icons.Outlined.Flag, null,
-                                    tint = priorityColor(p), modifier = Modifier.size(16.dp))
-                            },
-                            trailingIcon = if (active) ({
-                                Icon(Icons.Outlined.Check, null, modifier = Modifier.size(16.dp))
-                            }) else null,
-                        )
-                    }
-            }
-        }
-
-        // ── Labels chip ───────────────────────────────────────────────────
-        if (featureFlags.labelsEnabled && showLabelFilter && labels.isNotEmpty()) {
-            Box {
-                PillChip(
-                    selected      = labelFilter.isNotEmpty(),
-                    onClick       = { labelsExpanded = true },
-                    label         = if (labelFilter.isNotEmpty()) labelFilter.size.toString() else "",
-                    leadingContent = { Icon(Icons.Outlined.Label, null, Modifier.size(16.dp)) },
-                )
-                DropdownMenu(
-                    expanded         = labelsExpanded,
-                    onDismissRequest = { labelsExpanded = false },
-                ) {
-                    labels.forEach { lbl ->
-                        val active = lbl.id in labelFilter
-                        DropdownMenuItem(
-                            text         = { Text(lbl.name, color = lbl.color.toComposeColor()) },
-                            onClick      = { onToggleLabel(lbl.id) },
-                            leadingIcon  = {
-                                Icon(Icons.Outlined.Label, null,
-                                    tint = lbl.color.toComposeColor(), modifier = Modifier.size(16.dp))
-                            },
-                            trailingIcon = if (active) ({
-                                Icon(Icons.Outlined.Check, null, modifier = Modifier.size(16.dp))
-                            }) else null,
-                        )
-                    }
-                }
-            }
-        }
-
-        // ── Folders chip ──────────────────────────────────────────────────
-        if (featureFlags.foldersEnabled && showFolderFilter && folders.isNotEmpty()) {
-            Box {
-                PillChip(
-                    selected      = folderFilter.isNotEmpty(),
-                    onClick       = { foldersExpanded = true },
-                    label         = if (folderFilter.isNotEmpty()) folderFilter.size.toString() else "",
-                    leadingContent = { Icon(Icons.Outlined.Folder, null, Modifier.size(16.dp)) },
-                )
-                DropdownMenu(
-                    expanded         = foldersExpanded,
-                    onDismissRequest = { foldersExpanded = false },
-                ) {
-                    folders.forEach { fld ->
-                        val active = fld.id in folderFilter
-                        DropdownMenuItem(
-                            text         = { Text(fld.name, color = fld.color.toComposeColor()) },
-                            onClick      = { onToggleFolder(fld.id) },
-                            leadingIcon  = {
-                                Icon(Icons.Outlined.Folder, null,
-                                    tint = fld.color.toComposeColor(), modifier = Modifier.size(16.dp))
-                            },
-                            trailingIcon = if (active) ({
-                                Icon(Icons.Outlined.Check, null, modifier = Modifier.size(16.dp))
-                            }) else null,
-                        )
-                    }
-                }
-            }
-        }
-
-        // ── Calendars chip — visible when events are present OR a filter is active ──
-        if (calendars.isNotEmpty() || calendarFilter.isNotEmpty()) {
-            Box {
-                PillChip(
-                    selected      = calendarFilter.isNotEmpty(),
-                    onClick       = { calendarsExpanded = true },
-                    label         = if (calendarFilter.isNotEmpty()) calendarFilter.size.toString() else "",
-                    leadingContent = { Icon(Icons.Outlined.CalendarMonth, null, Modifier.size(16.dp)) },
-                )
-                DropdownMenu(
-                    expanded         = calendarsExpanded,
-                    onDismissRequest = { calendarsExpanded = false },
-                ) {
-                    calendars.forEach { cal ->
-                        val active = cal.id in calendarFilter
-                        val calColor = cal.color.toComposeColor()
-                        DropdownMenuItem(
-                            text         = { Text(cal.summary, color = calColor) },
-                            onClick      = { onToggleCalendar(cal.id) },
-                            leadingIcon  = {
-                                Icon(Icons.Outlined.CalendarMonth, null,
-                                    tint = calColor, modifier = Modifier.size(16.dp))
-                            },
-                            trailingIcon = if (active) ({
-                                Icon(Icons.Outlined.Check, null, modifier = Modifier.size(16.dp))
-                            }) else null,
-                        )
-                    }
-                }
-            }
-        }
-    }
-}

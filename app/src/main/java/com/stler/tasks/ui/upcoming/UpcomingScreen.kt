@@ -44,8 +44,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.stler.tasks.domain.model.ListItem
-import com.stler.tasks.domain.model.Priority
-import com.stler.tasks.ui.alltasks.FilterBar
 import com.stler.tasks.ui.calendar.CalendarEventItem
 import com.stler.tasks.ui.task.TaskItem
 import com.stler.tasks.ui.theme.SelectedHighlightLight
@@ -78,11 +76,6 @@ fun UpcomingScreen(
     val weekOffset         by viewModel.weekOffset.collectAsStateWithLifecycle()
     val labels             by viewModel.labels.collectAsStateWithLifecycle()
     val folders            by viewModel.folders.collectAsStateWithLifecycle()
-    val priorityFilter     by viewModel.priorityFilter.collectAsStateWithLifecycle()
-    val labelFilter        by viewModel.labelFilter.collectAsStateWithLifecycle()
-    val folderFilter       by viewModel.folderFilter.collectAsStateWithLifecycle()
-    val calendarFilter     by viewModel.calendarFilter.collectAsStateWithLifecycle()
-    val calendarsInEvents  by viewModel.calendarsInEvents.collectAsStateWithLifecycle()
     val featureFlags       by viewModel.featureFlags.collectAsStateWithLifecycle()
 
     ErrorSnackbarEffect(viewModel)
@@ -243,23 +236,6 @@ fun UpcomingScreen(
                 )
             }
         }
-
-        // ── Filter bar ────────────────────────────────────────────────────
-        FilterBar(
-            labels           = labels,
-            folders          = folders,
-            priorityFilter   = priorityFilter,
-            labelFilter      = labelFilter,
-            folderFilter     = folderFilter,
-            calendars        = calendarsInEvents,
-            calendarFilter   = calendarFilter,
-            featureFlags     = featureFlags,
-            onTogglePriority = { viewModel.togglePriorityFilter(it) },
-            onToggleLabel    = { viewModel.toggleLabelFilter(it) },
-            onToggleFolder   = { viewModel.toggleFolderFilter(it) },
-            onToggleCalendar = { viewModel.toggleCalendarFilter(it) },
-            onClearAll       = { viewModel.clearAllFilters() },
-        )
 
         // ── Task list — all dates, scrollable ─────────────────────────────
         if (isLoading) {

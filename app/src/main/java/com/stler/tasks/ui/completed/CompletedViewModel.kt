@@ -71,6 +71,11 @@ class CompletedViewModel @Inject constructor(
     fun toggleFolderFilter(id: String) =
         _folderFilter.update { if (id in it) it - id else it + id }
 
+    val filterState: StateFlow<com.stler.tasks.ui.alltasks.TaskFilterState> = combine(
+        _priorityFilter, _labelFilter, _folderFilter,
+    ) { pf, lf, ff -> com.stler.tasks.ui.alltasks.TaskFilterState(pf, lf, ff) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), com.stler.tasks.ui.alltasks.TaskFilterState())
+
     fun clearAllFilters() {
         _priorityFilter.value = emptySet()
         _labelFilter.value    = emptySet()

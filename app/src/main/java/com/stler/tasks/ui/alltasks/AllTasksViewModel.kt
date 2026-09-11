@@ -209,6 +209,11 @@ class AllTasksViewModel @Inject constructor(
         _calendarFilter.update { if (id in it) it - id else it + id }
     }
 
+    val filterState: StateFlow<TaskFilterState> = combine(
+        _priorityFilter, _labelFilter, _folderFilter, _calendarFilter,
+    ) { pf, lf, ff, cf -> TaskFilterState(pf, lf, ff, cf) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TaskFilterState())
+
     fun clearAllFilters() {
         _priorityFilter.value  = emptySet()
         _labelFilter.value     = emptySet()
