@@ -1,5 +1,6 @@
 package com.stler.tasks.ui.task
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -11,6 +12,7 @@ import com.stler.tasks.ui.theme.DeadlineTomorrow
 import com.stler.tasks.ui.theme.PriorityImportant
 import com.stler.tasks.ui.theme.PriorityNormal
 import com.stler.tasks.ui.theme.PriorityUrgent
+import com.stler.tasks.ui.theme.UrgentLight
 import java.time.LocalDateTime
 import java.time.LocalDate
 import java.time.LocalTime
@@ -22,8 +24,15 @@ import java.util.Locale
 // ── Priority colours ─────────────────────────────────────────────────────────
 // Source of truth is ui/theme/Color.kt — re-exported here for convenience.
 
+/**
+ * URGENT swaps in [UrgentLight] in light mode for every consumer — checkbox
+ * fill, flag icons, and priority labels alike — so a given priority is always
+ * one single color, never "dark red text, light red checkbox". See the
+ * contrast note on [PriorityUrgent].
+ */
+@Composable
 fun priorityColor(priority: Priority): Color = when (priority) {
-    Priority.URGENT    -> PriorityUrgent
+    Priority.URGENT    -> if (isSystemInDarkTheme()) PriorityUrgent else UrgentLight
     Priority.IMPORTANT -> PriorityImportant
     Priority.NORMAL    -> PriorityNormal
 }
@@ -57,9 +66,15 @@ fun deadlineStatus(deadlineDate: String, deadlineTime: String? = null): Deadline
     }
 }
 
+/**
+ * OVERDUE swaps in [UrgentLight] in light mode — every call site colors both
+ * the deadline text and its paired icon (e.g. the clock button that opens the
+ * deadline picker), so there's no separate decorative-only variant to keep
+ * [DeadlineOverdue] bright for. See the contrast note on that token.
+ */
 @Composable
 fun deadlineColor(status: DeadlineStatus): Color = when (status) {
-    DeadlineStatus.OVERDUE -> DeadlineOverdue
+    DeadlineStatus.OVERDUE -> if (isSystemInDarkTheme()) DeadlineOverdue else UrgentLight
     DeadlineStatus.TODAY -> DeadlineToday
     DeadlineStatus.TOMORROW -> DeadlineTomorrow
     DeadlineStatus.THIS_WEEK -> DeadlineThisWeek

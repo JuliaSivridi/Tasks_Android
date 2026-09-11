@@ -88,15 +88,31 @@ val DestructiveDark = Color(0xFFCC5252)  // hsl(0 55% 58%)
 val OnDestructive = Color(0xFFFFFFFF)
 
 // ── Priority Colors ───────────────────────────────────────────────────────────
+// red-400 fails WCAG's 4.5:1 text-contrast check on a light background
+// (~2.77:1 on white) — it only clears the 3:1 graphic-object threshold. Since
+// a single priority is shown as text, flag icons, AND the checkbox fill all
+// at once, there's no split "bright for icons, dark for text": [priorityColor]
+// in TaskColors.kt swaps in a darker shade for URGENT everywhere in light
+// mode, so every representation of "this task is Urgent" is the same color.
 val PriorityUrgent = Color(0xFFF87171)   // red-400
 val PriorityImportant = Color(0xFFFB923C) // orange-400
 val PriorityNormal = Color(0xFF9CA3AF)   // gray-400
 
 // ── Deadline Status Colors ────────────────────────────────────────────────────
+// Same red-400, same fix, same reasoning: [deadlineColor] in TaskColors.kt
+// swaps in the darker shade for OVERDUE everywhere (label text and any icon
+// paired with it), so it's never two different reds for the same status.
 val DeadlineOverdue = Color(0xFFF87171)  // red-400
 val DeadlineToday = Color(0xFF16A34A)    // green-600
 val DeadlineTomorrow = Color(0xFFFB923C) // orange-400
 val DeadlineThisWeek = Color(0xFFA78BFA) // violet-400
+
+// Light-mode-only variant (Tailwind red-600) — ≥4.5:1 on white, used for every
+// "Urgent priority" / "Overdue deadline" visual, not just text. Dark mode keeps
+// PriorityUrgent/DeadlineOverdue above: they already clear 4.5:1 against this
+// app's near-black dark backgrounds, and a darkened shade would fail there
+// instead (lower luminance = less contrast against an already-dark background).
+val UrgentLight = Color(0xFFDC2626)
 
 // ── Label / Folder Color Presets ──────────────────────────────────────────────
 val ColorPresets = listOf(

@@ -1039,19 +1039,24 @@ Five neutral gray levels mapped to M3 `surfaceContainer*` tokens. `surfaceTint =
 
 | Constant | Hex | Usage |
 |---|---|---|
-| `PriorityUrgent` | `#f87171` | Red-400 |
+| `PriorityUrgent` | `#f87171` | Red-400 — dark mode only (4.5:1 on near-black) |
 | `PriorityImportant` | `#fb923c` | Orange-400 |
 | `PriorityNormal` | `#9ca3af` | Gray-400 |
+| `UrgentLight` | `#dc2626` | Red-600 — light mode URGENT and OVERDUE (≥4.5:1 on white) |
+
+`priorityColor(priority)` is `@Composable` and returns `UrgentLight` for `URGENT` in light mode, `PriorityUrgent` in dark mode. Red-400 only clears the 3:1 graphic-object threshold on white (#f87171 ≈ 2.77:1) — not enough for text or labelled icons, which need 4.5:1.
 
 ### Deadline Status Colors
 
 | Constant | Hex | Usage |
 |---|---|---|
-| `DeadlineOverdue` | `#f87171` | Past due dates |
+| `DeadlineOverdue` | `#f87171` | Red-400 — dark mode overdue (same fix as PriorityUrgent) |
 | `DeadlineToday` | `#16a34a` | Due today (green-600) |
 | `DeadlineTomorrow` | `#fb923c` | Due tomorrow |
 | `DeadlineThisWeek` | `#a78bfa` | Due this week (violet-400) |
 | `Destructive` | `#e96060` | Error states, delete actions |
+
+`deadlineColor(status)` is `@Composable` and returns `UrgentLight` for `OVERDUE` in light mode, `DeadlineOverdue` in dark mode — same contrast reasoning as priority.
 
 ### Borders and Inputs
 
