@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material3.Button
+import com.stler.tasks.ui.theme.ControlShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -102,6 +103,7 @@ fun FeedbackScreen(
             Button(
                 onClick  = { viewModel.send(message.trim()) },
                 enabled  = message.isNotBlank() && !isSending,
+                shape    = ControlShape,
             ) {
                 if (isSending) {
                     CircularProgressIndicator(

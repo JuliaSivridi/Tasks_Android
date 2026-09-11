@@ -210,6 +210,7 @@ fun SettingsScreen(
                             pickerExpanded = !pickerExpanded
                         },
                         enabled = !switching,
+                        shape = ControlShape,
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                         modifier = Modifier.height(32.dp),
                     ) {

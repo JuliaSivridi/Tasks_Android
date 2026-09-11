@@ -1,6 +1,6 @@
 # Stler Tasks Android — Technical Specification
 
-**Version:** 3.0 (September 2026)  
+**Version:** 3.2 (September 2026)  
 **Repository:** github.com/JuliaSivridi/Tasks_Android  
 **Stack:** Kotlin · Jetpack Compose · Room · Hilt · WorkManager · Glance · Google Sheets API v4 · Google Calendar API v3  
 **Min SDK:** 26 (Android 8.0) · **Target SDK:** 36
@@ -94,7 +94,7 @@ In addition to tasks, the app integrates with **Google Calendar API v3**: events
 | Navigation | Navigation Compose | — | Single NavHost inside MainScreen |
 | Lifecycle | Lifecycle ViewModel / Runtime | — | `WhileSubscribed(5000)` sharing strategy |
 
-**Build config:** `applicationId = "com.stler.tasks"`, `versionCode = 31`, `versionName = "3.0"`, `minSdk = 26`, `targetSdk = 36`. KSP with `room.schemaLocation = "$projectDir/schemas"`. Signing via environment variables `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` (only wired if `KEYSTORE_PATH` is non-blank, so debug builds are unaffected).
+**Build config:** `applicationId = "com.stler.tasks"`, `versionCode = 33`, `versionName = "3.2"`, `minSdk = 26`, `targetSdk = 36`. KSP with `room.schemaLocation = "$projectDir/schemas"`. Signing via environment variables `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` (only wired if `KEYSTORE_PATH` is non-blank, so debug builds are unaffected).
 
 ---
 
@@ -194,12 +194,13 @@ com.stler.tasks/
 │   ├── completed/           CompletedScreen + CompletedViewModel
 │   ├── folder/              FolderScreen (drag-reorder) + FolderViewModel
 │   ├── calendar/            CalendarScreen + CalendarViewModel + CalendarEventItem
+│   ├── common/              PillChip (shared chip component replacing FilterChip everywhere)
 │   ├── task/                TaskFormSheet, TaskFormViewModel, TaskItem, TaskColors, pickers
 │   ├── settings/            SettingsScreen + SettingsViewModel (nav mode, feature flags, folder/label/calendar mgmt)
 │   ├── help/                HelpScreen (static content)
 │   ├── feedback/            FeedbackScreen + FeedbackViewModel
 │   ├── navigation/          Screen.kt (route constants: UPCOMING, ALL_TASKS, FOLDERS_LIST, CALENDARS_LIST, MENU_SCREEN, FOLDER, CALENDAR)
-│   ├── theme/               Color.kt, Theme.kt, Type.kt
+│   ├── theme/               Color.kt, Theme.kt, Type.kt, Shape.kt (ControlShape)
 │   └── util/                EmptyState, ShimmerTaskList, ErrorSnackbarEffect, LocalSnackbarHostState
 ├── widget/
 │   ├── UpcomingWidget.kt    GlanceAppWidget — 7-day timeline
@@ -760,7 +761,7 @@ fun CalendarEventItem(
 **Start destination:** `Screen.UPCOMING`  
 **Back stack:** `navigateTo()` uses `saveState = true` / `restoreState = true` — per-tab state is preserved when switching bottom nav tabs.
 
-**FAB:** On `CALENDAR` screen → checks `accessRole`: `"owner"`/`"writer"` → EVENT mode; read-only → TASK mode (Inbox). Otherwise → TASK mode with current folder context.  
+**FAB:** On `CALENDAR` screen → checks `accessRole`: `"owner"`/`"writer"` → EVENT mode; read-only → TASK mode (Inbox). Otherwise → TASK mode with current folder context. `containerColor = MaterialTheme.colorScheme.primary` and `contentColor = onPrimary` are set explicitly — required because `primaryContainer` is mapped to a neutral gray for segmented-button highlights, not the brand orange.  
 **Task form:** `TaskFormSheet` shown outside the `Box` overlay (always on top) when `showForm = true`.  
 **Deep links:** Handled in `LaunchedEffect(initialDeepLinkUri)`.
 
@@ -792,7 +793,7 @@ Shows: user avatar (72dp, `CircleShape`, Coil `AsyncImage`) or `AccountCircle` f
 
 ### 8.7e About Screen (overlay)
 
-Static screen: version string (`BuildConfig.VERSION_NAME`) + "Check for updates" `OutlinedButton` (opens GitHub releases page). No ViewModel. `BackHandler` pops overlay.
+Static screen: version string (`BuildConfig.VERSION_NAME`) + "Check for updates" `OutlinedButton(shape = ControlShape)` (opens GitHub releases page). No ViewModel. `BackHandler` pops overlay.
 
 ---
 
@@ -845,8 +846,7 @@ fun FilterBar(
 
 Priority/label/folder chips are hidden when the corresponding `featureFlags.*Enabled` is `false`.
 
-**Layout:** `Row` — optional ✕ clear-all button, then icon-only `FilterChip` buttons (priority 🚩, labels 🏷, folders 📁, calendars 📅). Each chip shows a count badge when active. Each chip opens a `DropdownMenu` with multi-select items (checkmark on active).  
-**Neutral chip colors:** overrides Material You warm tint — selected container = `#d8d8d8` (light) / `primaryContainer` (dark).
+**Layout:** `Row` — optional ✕ clear-all button, then icon-only `PillChip` buttons (priority 🚩, labels 🏷, folders 📁, calendars 📅). Each chip shows a count badge when active. Each chip opens a `DropdownMenu` with multi-select items (checkmark on active). Selected state uses primary (orange) tint via `PillChip`'s default `activeColor = null` path.
 
 ---
 
@@ -1008,6 +1008,18 @@ Theme is `TasksTheme` wrapping `MaterialTheme`. No dynamic color (Material You).
 | `Surface` | `#ffffff` | `#363636` |
 | `Popover` | `#ffffff` | `#242424` |
 
+### Surface Container Tokens
+
+Five neutral gray levels mapped to M3 `surfaceContainer*` tokens. `surfaceTint = Color.Transparent` is set on both schemes to suppress M3's automatic purple tint on elevated surfaces (ModalBottomSheet, cards). Without these tokens M3 fills from the baseline purple palette.
+
+| Token | Light | Dark |
+|---|---|---|
+| `surfaceContainerLowest` | `#ffffff` | `#1c1c1c` |
+| `surfaceContainerLow` | `#f8f8f8` | `#222222` |
+| `surfaceContainer` | `#f2f2f2` | `#242424` |
+| `surfaceContainerHigh` | `#ebebeb` | `#2d2d2d` |
+| `surfaceContainerHighest` | `#e0e0e0` | `#363636` |
+
 ### Text
 
 | Constant | Light | Dark |
@@ -1046,6 +1058,16 @@ Theme is `TasksTheme` wrapping `MaterialTheme`. No dynamic color (Material You).
 | Constant | Light | Dark |
 |---|---|---|
 | `Border` / `Input` | `#e0e0e0` | `#4a4a4a` / `#383838` |
+
+### Shapes
+
+| Constant | Value | Usage |
+|---|---|---|
+| `ControlShape` | `RoundedCornerShape(10.dp)` | All interactive controls — `Button`, `OutlinedButton`, `SegmentedButton` items, `PillChip`. Defined in `ui/theme/Shape.kt`. |
+
+M3's `Button` and `SegmentedButton` hard-code the "corner full" shape token and ignore `MaterialTheme.shapes`, so `ControlShape` is applied at each call site explicitly (`shape = ControlShape` / `baseShape = ControlShape`).
+
+---
 
 ### Widget Colors (XML resources)
 

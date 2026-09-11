@@ -103,7 +103,8 @@ ui/
   completed/   — Completed tasks with restore / delete
   settings/    — Nav mode toggle, feature toggles, spreadsheet picker, folder/label/calendar management
   task/        — TaskItem, TaskFormSheet, DeadlinePickerDialog, pickers
-  theme/       — Color palette, Typography, Theme
+  common/      — PillChip (shared chip component replacing FilterChip everywhere)
+  theme/       — Color palette, Typography, Theme, Shape (ControlShape = RoundedCornerShape(10.dp))
 data/
   local/       — Room DB (version 8), DAOs, entities
   remote/      — Retrofit + SheetsMapper (row ↔ entity) + CalendarApi
