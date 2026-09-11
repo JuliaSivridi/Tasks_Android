@@ -214,6 +214,9 @@ class AllTasksViewModel @Inject constructor(
     ) { pf, lf, ff, cf -> TaskFilterState(pf, lf, ff, cf) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TaskFilterState())
 
+    val selectedTabIndex = MutableStateFlow(0)
+    fun setSelectedTab(tab: Int) { selectedTabIndex.value = tab }
+
     fun clearAllFilters() {
         _priorityFilter.value  = emptySet()
         _labelFilter.value     = emptySet()

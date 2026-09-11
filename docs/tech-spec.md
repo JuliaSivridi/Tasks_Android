@@ -1,6 +1,6 @@
 # Stler Tasks Android — Technical Specification
 
-**Version:** 3.2 (September 2026)  
+**Version:** 3.6 (September 2026)  
 **Repository:** github.com/JuliaSivridi/Tasks_Android  
 **Stack:** Kotlin · Jetpack Compose · Room · Hilt · WorkManager · Glance · Google Sheets API v4 · Google Calendar API v3  
 **Min SDK:** 26 (Android 8.0) · **Target SDK:** 36
@@ -36,7 +36,7 @@
    - [8.2 All Tasks](#82-all-tasks)
    - [8.3 Completed](#83-completed)
    - [8.4 Folder](#84-folder)
-   - [8.5 FilterBar](#85-filterbar-shared-component)
+   - [8.5 Calendar](#85-calendar)
    - [8.6 Calendar](#86-calendar)  <!-- was removed: Label (8.5), Priority (8.6) -->
    - [8.7 CalendarEventItem](#87-calendareventitem)
    - [8.8 MainScreen](#88-mainscreen--global-fab-and-navigation)
@@ -93,7 +93,7 @@ In addition to tasks, the app integrates with **Google Calendar API v3**: events
 | Navigation | Navigation Compose | — | Single NavHost inside MainScreen |
 | Lifecycle | Lifecycle ViewModel / Runtime | — | `WhileSubscribed(5000)` sharing strategy |
 
-**Build config:** `applicationId = "com.stler.tasks"`, `versionCode = 33`, `versionName = "3.2"`, `minSdk = 26`, `targetSdk = 36`. KSP with `room.schemaLocation = "$projectDir/schemas"`. Signing via environment variables `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` (only wired if `KEYSTORE_PATH` is non-blank, so debug builds are unaffected).
+**Build config:** `applicationId = "com.stler.tasks"`, `versionCode = 37`, `versionName = "3.6"`, `minSdk = 26`, `targetSdk = 36`. KSP with `room.schemaLocation = "$projectDir/schemas"`. Signing via environment variables `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` (only wired if `KEYSTORE_PATH` is non-blank, so debug builds are unaffected).
 
 ---
 
@@ -188,7 +188,7 @@ com.stler.tasks/
 │   ├── auth/                AuthScreen, AuthViewModel, AuthUiState
 │   ├── main/                MainScreen, MainViewModel, TasksTopAppBar
 │   │                        MenuScreen, FoldersListScreen, CalendarsListScreen, AboutScreen
-│   ├── alltasks/            ActiveTasksScreen (toggle wrapper), AllTasksScreen + AllTasksViewModel, FilterBar
+│   ├── alltasks/            ActiveTasksScreen (toggle wrapper), AllTasksScreen + AllTasksViewModel, TaskFilterSheet, TaskFilterState
 │   ├── upcoming/            UpcomingScreen + UpcomingViewModel
 │   ├── completed/           CompletedScreen + CompletedViewModel
 │   ├── folder/              FolderScreen (drag-reorder) + FolderViewModel
@@ -650,7 +650,7 @@ All methods live in `CalendarRepositoryImpl`. Mutations bypass the SyncQueue ent
 
 **ViewModel:** `UpcomingViewModel`  
 **Data source:** `repository.observeAllPendingTasksWithDeadline()` + `calendarRepository.getEventsForCalendars(selectedIds, now, now+366)`  
-**StateFlows:** `allGroupedTasks: Map<LocalDate, List<ListItem>>`, `isLoading`, `weekDays`, `weekOffset`, `labels`, `folders`, `priorityFilter`, `labelFilter`, `folderFilter`, `calendarFilter`, `calendarsInEvents`  
+**StateFlows:** `allGroupedTasks: Map<LocalDate, List<ListItem>>`, `isLoading`, `weekDays`, `weekOffset`, `labels`, `folders`, `filterState: TaskFilterState`, `priorityFilter`, `labelFilter`, `folderFilter`, `calendarFilter`, `calendarsInEvents`  
 **Sort order within a day:** timed items before all-day, then by time string.  
 **Overdue group:** Items with `deadlineDate < today` are grouped under key `LocalDate.MIN` (displayed as "Overdue" header in red).  
 **Week strip:** Mon–Sun strip driven by `_weekOffset`. Scroll syncs to strip via `snapshotFlow` + debounce 120ms. Day pills show a dot (orange = today, primary = has tasks). Navigation via chevron buttons or direct tap.  
@@ -664,10 +664,10 @@ All methods live in `CalendarRepositoryImpl`. Mutations bypass the SyncQueue ent
 
 **ViewModel:** `AllTasksViewModel`  
 **Data source:** `repository.observeAllPendingTasks()` + `calendarRepository.getEventsForCalendars(selectedIds, now, now+366)`  
-**StateFlows:** `filteredItems: List<ListItem>`, `isLoading`, `labels`, `folders`, `priorityFilter`, `labelFilter`, `folderFilter`, `calendarFilter`, `calendarsInEvents`  
+**StateFlows:** `filteredItems: List<ListItem>`, `isLoading`, `labels`, `folders`, `filterState: TaskFilterState`, `priorityFilter`, `labelFilter`, `folderFilter`, `calendarFilter`, `calendarsInEvents`, `selectedTabIndex`  
 **Sort order:** priority (URGENT→IMPORTANT→NORMAL, events count as NORMAL) → deadline date → timed-before-allday → time. Undated tasks appended after all dated items, sorted by priority only.  
 **Scroll-to-today:** On first load, scrolls to the first item whose date is today or future (debounced 200ms).  
-**Filter bar:** `FilterBar` composable — see §8.11.  
+**Filter:** Popup `TaskFilterSheet` invoked from the filter button in `TasksTopAppBar` — see §8.9. The Active tab shows all four filter sections (Priority, Labels, Folders, Calendars); the Done (Completed) tab hides the Calendars section since completed tasks carry no calendar events.  
 **Empty state:** `EmptyState` with `FormatListBulleted` icon.
 
 ---
@@ -676,8 +676,8 @@ All methods live in `CalendarRepositoryImpl`. Mutations bypass the SyncQueue ent
 
 **ViewModel:** `CompletedViewModel`  
 **Data source:** `repository.observeCompletedTasks()` — ordered by `completedAt DESC` (falls back to `updatedAt`).  
-**StateFlows:** `filteredTasks`, `isLoading`, `labels`, `folders`, `priorityFilter`, `labelFilter`, `folderFilter`  
-**Filter bar:** Priority, label, folder chips (no calendar chip).  
+**StateFlows:** `filteredTasks`, `isLoading`, `labels`, `folders`, `filterState: TaskFilterState`, `priorityFilter`, `labelFilter`, `folderFilter`  
+**Filter:** Popup `TaskFilterSheet` (Priority, Labels, Folders only — no Calendars section, as completed tasks carry no calendar events).  
 **Actions:** restore task (unchecking checkbox), delete task.  
 **Empty state:** `EmptyState` with `CheckCircle` icon.
 
@@ -740,7 +740,8 @@ fun CalendarEventItem(
 **StateFlows:** `folders`, `labels`, `syncState`, `authData`, `selectedCalendars`, `featureFlags`
 
 **Navigation:** Always bottom-bar only. `NavigationBar` (icon-only, no labels) with items: Upcoming · All Tasks · Folders (if enabled) · Calendars (if enabled + non-empty) · Menu (avatar or AccountCircle icon).  
-**TopAppBar:** Back arrow shown when current route is `FOLDER` or `CALENDAR`. No hamburger, no avatar dropdown.  
+**TopAppBar:** Back arrow shown when current route is `FOLDER` or `CALENDAR`. No hamburger, no avatar dropdown. Filter button (`Icons.Outlined.Tune`) shown on `UPCOMING` and `ALL_TASKS` routes: `FilledIconButton` when filters are active, plain `IconButton` otherwise.  
+**Filter sheet:** `TaskFilterSheet` rendered as a `ModalBottomSheet` overlay (outside `Scaffold`, always on top). MainScreen reads the same `AllTasksViewModel` / `UpcomingViewModel` / `CompletedViewModel` instances that the sub-screens use (via `hiltViewModel(backStackEntry!!)`) and forwards toggle/clear callbacks to all three simultaneously so Active and Done tabs stay in sync. `selectedTabIndex` from `AllTasksViewModel` determines whether the Calendars section is shown (`selectedTab == 0` = Active).  
 **FAB:** Shown only on `UPCOMING`, `ALL_TASKS`, `FOLDER`, `CALENDAR` routes (hidden on list and menu screens).
 
 **Overlay screens** (rendered in `Box` on top of the NavHost — NavHost stays in composition so its back stack is preserved): Settings · Help · Feedback · About — pushed/popped via `overlayStack: List<String>`. `BackHandler` inside each overlay screen pops the stack; physical back and in-screen back button both call `popOverlay()`.
@@ -812,33 +813,40 @@ Static screen: version string (`BuildConfig.VERSION_NAME`) + "Check for updates"
 
 ---
 
-### 8.9 FilterBar
+### 8.9 TaskFilterSheet
 
-Shared composable defined in `AllTasksScreen.kt`, reused by `AllTasksScreen` and `CompletedScreen`.
+`ModalBottomSheet` filter panel (`skipPartiallyExpanded = true`) shown as an overlay from `MainScreen` when the filter button in `TasksTopAppBar` is tapped. Replaces the old `FilterBar` chip row (removed in v3.5).
 
 ```kotlin
-fun FilterBar(
+fun TaskFilterSheet(
+    filterState     : TaskFilterState,
     labels          : List<Label>,
-    folders         : List<Folder> = emptyList(),
-    priorityFilter  : Set<Priority>,
-    labelFilter     : Set<String>,
-    folderFilter    : Set<String> = emptySet(),
-    calendars       : List<CalendarItem> = emptyList(),
-    calendarFilter  : Set<String> = emptySet(),
-    featureFlags    : FeatureFlags = FeatureFlags(),
+    folders         : List<Folder>,
+    calendars       : List<CalendarItem>,
+    featureFlags    : FeatureFlags,
+    showCalendars   : Boolean = true,
     onTogglePriority: (Priority) -> Unit,
     onToggleLabel   : (String) -> Unit,
-    onToggleFolder  : (String) -> Unit = {},
-    onToggleCalendar: (String) -> Unit = {},
-    onClearAll      : () -> Unit = {},
-    showLabelFilter : Boolean = true,
-    showFolderFilter: Boolean = true,
+    onToggleFolder  : (String) -> Unit,
+    onToggleCalendar: (String) -> Unit,
+    onClearAll      : () -> Unit,
+    onDismiss       : () -> Unit,
 )
 ```
 
-Priority/label/folder chips are hidden when the corresponding `featureFlags.*Enabled` is `false`.
+**`TaskFilterState`** (`ui/alltasks/TaskFilterState.kt`): data class holding `priorityFilter: Set<Priority>`, `labelFilter: Set<String>`, `folderFilter: Set<String>`, `calendarFilter: Set<String>`. `hasFilters: Boolean` is `true` when any set is non-empty. Exposed from all three filter ViewModels as `filterState: StateFlow<TaskFilterState>` via `combine(_priorityFilter, _labelFilter, _folderFilter[, _calendarFilter])`.
 
-**Layout:** `Row` — optional ✕ clear-all button, then icon-only `PillChip` buttons (priority 🚩, labels 🏷, folders 📁, calendars 📅). Each chip shows a count badge when active. Each chip opens a `DropdownMenu` with multi-select items (checkmark on active). Selected state uses primary (orange) tint via `PillChip`'s default `activeColor = null` path.
+**Layout:** scrollable `Column` with up to four `FilterSection` composables (Priority · Labels · Folders · Calendars). Each section has an uppercase `onSurfaceVariant` title and a `FlowRow` of `PillChip`s. "Clear all filters" `TextButton` (error color) appears at the top when `filterState.hasFilters`. Labels and Folders sections cap at `heightIn(max = 156.dp)` with inner vertical scroll.
+
+**Selected-first ordering:** chip order within each section is captured once at sheet-open via `remember { filterState.labelFilter }` etc., so already-selected items appear first.
+
+**Sections shown per route/tab:**
+
+| Route | Priorities | Labels | Folders | Calendars |
+|---|---|---|---|---|
+| Upcoming | ✓ (if enabled) | ✓ (if enabled) | ✓ (if enabled) | ✓ |
+| All Tasks — Active tab | ✓ | ✓ | ✓ | ✓ |
+| All Tasks — Done tab | ✓ | ✓ | ✓ | — |
 
 ---
 

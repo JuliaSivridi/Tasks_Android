@@ -108,6 +108,7 @@ fun MainScreen(
 
     val upcomingFilterState  by remember(upcomingVm)  { upcomingVm?.filterState  ?: kotlinx.coroutines.flow.MutableStateFlow(TaskFilterState()) }.collectAsStateWithLifecycle()
     val allTasksFilterState  by remember(allTasksVm)  { allTasksVm?.filterState  ?: kotlinx.coroutines.flow.MutableStateFlow(TaskFilterState()) }.collectAsStateWithLifecycle()
+    val allTasksSelectedTab  by remember(allTasksVm)  { allTasksVm?.selectedTabIndex ?: kotlinx.coroutines.flow.MutableStateFlow(0) }.collectAsStateWithLifecycle()
 
     val currentFilterState = when (currentRoute) {
         Screen.UPCOMING  -> upcomingFilterState
@@ -411,7 +412,8 @@ fun MainScreen(
                 folders          = folders,
                 calendars        = selectedCalendars,
                 featureFlags     = featureFlags,
-                showCalendars    = currentRoute != Screen.ALL_TASKS || selectedCalendars.isNotEmpty(),
+                showCalendars    = currentRoute == Screen.UPCOMING ||
+                    (currentRoute == Screen.ALL_TASKS && allTasksSelectedTab == 0),
                 onTogglePriority = { p ->
                     upcomingVm?.togglePriorityFilter(p)
                     allTasksVm?.togglePriorityFilter(p)

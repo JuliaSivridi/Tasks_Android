@@ -10,6 +10,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import com.stler.tasks.ui.theme.ControlShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -33,6 +34,7 @@ fun ActiveTasksScreen(
     completedViewModel  : CompletedViewModel = hiltViewModel(),
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(selectedTab) { allTasksViewModel.setSelectedTab(selectedTab) }
 
     Column {
         SingleChoiceSegmentedButtonRow(
