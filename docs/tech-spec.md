@@ -41,7 +41,6 @@
    - [8.7 CalendarEventItem](#87-calendareventitem)
    - [8.8 MainScreen](#88-mainscreen--global-fab-and-navigation)
    - [8.9 Settings Screen](#89-settings-screen)
-   - [8.10 Sidebar](#810-sidebar-sidebarmenu)
    - [HelpScreen](#helpscreen)
    - [FeedbackScreen](#feedbackscreen)
 9. [TaskItem Component](#9-taskitem-component)
@@ -187,7 +186,7 @@ com.stler.tasks/
 │   └── SyncWorker.kt        Push + pull + calendar sync
 ├── ui/
 │   ├── auth/                AuthScreen, AuthViewModel, AuthUiState
-│   ├── main/                MainScreen, MainViewModel, TasksTopAppBar, SidebarMenu, SidebarPreferences
+│   ├── main/                MainScreen, MainViewModel, TasksTopAppBar
 │   │                        MenuScreen, FoldersListScreen, CalendarsListScreen, AboutScreen
 │   ├── alltasks/            ActiveTasksScreen (toggle wrapper), AllTasksScreen + AllTasksViewModel, FilterBar
 │   ├── upcoming/            UpcomingScreen + UpcomingViewModel
@@ -196,7 +195,7 @@ com.stler.tasks/
 │   ├── calendar/            CalendarScreen + CalendarViewModel + CalendarEventItem
 │   ├── common/              PillChip (shared chip component replacing FilterChip everywhere)
 │   ├── task/                TaskFormSheet, TaskFormViewModel, TaskItem, TaskColors, pickers
-│   ├── settings/            SettingsScreen + SettingsViewModel (nav mode, feature flags, folder/label/calendar mgmt)
+│   ├── settings/            SettingsScreen + SettingsViewModel (feature flags, folder/label/calendar mgmt)
 │   ├── help/                HelpScreen (static content)
 │   ├── feedback/            FeedbackScreen + FeedbackViewModel
 │   ├── navigation/          Screen.kt (route constants: UPCOMING, ALL_TASKS, FOLDERS_LIST, CALENDARS_LIST, MENU_SCREEN, FOLDER, CALENDAR)
@@ -738,22 +737,11 @@ fun CalendarEventItem(
 ### 8.7 MainScreen — Global FAB and Navigation
 
 **ViewModel:** `MainViewModel`, `TaskFormViewModel`  
-**StateFlows:** `folders`, `labels`, `syncState`, `authData`, `sidebarState`, `selectedCalendars`, `featureFlags`, `navMode`
+**StateFlows:** `folders`, `labels`, `syncState`, `authData`, `selectedCalendars`, `featureFlags`
 
-#### Navigation modes
-
-`navMode` is persisted in DataStore (`SidebarPreferences`, key `"nav_mode"`). Default: `"bottom"`. Toggled in Settings → Navigation section.
-
-**Bottom bar mode (`navMode == "bottom"`):**
-- `NavigationBar` (icon-only, no labels) with items: Upcoming · All Tasks · Folders (if enabled) · Calendars (if enabled + non-empty) · Menu (avatar or AccountCircle icon)
-- No `ModalNavigationDrawer` — main content renders in a plain `Box`
-- TopAppBar: no hamburger, no avatar dropdown. Back arrow shown when current route is `FOLDER` or `CALENDAR` (returns to `FOLDERS_LIST` / `CALENDARS_LIST` respectively)
-- FAB hidden on `FOLDERS_LIST`, `CALENDARS_LIST`, `MENU_SCREEN` routes
-
-**Sidebar mode (`navMode == "sidebar"`):**
-- `ModalNavigationDrawer` with `SidebarMenu` — navigation-only; folder CRUD in Settings. Folders/Calendars sections gated by `featureFlags`
-- TopAppBar: hamburger + avatar dropdown (Settings · Help · Feedback · About · Sign out)
-- FAB always visible on content screens
+**Navigation:** Always bottom-bar only. `NavigationBar` (icon-only, no labels) with items: Upcoming · All Tasks · Folders (if enabled) · Calendars (if enabled + non-empty) · Menu (avatar or AccountCircle icon).  
+**TopAppBar:** Back arrow shown when current route is `FOLDER` or `CALENDAR`. No hamburger, no avatar dropdown.  
+**FAB:** Shown only on `UPCOMING`, `ALL_TASKS`, `FOLDER`, `CALENDAR` routes (hidden on list and menu screens).
 
 **Overlay screens** (rendered in `Box` on top of the NavHost — NavHost stays in composition so its back stack is preserved): Settings · Help · Feedback · About — pushed/popped via `overlayStack: List<String>`. `BackHandler` inside each overlay screen pops the stack; physical back and in-screen back button both call `popOverlay()`.
 
@@ -787,7 +775,12 @@ Wraps `AllTasksScreen` (Active) and `CompletedScreen` (Done) with a `SingleChoic
 
 ### 8.7d Menu Screen (`MENU_SCREEN` route, bottom nav only)
 
-Shows: user avatar (72dp, `CircleShape`, Coil `AsyncImage`) or `AccountCircle` fallback, user name (`titleMedium`), email (`bodyMedium`). Menu rows (`heightIn(min=56dp)`, `bodyLarge`, 24dp icons): Settings · Help · Feedback · About · Sign out (error colour). Each row pushes the appropriate overlay (`pushOverlay("settings")` etc.).
+**Layout:** `Column(fillMaxWidth, vertical padding 16dp)`:
+1. **User row** — horizontal `Row`: avatar (72dp, `CircleShape`, Coil `AsyncImage`) or `AccountCircle` fallback on the left; `Column { name (titleMedium) · email (bodyMedium) }` on the right; 16dp gap between icon and text; 16dp horizontal padding.
+2. **`HorizontalDivider`** (single divider, right after user row).
+3. **Menu rows** — `MenuRow`: 16dp horizontal/vertical padding, 16dp gap between icon and text, `bodyLarge` text, 24dp icons: Settings (`Outlined.Settings`) · Help (`AutoMirrored.Outlined.HelpOutline`) · Feedback (`Outlined.Feedback`) · About (`Outlined.Info`) · Sign out (`AutoMirrored.Outlined.Logout`, error colour).
+
+Each row pushes the appropriate overlay (`pushOverlay("settings")` etc.). No dividers between menu rows.
 
 ---
 
@@ -806,11 +799,10 @@ Static screen: version string (`BuildConfig.VERSION_NAME`) + "Check for updates"
 **Section order (top → bottom, no headers):**
 
 1. **Spreadsheet** — current file name + "Change" button → expandable Drive file picker; `switchSpreadsheet()` clears all Room data and triggers sync.
-2. **Navigation** — `SingleChoiceSegmentedButtonRow`: "Bottom bar" (index 0, default) · "Side menu" (index 1). Persisted via `SidebarPreferences.setNavMode()` in DataStore. Switching takes effect immediately without restart.
-3. **Priorities** — `Switch` toggle (`featureFlags.prioritiesEnabled`); hides priority UI everywhere when off.
-4. **Labels** — `Switch` toggle + animated label list (color dot + name + Edit/Delete) + Add button in header; label CRUD inline.
-5. **Folders** — `Switch` toggle + animated folder list (icon tinted with folder color + name + Edit/Delete, Inbox excluded) + Add button in header; folder CRUD inline.
-6. **Calendars** — `Switch` toggle + Refresh button + checkbox list of Google Calendars; clearing events on disable; `PackageManager.setComponentEnabledSetting` hides `CalendarWidgetReceiver` from widget picker.
+2. **Priorities** — `Switch` toggle (`featureFlags.prioritiesEnabled`); hides priority UI everywhere when off.
+3. **Labels** — `Switch` toggle + animated label list (color dot + name + Edit/Delete) + Add button in header; label CRUD inline.
+4. **Folders** — `Switch` toggle + animated folder list (icon tinted with folder color + name + Edit/Delete, Inbox excluded) + Add button in header; folder CRUD inline.
+5. **Calendars** — `Switch` toggle + Refresh button + checkbox list of Google Calendars; clearing events on disable; `PackageManager.setComponentEnabledSetting` hides `CalendarWidgetReceiver` from widget picker.
 
 **Feature flags storage:** `AuthPreferences` DataStore keys `folders_enabled`, `labels_enabled`, `priorities_enabled`, `calendars_enabled` (all default `true`). Combined into `featureFlags: Flow<FeatureFlags>` via `combine`.
 

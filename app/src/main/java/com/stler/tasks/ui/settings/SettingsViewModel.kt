@@ -15,7 +15,6 @@ import com.stler.tasks.domain.model.Folder
 import com.stler.tasks.domain.model.Label
 import com.stler.tasks.sync.SyncManager
 import com.stler.tasks.ui.BaseViewModel
-import com.stler.tasks.ui.main.SidebarPreferences
 import com.stler.tasks.widget.CalendarWidgetReceiver
 import com.stler.tasks.widget.FolderWidgetReceiver
 import androidx.lifecycle.viewModelScope
@@ -43,17 +42,7 @@ class SettingsViewModel @Inject constructor(
     private val taskRepository: TaskRepository,
     private val syncManager: SyncManager,
     private val calendarRepository: CalendarRepository,
-    private val sidebarPreferences: SidebarPreferences,
 ) : BaseViewModel() {
-
-    // ── Navigation mode ───────────────────────────────────────────────────
-
-    val navMode: StateFlow<String> = sidebarPreferences.navMode
-        .stateIn(viewModelScope, SharingStarted.Eagerly, "bottom")
-
-    fun setNavMode(mode: String) {
-        viewModelScope.launch { sidebarPreferences.setNavMode(mode) }
-    }
 
     // ── Feature flags ─────────────────────────────────────────────────────
 

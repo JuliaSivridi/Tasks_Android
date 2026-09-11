@@ -30,7 +30,6 @@ class MainViewModel @Inject constructor(
     private val taskRepository: TaskRepository,
     private val authRepository: GoogleAuthRepository,
     private val syncManager: SyncManager,
-    private val sidebarPreferences: SidebarPreferences,
     private val calendarRepository: CalendarRepository,
     private val authPreferences: AuthPreferences,
 ) : BaseViewModel() {
@@ -56,12 +55,6 @@ class MainViewModel @Inject constructor(
 
     val authData: StateFlow<AuthData> = authRepository.authData
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AuthData())
-
-    val sidebarState: StateFlow<SidebarState> = sidebarPreferences.sidebarState
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SidebarState())
-
-    val navMode: StateFlow<String> = sidebarPreferences.navMode
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "bottom")
 
     // ── Calendars ─────────────────────────────────────────────────────────
 
@@ -95,10 +88,6 @@ class MainViewModel @Inject constructor(
                 }
             }
         }
-    }
-
-    fun toggleSection(section: String) = safeLaunch {
-        sidebarPreferences.toggleSection(section)
     }
 
     fun triggerSync() = syncManager.triggerSync()

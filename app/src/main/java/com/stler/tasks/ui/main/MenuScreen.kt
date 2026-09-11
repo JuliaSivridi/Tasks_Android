@@ -1,25 +1,21 @@
 package com.stler.tasks.ui.main
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.Feedback
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Message
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -43,18 +39,12 @@ fun MenuScreen(
     onNavigateToAbout    : () -> Unit,
     onSignOut            : () -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
-    ) {
-        // ── User info ──────────────────────────────────────────────────────────
-        Column(
-            modifier              = Modifier
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
+        Row(
+            modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 28.dp),
-            horizontalAlignment   = Alignment.CenterHorizontally,
-            verticalArrangement   = Arrangement.spacedBy(8.dp),
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             if (authData.userAvatarUrl.isNotBlank()) {
                 AsyncImage(
@@ -70,37 +60,29 @@ fun MenuScreen(
                     tint               = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            if (authData.userName.isNotBlank()) {
-                Text(authData.userName, style = MaterialTheme.typography.titleMedium)
-            }
-            if (authData.userEmail.isNotBlank()) {
-                Text(
-                    text  = authData.userEmail,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                if (authData.userName.isNotBlank()) {
+                    Text(authData.userName, style = MaterialTheme.typography.titleMedium)
+                }
+                if (authData.userEmail.isNotBlank()) {
+                    Text(
+                        text  = authData.userEmail,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
 
+        Spacer(modifier = Modifier.padding(top = 8.dp))
         HorizontalDivider()
 
-        // ── Menu items ─────────────────────────────────────────────────────────
-        MenuRow(icon = Icons.Outlined.Settings,    label = "Settings", onClick = onNavigateToSettings)
-        HorizontalDivider()
-        MenuRow(icon = Icons.Outlined.HelpOutline, label = "Help",     onClick = onNavigateToHelp)
-        HorizontalDivider()
-        MenuRow(icon = Icons.Outlined.Message,     label = "Feedback", onClick = onNavigateToFeedback)
-        HorizontalDivider()
-        MenuRow(icon = Icons.Outlined.Info,        label = "About",    onClick = onNavigateToAbout)
-        HorizontalDivider()
-        MenuRow(
-            icon          = Icons.AutoMirrored.Outlined.Logout,
-            label         = "Sign out",
-            onClick       = onSignOut,
-            isDestructive = true,
-        )
-
-        Spacer(Modifier.height(24.dp))
+        MenuRow(Icons.Outlined.Settings,             "Settings",  onNavigateToSettings)
+        MenuRow(Icons.AutoMirrored.Outlined.HelpOutline, "Help",  onNavigateToHelp)
+        MenuRow(Icons.Outlined.Feedback,             "Feedback",  onNavigateToFeedback)
+        MenuRow(Icons.Outlined.Info,                 "About",     onNavigateToAbout)
+        MenuRow(Icons.AutoMirrored.Outlined.Logout,  "Sign out",  onSignOut, isDestructive = true)
     }
 }
 
@@ -117,22 +99,13 @@ private fun MenuRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 56.dp)
             .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp)
-            .heightIn(min = 56.dp),
-        verticalAlignment     = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(20.dp),
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector        = icon,
-            contentDescription = null,
-            tint               = contentColor,
-            modifier           = Modifier.size(24.dp),
-        )
-        Text(
-            text  = label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = contentColor,
-        )
+        Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp), tint = contentColor)
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(label, style = MaterialTheme.typography.bodyLarge, color = contentColor)
     }
 }

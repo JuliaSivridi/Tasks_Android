@@ -13,24 +13,20 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FormatListBulleted
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -79,20 +75,14 @@ fun MainScreen(
     fun popOverlay() { overlayStack = overlayStack.dropLast(1) }
 
     val navController     = rememberNavController()
-    val drawerState       = rememberDrawerState(DrawerValue.Closed)
-    val scope             = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
     val folders           by viewModel.folders.collectAsStateWithLifecycle()
     val labels            by viewModel.labels.collectAsStateWithLifecycle()
     val syncState         by viewModel.syncState.collectAsStateWithLifecycle()
     val authData          by viewModel.authData.collectAsStateWithLifecycle()
-    val sidebarState      by viewModel.sidebarState.collectAsStateWithLifecycle()
     val selectedCalendars by viewModel.selectedCalendars.collectAsStateWithLifecycle()
     val featureFlags      by viewModel.featureFlags.collectAsStateWithLifecycle()
-    val navMode           by viewModel.navMode.collectAsStateWithLifecycle()
-
-    val isBottomNav = navMode == "bottom"
 
     val backStackEntry    by navController.currentBackStackEntryAsState()
     val currentRoute      = backStackEntry?.destination?.route
@@ -202,8 +192,8 @@ fun MainScreen(
         }
     }
 
-    val sidebarFolderContext = if (currentRoute == Screen.FOLDER) currentFolderId ?: "fld-inbox"
-                               else "fld-inbox"
+    val fabFolderContext = if (currentRoute == Screen.FOLDER) currentFolderId ?: "fld-inbox"
+                          else "fld-inbox"
 
     fun handleFormResult(result: TaskFormResult) {
         val et = editingTask
@@ -217,34 +207,25 @@ fun MainScreen(
             launchSingleTop = true
             restoreState    = true
         }
-        scope.launch { drawerState.close() }
     }
 
-    // ── Shared Scaffold + NavHost (used in both nav modes) ────────────────────
-    val mainContent: @Composable () -> Unit = {
-        Scaffold(
+    // ── UI ────────────────────────────────────────────────────────────────────
+
+    CompositionLocalProvider(LocalSnackbarHostState provides snackbarHostState) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Scaffold(
             topBar = {
                 TasksTopAppBar(
-                    title         = screenTitle,
-                    syncState     = syncState,
-                    onSyncClick   = viewModel::triggerSync,
-                    onBackClick   = if (isBottomNav && (currentRoute == Screen.FOLDER || currentRoute == Screen.CALENDAR)) {
+                    title       = screenTitle,
+                    syncState   = syncState,
+                    onSyncClick = viewModel::triggerSync,
+                    onBackClick = if (currentRoute == Screen.FOLDER || currentRoute == Screen.CALENDAR) {
                         { navController.popBackStack() }
                     } else null,
-                    onMenuClick   = if (!isBottomNav) { { scope.launch { drawerState.open() } } } else null,
-                    userName      = authData.userName,
-                    userEmail     = authData.userEmail,
-                    userAvatarUrl = authData.userAvatarUrl,
-                    onSignOut     = if (!isBottomNav) onSignOut else null,
-                    onNavigateToSettings = { pushOverlay("settings") },
-                    onNavigateToHelp     = { pushOverlay("help") },
-                    onNavigateToFeedback = { pushOverlay("feedback") },
-                    onNavigateToAbout    = { pushOverlay("about") },
                 )
             },
             bottomBar = {
-                if (isBottomNav) {
-                    NavigationBar {
+                NavigationBar {
                         NavigationBarItem(
                             icon     = { Icon(Icons.Outlined.CalendarToday, null) },
                             label    = null,
@@ -290,13 +271,9 @@ fun MainScreen(
                             onClick  = { navigateTo(Screen.MENU_SCREEN) },
                         )
                     }
-                }
             },
             floatingActionButton = {
-                val showFab = !isBottomNav || currentRoute in setOf(
-                    Screen.UPCOMING, Screen.ALL_TASKS, Screen.FOLDER, Screen.CALENDAR
-                )
-                if (showFab) {
+                if (currentRoute in setOf(Screen.UPCOMING, Screen.ALL_TASKS, Screen.FOLDER, Screen.CALENDAR)) {
                     FloatingActionButton(
                         onClick = {
                             if (currentRoute == Screen.CALENDAR && currentCalendarId != null) {
@@ -304,10 +281,10 @@ fun MainScreen(
                                 if (cal != null && cal.accessRole in listOf("owner", "writer")) {
                                     openCreateEvent(currentCalendarId)
                                 } else {
-                                    openCreate(sidebarFolderContext)
+                                    openCreate(fabFolderContext)
                                 }
                             } else {
-                                openCreate(sidebarFolderContext)
+                                openCreate(fabFolderContext)
                             }
                         },
                         containerColor = MaterialTheme.colorScheme.primary,
@@ -387,36 +364,7 @@ fun MainScreen(
                 }
             }
         }
-    }
 
-    // ── UI ────────────────────────────────────────────────────────────────────
-
-    CompositionLocalProvider(LocalSnackbarHostState provides snackbarHostState) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            if (!isBottomNav) {
-                ModalNavigationDrawer(
-                    drawerState   = drawerState,
-                    drawerContent = {
-                        SidebarMenu(
-                            currentRoute      = currentRoute,
-                            currentFolderId   = currentFolderId,
-                            currentCalendarId = currentCalendarId,
-                            folders           = folders,
-                            selectedCalendars = selectedCalendars,
-                            featureFlags      = featureFlags,
-                            sidebarState      = sidebarState,
-                            onNavigate        = ::navigateTo,
-                            onToggleSection   = viewModel::toggleSection,
-                            onAddTask         = { openCreate(sidebarFolderContext); scope.launch { drawerState.close() } },
-                        )
-                    },
-                    content = mainContent,
-                )
-            } else {
-                mainContent()
-            }
-
-            // Overlay screens rendered on top — NavHost stays in composition so back stack survives
             when (currentOverlay) {
                 "settings" -> SettingsScreen(onNavigateBack = ::popOverlay)
                 "help"     -> HelpScreen    (onNavigateBack = ::popOverlay)
