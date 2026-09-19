@@ -34,6 +34,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -329,9 +332,13 @@ fun MainScreen(
             snackbarHost = { SnackbarHost(snackbarHostState) },
         ) { innerPadding ->
             NavHost(
-                navController    = navController,
-                startDestination = Screen.UPCOMING,
-                modifier         = Modifier.padding(innerPadding),
+                navController      = navController,
+                startDestination   = Screen.UPCOMING,
+                modifier           = Modifier.padding(innerPadding),
+                enterTransition    = { fadeIn(animationSpec = tween(120)) },
+                exitTransition     = { fadeOut(animationSpec = tween(120)) },
+                popEnterTransition = { fadeIn(animationSpec = tween(120)) },
+                popExitTransition  = { fadeOut(animationSpec = tween(120)) },
             ) {
                 composable(Screen.UPCOMING) {
                     UpcomingScreen(

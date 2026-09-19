@@ -1098,11 +1098,15 @@ Helper functions: `folderRoute(id)`, `labelRoute(id)`, `priorityRoute(priority)`
 
 ### Navigation Behavior
 
-- All navigation uses `popUpTo(graph.startDestinationId) + launchSingleTop = true` to prevent stack buildup when switching sections from the sidebar.
+- All navigation uses `popUpTo(graph.startDestinationId) + launchSingleTop = true` to prevent stack buildup when switching sections from the bottom bar.
 - The `NavHost` lives inside `MainScreen`. Navigation between screens happens by calling `navController.navigate(route)`.
 - **Overlay screens** (Settings, Help, Feedback) are shown by toggling `showSettings/showHelp/showFeedback` local state in `MainScreen`. They replace the entire content via `return` and do not create NavBackStack entries.
 - The `TaskFormSheet` (ModalBottomSheet) is shown as a local overlay without navigation.
 - Deep links are handled in `MainActivity.onNewIntent()` and passed as `initialDeepLinkUri` to `MainScreen`.
+
+### Screen Transitions
+
+`NavHost` overrides the Navigation Compose default (700 ms crossfade) with a 120 ms fade on all four transition hooks (`enterTransition`, `exitTransition`, `popEnterTransition`, `popExitTransition`). The non-zero duration is intentional: `EnterTransition.None` / `ExitTransition.None` causes `AnimatedContent` to briefly show the old screen over the new one (one-frame overlap), making shimmer/loading states flash visibly. A short fade prevents this artifact while still feeling instant.
 
 ### Deeplinks (`stlertasks://`)
 
