@@ -51,6 +51,11 @@ class FolderViewModel @Inject constructor(
         buildDisplayList(tasks, counts)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** True until the first emission from [displayList], then false. */
+    val isLoading: StateFlow<Boolean> = displayList
+        .map { false }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
     // ── Actions ───────────────────────────────────────────────────────────
 
     fun toggleExpanded(task: Task) = safeLaunch {
