@@ -267,7 +267,12 @@ class TaskRepositoryImpl @Inject constructor(
             ranges.getOrNull(0)?.values?.drop(1)
                 ?.mapNotNull { mapper.rowToTask(it) }
                 ?.let { remote ->
-                    taskDao.upsertAll(remote.filter { it.id !in pendingIds })
+                    // Preserve local isExpanded — it is intentionally not synced to Sheets
+                    // (toggleExpanded never enqueues), so the remote value is always stale.
+                    val localExpanded = taskDao.getAll().associate { it.id to it.isExpanded }
+                    val toUpsert = remote.filter { it.id !in pendingIds }
+                        .map { it.copy(isExpanded = localExpanded[it.id] ?: it.isExpanded) }
+                    taskDao.upsertAll(toUpsert)
                     taskDao.deleteNotIn(remote.map { it.id } + pendingIds)
                 }
 
